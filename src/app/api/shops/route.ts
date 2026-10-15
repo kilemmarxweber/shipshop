@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { assertUniqueShopName } from "@/lib/shop-name";
 import { ensureSellerMembership } from "@/lib/system-org";
 import { slugify } from "@/lib/utils";
 
@@ -59,7 +60,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 
-    let slug = slugify(body.name);
+    const name = await assertUniqueShopName(body.name);
+
+    let slug = slugify(name);
     const existing = await prisma.shop.findUnique({
       where: {
         organizationId_slug: {
@@ -74,7 +77,7 @@ export async function POST(req: Request) {
       data: {
         organizationId,
         ownerUserId: session.user.id,
-        name: body.name,
+        name,
         slug,
         description: body.description,
       },

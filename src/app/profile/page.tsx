@@ -41,6 +41,11 @@ type ProfileUser = {
 
 type Period = "7d" | "30d" | "90d" | "all";
 type Tab = "active" | "history";
+type KycStatus = "NONE" | "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
+type KycSummary = {
+  status: KycStatus;
+  rejectReason: string | null;
+};
 
 const IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -52,6 +57,7 @@ const IMAGE_TYPES = new Set([
 
 export default function ProfilePage() {
   const { data: session } = authClient.useSession();
+  const userId = session?.user?.id;
   const fileRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"buyer" | "seller">("buyer");
   const [orders, setOrders] = useState<Order[]>([]);
@@ -65,8 +71,11 @@ export default function ProfilePage() {
   const [phoneDraft, setPhoneDraft] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
   const [period, setPeriod] = useState<Period>("30d");
   const [tab, setTab] = useState<Tab>("active");
+  const [kyc, setKyc] = useState<KycSummary | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
 
   function applyProfile(user: ProfileUser) {
     setProfile(user);
@@ -76,30 +85,34 @@ export default function ProfilePage() {
   }
 
   async function refresh() {
-    const [ordersRes, walletRes, cartRes, profileRes] = await Promise.all([
-      fetchJson<{ orders?: Order[]; error?: string }>(
-        `/api/orders?period=${period}&status=${tab}`,
-      ),
-      fetchJson<{ wallet?: { balanceCents?: number } }>("/api/wallet"),
-      fetchJson<{ count?: number }>("/api/cart"),
-      fetchJson<{ user?: ProfileUser }>("/api/profile"),
-    ]);
+    const [ordersRes, walletRes, cartRes, profileRes, kycRes] =
+      await Promise.all([
+        fetchJson<{ orders?: Order[]; error?: string }>(
+          `/api/orders?period=${period}&status=${tab}`,
+        ),
+        fetchJson<{ wallet?: { balanceCents?: number } }>("/api/wallet"),
+        fetchJson<{ count?: number }>("/api/cart"),
+        fetchJson<{ user?: ProfileUser }>("/api/profile"),
+        fetchJson<{ kyc?: KycSummary | null; isOwner?: boolean }>("/api/kyc"),
+      ]);
     setOrders(ordersRes.data?.orders ?? []);
     setBalance(walletRes.data?.wallet?.balanceCents ?? 0);
     setCartCount(cartRes.data?.count ?? 0);
     if (profileRes.data?.user) {
       applyProfile(profileRes.data.user);
     }
+    setKyc(kycRes.data?.kyc ?? null);
+    setIsOwner(Boolean(kycRes.data?.isOwner));
   }
 
   useEffect(() => {
-    if (!session) return;
+    if (!userId) return;
     refresh().catch(() => {
       setOrders([]);
       setBalance(0);
       setCartCount(0);
     });
-  }, [session, period, tab]);
+  }, [userId, period, tab]);
 
   async function syncSessionUser(patch: {
     name?: string;
@@ -251,23 +264,26 @@ export default function ProfilePage() {
   const displayEmail = profile?.email ?? session.user.email ?? "";
   const displayPhone = profile?.phone ?? "";
   const displayImage = profile?.image ?? session.user.image ?? null;
+  const kycStatus = kyc?.status ?? "NONE";
+  const isPro = kycStatus === "APPROVED";
 
   return (
     <div className="px-4 pb-6 pt-0 md:px-8">
       <div className="text-center">
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          className="hidden"
-          onChange={(e) => onAvatarPick(e.target.files?.[0])}
-        />
         <button
           type="button"
-          disabled={uploadingAvatar}
-          onClick={() => fileRef.current?.click()}
-          className="relative mx-auto mb-3 grid size-20 cursor-pointer place-items-center overflow-hidden rounded-full border-2 border-white/10 bg-gradient-to-br from-primary to-violet-600 font-heading text-2xl font-bold transition hover:opacity-90 disabled:opacity-60"
-          aria-label="Changer la photo de profil"
+          onClick={() => {
+            if (displayImage) setZoomOpen(true);
+          }}
+          className={cn(
+            "relative mx-auto mb-3 grid size-20 place-items-center overflow-hidden rounded-full border-2 border-white/10 bg-gradient-to-br from-primary to-violet-600 font-heading text-2xl font-bold transition",
+            displayImage
+              ? "cursor-zoom-in hover:opacity-90"
+              : "cursor-default",
+          )}
+          aria-label={
+            displayImage ? "Agrandir la photo de profil" : "Photo de profil"
+          }
         >
           {displayImage ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -279,18 +295,19 @@ export default function ProfilePage() {
           ) : (
             displayName.slice(0, 1).toUpperCase()
           )}
-          <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 py-1 text-[9px] font-semibold text-white">
-            <Camera className="size-3" />
-            {uploadingAvatar ? "…" : "Photo"}
-          </span>
-          <span className="absolute -right-1 -top-1 rounded-full border-2 border-background bg-gradient-to-r from-amber-500 to-primary px-1.5 py-0.5 text-[9px] font-bold">
-            PRO
-          </span>
         </button>
 
         <div className="flex items-start justify-center gap-2">
           <div className="min-w-0">
-            <h1 className="font-heading text-lg font-bold">{displayName}</h1>
+            <h1 className="flex items-center justify-center gap-1.5 font-heading text-lg font-bold">
+              {displayName}
+              {isPro ? (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-trust/20 px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide text-trust">
+                  <BadgeCheck className="size-3" />
+                  PRO
+                </span>
+              ) : null}
+            </h1>
             <p className="text-xs text-muted-foreground">{displayEmail}</p>
             <p className="mt-0.5 flex items-center justify-center gap-1 text-xs text-muted-foreground">
               <Phone className="size-3 shrink-0" />
@@ -318,8 +335,46 @@ export default function ProfilePage() {
       {editing && (
         <div className="mt-4 space-y-2.5 rounded-2xl border border-white/8 bg-[#13131a] p-3 text-left">
           <p className="text-[11px] font-semibold text-muted-foreground">
-            Modifier nom, e-mail et contact
+            Modifier photo, nom, e-mail et contact
           </p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => onAvatarPick(e.target.files?.[0])}
+          />
+          <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-[#1c1c26] p-2.5">
+            <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-violet-600 text-sm font-bold">
+              {displayImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={displayImage}
+                  alt=""
+                  className="size-full object-cover"
+                />
+              ) : (
+                displayName.slice(0, 1).toUpperCase()
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold">Photo de profil</p>
+              <p className="text-[10px] text-muted-foreground">
+                JPG, PNG, WebP — max 5 Mo
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={uploadingAvatar}
+              className="h-9 shrink-0 cursor-pointer gap-1.5"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Camera className="size-3.5" />
+              {uploadingAvatar ? "…" : "Parcourir"}
+            </Button>
+          </div>
           <Input
             value={nameDraft}
             onChange={(e) => setNameDraft(e.target.value)}
@@ -343,14 +398,14 @@ export default function ProfilePage() {
             <Button
               variant="ghost"
               className="h-9 flex-1 cursor-pointer"
-              disabled={savingProfile}
+              disabled={savingProfile || uploadingAvatar}
               onClick={() => setEditing(false)}
             >
               Annuler
             </Button>
             <Button
               className="h-9 flex-1 cursor-pointer"
-              disabled={savingProfile}
+              disabled={savingProfile || uploadingAvatar}
               onClick={saveProfile}
             >
               {savingProfile ? "…" : "Enregistrer"}
@@ -359,16 +414,90 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div className="mt-4 rounded-2xl border border-trust/30 bg-trust/10 p-3 text-left">
+      {zoomOpen && displayImage && (
+        <button
+          type="button"
+          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          onClick={() => setZoomOpen(false)}
+          aria-label="Fermer l'aperçu"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={displayImage}
+            alt={displayName}
+            className="max-h-[85dvh] max-w-full rounded-2xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </button>
+      )}
+
+      <div
+        className={cn(
+          "mt-4 rounded-2xl border p-3 text-left",
+          isPro
+            ? "border-trust/30 bg-trust/10"
+            : kycStatus === "PENDING"
+              ? "border-amber-500/30 bg-amber-500/10"
+              : kycStatus === "REJECTED"
+                ? "border-destructive/30 bg-destructive/10"
+                : "border-white/8 bg-[#13131a]",
+        )}
+      >
         <div className="flex items-center gap-3">
-          <div className="grid size-9 place-items-center rounded-full bg-trust text-trust-foreground">
+          <div
+            className={cn(
+              "grid size-9 place-items-center rounded-full",
+              isPro
+                ? "bg-trust text-trust-foreground"
+                : kycStatus === "PENDING"
+                  ? "bg-amber-500/20 text-amber-400"
+                  : kycStatus === "REJECTED"
+                    ? "bg-destructive/20 text-destructive"
+                    : "bg-white/10 text-muted-foreground",
+            )}
+          >
             <BadgeCheck className="size-5" />
           </div>
-          <div className="text-xs">
-            <p className="font-bold text-trust">KYC — Phase B</p>
-            <p className="text-muted-foreground">
-              Vérification vendeur pro bientôt disponible
-            </p>
+          <div className="min-w-0 flex-1 text-xs">
+            {isPro ? (
+              <>
+                <p className="font-bold text-trust">Vendeur pro vérifié</p>
+                <p className="text-muted-foreground">Badge PRO actif</p>
+              </>
+            ) : kycStatus === "PENDING" ? (
+              <>
+                <p className="font-bold text-amber-400">Dossier en revue</p>
+                <p className="text-muted-foreground">
+                  L&apos;équipe Chip Shop examine vos documents
+                </p>
+              </>
+            ) : kycStatus === "REJECTED" ? (
+              <>
+                <p className="font-bold text-destructive">Dossier refusé</p>
+                <p className="text-muted-foreground">
+                  {kyc?.rejectReason || "Corrigez et renvoyez votre dossier"}
+                </p>
+                <Link
+                  href="/kyc"
+                  className="mt-1 inline-block font-semibold text-primary"
+                >
+                  Corriger et renvoyer
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="font-bold">Devenir vendeur pro</p>
+                <p className="text-muted-foreground">
+                  Vérifiez votre identité pour le badge PRO
+                </p>
+                <Link
+                  href="/kyc"
+                  className="mt-1 inline-block font-semibold text-primary"
+                >
+                  Commencer la vérification
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -495,6 +624,7 @@ export default function ProfilePage() {
               const canCancel =
                 o.status !== "DELIVERED" &&
                 o.status !== "PICKED_UP" &&
+                o.status !== "AWAITING_CONFIRM" &&
                 o.status !== "CANCELLED" &&
                 o.status !== "REFUNDED" &&
                 (o.status === "PAID" ||
@@ -543,6 +673,8 @@ export default function ProfilePage() {
                         o.status === "ASSIGNED" && "bg-primary/15 text-primary",
                         o.status === "READY_FOR_PICKUP" &&
                           "bg-amber-500/15 text-amber-400",
+                        o.status === "AWAITING_CONFIRM" &&
+                          "bg-amber-500/15 text-amber-400",
                         o.status === "FAILED" &&
                           "bg-destructive/15 text-destructive",
                         o.status === "REFUNDED" &&
@@ -590,11 +722,25 @@ export default function ProfilePage() {
             Commandes & livreurs
           </Link>
           <Link
+            href="/shops/reports"
+            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
+          >
+            Rapports & statistiques
+          </Link>
+          <Link
             href="/shops/messaging"
             className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
           >
             Messages (owner)
           </Link>
+          {isOwner ? (
+            <Link
+              href="/shops/kyc"
+              className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
+            >
+              Revue KYC (owner)
+            </Link>
+          ) : null}
           <Link
             href="/shops"
             className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"

@@ -61,13 +61,6 @@ async function main() {
         email,
         phone: "+243810000001",
         emailVerified: true,
-        accounts: {
-          create: {
-            accountId: email,
-            providerId: "credential",
-            password,
-          },
-        },
         wallet: {
           create: {
             balanceCents: 500_00,
@@ -85,6 +78,26 @@ async function main() {
       where: { userId: user.id },
       create: { userId: user.id, balanceCents: 500_00 },
       update: { balanceCents: 500_00 },
+    });
+  }
+
+  // Better Auth lie le mot de passe à accountId === user.id (pas l'email)
+  const credential = await prisma.account.findFirst({
+    where: { userId: user.id, providerId: "credential" },
+  });
+  if (!credential) {
+    await prisma.account.create({
+      data: {
+        userId: user.id,
+        accountId: user.id,
+        providerId: "credential",
+        password,
+      },
+    });
+  } else {
+    await prisma.account.update({
+      where: { id: credential.id },
+      data: { accountId: user.id, password },
     });
   }
 

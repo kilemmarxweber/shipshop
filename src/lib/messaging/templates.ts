@@ -50,6 +50,7 @@ export const DELIVERY_EVENT_KEYS = [
   "DELIVERED",
   "PICKUP_READY",
   "PICKED_UP",
+  "HANDOVER_SCANNED",
 ] as const;
 
 export type DeliveryEventKey = (typeof DELIVERY_EVENT_KEYS)[number];
@@ -88,5 +89,10 @@ export const DEFAULT_TEMPLATES: {
     eventKey: "PICKED_UP",
     name: "Colis retiré",
     body: "{{brand}} · {{shop_name}}\nBonjour {{customer_name}}, votre colis {{product_title}} a bien été retiré. Merci !",
+  },
+  {
+    eventKey: "HANDOVER_SCANNED",
+    name: "Confirmer la réception",
+    body: "{{brand}} · {{shop_name}}\nLe QR de {{product_title}} a été scanné. Confirmez la réception dans Chip Shop pour clôturer la commande : {{tracking_url}}",
   },
 ];

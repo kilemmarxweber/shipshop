@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "OrderStatus" ADD VALUE IF NOT EXISTS 'AWAITING_CONFIRM';
+
+-- AlterTable
+ALTER TABLE "pickup_receipt" ADD COLUMN IF NOT EXISTS "scannedAt" TIMESTAMP(3);

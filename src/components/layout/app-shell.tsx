@@ -31,12 +31,13 @@ const NAV = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: session } = authClient.useSession();
+  const userId = session?.user?.id;
   const [balance, setBalance] = useState<number | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [urgentCount, setUrgentCount] = useState(0);
 
   useEffect(() => {
-    if (!session) {
+    if (!userId) {
       setBalance(null);
       setCartCount(0);
       setUrgentCount(0);
@@ -62,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         setCartCount(0);
         setUrgentCount(0);
       });
-  }, [session, pathname]);
+  }, [userId, pathname]);
 
   const hideChrome =
     pathname.startsWith("/auth") || pathname.startsWith("/onboarding");
@@ -124,6 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                   <Link
                     href={session ? "/profile" : "/auth/login"}
+                    prefetch={false}
                     className="grid size-9 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/5"
                     aria-label="Profil"
                   >

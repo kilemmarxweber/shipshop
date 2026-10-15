@@ -288,12 +288,24 @@ async function refundOrderInternal(
   if (!order || order.buyerId !== opts.buyerId) {
     throw new Error("Commande introuvable");
   }
-  if (!isOrderCancellable(order.status, order.pickupReceipt?.redeemedAt)) {
+  if (
+    !isOrderCancellable(
+      order.status,
+      order.pickupReceipt?.redeemedAt,
+      order.pickupReceipt?.scannedAt,
+    )
+  ) {
     if (order.status === "DELIVERED" || order.status === "PICKED_UP") {
       throw new Error("Commande déjà livrée — annulation impossible");
     }
-    if (order.pickupReceipt?.redeemedAt) {
-      throw new Error("Remise confirmée (QR/code) — annulation impossible");
+    if (
+      order.pickupReceipt?.redeemedAt ||
+      order.pickupReceipt?.scannedAt ||
+      order.status === "AWAITING_CONFIRM"
+    ) {
+      throw new Error(
+        "QR déjà scanné / réception en confirmation — annulation impossible",
+      );
     }
     throw new Error("Commande non annulable / déjà remboursée");
   }

@@ -85,9 +85,19 @@ export const CANCELLABLE_STATUSES = new Set([
   "FAILED",
 ]);
 
-export function isOrderCancellable(status: string, redeemedAt?: Date | null) {
-  if (redeemedAt) return false;
-  if (status === "DELIVERED" || status === "PICKED_UP") return false;
+export function isOrderCancellable(
+  status: string,
+  redeemedAt?: Date | null,
+  scannedAt?: Date | null,
+) {
+  if (redeemedAt || scannedAt) return false;
+  if (
+    status === "DELIVERED" ||
+    status === "PICKED_UP" ||
+    status === "AWAITING_CONFIRM"
+  ) {
+    return false;
+  }
   if (status === "CANCELLED" || status === "REFUNDED") return false;
   return CANCELLABLE_STATUSES.has(status);
 }

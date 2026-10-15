@@ -6,6 +6,7 @@ import { QrCode, ScanLine, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { QrScanCamera } from "@/components/qr-scan-camera";
 import { parseHandoverQrPayload } from "@/lib/handover";
 import {
   CANCEL_REASONS,
@@ -32,7 +33,11 @@ type Order = {
   product: { title: string; images: string[] };
   buyer: { name: string; phone: string | null };
   courier: { id: string; name: string } | null;
-  pickupReceipt: { code: string; redeemedAt: string | null } | null;
+  pickupReceipt: {
+    code: string;
+    redeemedAt: string | null;
+    scannedAt: string | null;
+  } | null;
 };
 
 export default function VendorOrdersPage() {
@@ -44,6 +49,7 @@ export default function VendorOrdersPage() {
   const [pickupCodes, setPickupCodes] = useState<Record<string, string>>({});
   const [scanInput, setScanInput] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] =
     useState<CancelReasonCode>("OUT_OF_STOCK");
@@ -99,7 +105,29 @@ export default function VendorOrdersPage() {
     }
     toast.success(data?.message ?? `Remise → ${data?.status}`);
     setScanInput("");
+    setScannerOpen(false);
     if (shopId) loadOrders(shopId);
+  }
+
+  async function applyScannedValue(raw: string) {
+    const value = raw.trim();
+    if (!value) return;
+    const parsed = parseHandoverQrPayload(value);
+    if (parsed) {
+      await confirmHandover({ qrPayload: value });
+      return;
+    }
+    const match = orders.find(
+      (o) =>
+        o.pickupReceipt &&
+        !o.pickupReceipt.redeemedAt &&
+        o.pickupReceipt.code.toUpperCase() === value.toUpperCase(),
+    );
+    if (match) {
+      await confirmHandover({ orderId: match.id, code: value });
+      return;
+    }
+    toast.error("QR / code non reconnu");
   }
 
   async function onScanSubmit() {
@@ -224,14 +252,26 @@ export default function VendorOrdersPage() {
             placeholder='Collez le JSON QR ou saisissez le code (ex. "AB12CD")'
             className="bg-[#1c1c26] text-xs"
           />
-          <Button
-            disabled={scanBusy || !scanInput.trim()}
-            className="cursor-pointer shrink-0"
-            onClick={onScanSubmit}
-          >
-            <QrCode className="mr-1 size-4" />
-            {scanBusy ? "…" : "Confirmer"}
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={scanBusy}
+              className="h-9 flex-1 cursor-pointer sm:flex-none"
+              onClick={() => setScannerOpen(true)}
+            >
+              <ScanLine className="mr-1 size-4" />
+              Scanner
+            </Button>
+            <Button
+              disabled={scanBusy || !scanInput.trim()}
+              className="h-9 flex-1 cursor-pointer sm:flex-none"
+              onClick={onScanSubmit}
+            >
+              <QrCode className="mr-1 size-4" />
+              {scanBusy ? "…" : "Confirmer"}
+            </Button>
+          </div>
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground">
           Après confirmation, le client ne peut plus demander de remboursement.
@@ -314,12 +354,18 @@ export default function VendorOrdersPage() {
       <ul className="space-y-3">
         {orders.map((o) => {
           const redeemed = Boolean(o.pickupReceipt?.redeemedAt);
+          const awaitingClient =
+            o.status === "AWAITING_CONFIRM" ||
+            Boolean(o.pickupReceipt?.scannedAt && !redeemed);
           const delivered =
             o.status === "DELIVERED" || o.status === "PICKED_UP" || redeemed;
           const canCancel = isOrderCancellable(
             o.status,
             o.pickupReceipt?.redeemedAt
               ? new Date(o.pickupReceipt.redeemedAt)
+              : null,
+            o.pickupReceipt?.scannedAt
+              ? new Date(o.pickupReceipt.scannedAt)
               : null,
           );
           return (
@@ -348,8 +394,13 @@ export default function VendorOrdersPage() {
                     </span>{" "}
                     · {o.fulfillmentType} ·{" "}
                     {formatMoney(o.totalCents || o.amountCents)}
+                    {awaitingClient && (
+                      <span className="ml-1 text-amber-400">
+                        · Attente confirmation client
+                      </span>
+                    )}
                     {redeemed && (
-                      <span className="ml-1 text-trust">· Remis ✓</span>
+                      <span className="ml-1 text-trust">· Livré SUCCESS</span>
                     )}
                   </p>
                   {o.deliveryAddress && (
@@ -373,7 +424,7 @@ export default function VendorOrdersPage() {
                   Suivi
                 </Link>
 
-                {o.fulfillmentType === "DELIVERY" && !redeemed && (
+                {o.fulfillmentType === "DELIVERY" && !redeemed && !awaitingClient && (
                   <>
                     <Button
                       size="sm"
@@ -418,7 +469,15 @@ export default function VendorOrdersPage() {
                   </>
                 )}
 
-                {o.pickupReceipt && !redeemed && (
+                {awaitingClient && (
+                  <p className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-200">
+                    QR scanné. Statut vendeur passera à{" "}
+                    <strong>DELIVERED SUCCESS</strong> après confirmation du
+                    client dans Chip Shop.
+                  </p>
+                )}
+
+                {o.pickupReceipt && !redeemed && !awaitingClient && (
                   <div className="flex w-full flex-wrap items-center gap-2">
                     <Input
                       placeholder="Code client / QR"
@@ -431,6 +490,16 @@ export default function VendorOrdersPage() {
                       }
                       className="h-8 max-w-[180px] bg-[#1c1c26] text-xs"
                     />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="cursor-pointer"
+                      disabled={scanBusy}
+                      onClick={() => setScannerOpen(true)}
+                    >
+                      <ScanLine className="mr-1 size-3.5" />
+                      Scanner
+                    </Button>
                     <Button
                       size="sm"
                       className="cursor-pointer"
@@ -491,6 +560,16 @@ export default function VendorOrdersPage() {
           </p>
         )}
       </ul>
+
+      {scannerOpen ? (
+        <QrScanCamera
+          onClose={() => setScannerOpen(false)}
+          onScan={(value) => {
+            setScannerOpen(false);
+            void applyScannedValue(value);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

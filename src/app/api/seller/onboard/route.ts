@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { assertUniqueShopName } from "@/lib/shop-name";
 import { ensureSellerMembership } from "@/lib/system-org";
 import { slugify } from "@/lib/utils";
 
@@ -20,8 +21,9 @@ export async function POST(req: Request) {
   try {
     const body = schema.parse(await req.json());
     const { org } = await ensureSellerMembership(session.user.id);
+    const name = await assertUniqueShopName(body.shopName);
 
-    let slug = slugify(body.shopName);
+    let slug = slugify(name);
     const existing = await withDbRetry(() =>
       prisma.shop.findUnique({
         where: {
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
         data: {
           organizationId: org.id,
           ownerUserId: session.user.id,
-          name: body.shopName,
+          name,
           slug,
           description: body.description,
         },

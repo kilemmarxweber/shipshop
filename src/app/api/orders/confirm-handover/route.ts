@@ -26,8 +26,8 @@ async function assertShopMember(userId: string, shopId: string) {
 }
 
 /**
- * Valide la remise (retrait ou livraison) par scan QR ou saisie manuelle du code.
- * Réservé au vendeur (membre org boutique).
+ * Étape 1 — le vendeur scanne le QR / saisit le code.
+ * La commande passe en AWAITING_CONFIRM. Le client doit ensuite confirmer.
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -79,14 +79,14 @@ export async function POST(req: Request) {
     const isVendor = await assertShopMember(session.user.id, order.shopId);
     if (!isVendor) {
       return NextResponse.json(
-        { error: "Seul le vendeur / boutique peut valider la remise" },
+        { error: "Seul le vendeur / boutique peut scanner la remise" },
         { status: 403 },
       );
     }
 
     if (order.pickupReceipt.redeemedAt) {
       return NextResponse.json(
-        { error: "Remise déjà confirmée", alreadyRedeemed: true },
+        { error: "Livraison déjà confirmée par le client", alreadyRedeemed: true },
         { status: 409 },
       );
     }
@@ -107,19 +107,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Code QR / reçu invalide" }, { status: 400 });
     }
 
-    const nextStatus =
-      order.fulfillmentType === "PICKUP" ? "PICKED_UP" : "DELIVERED";
+    if (order.pickupReceipt.scannedAt || order.status === "AWAITING_CONFIRM") {
+      return NextResponse.json({
+        status: "AWAITING_CONFIRM",
+        message:
+          "QR déjà scanné — en attente de confirmation du client dans Chip Shop",
+      });
+    }
 
     const updated = await withDbRetry(() =>
       prisma.$transaction(async (tx) => {
         await tx.pickupReceipt.update({
           where: { id: order.pickupReceipt!.id },
-          data: { redeemedAt: new Date() },
+          data: { scannedAt: new Date() },
         });
 
         const next = await tx.order.update({
           where: { id: order.id },
-          data: { status: nextStatus },
+          data: { status: "AWAITING_CONFIRM" },
           include: {
             pickupReceipt: true,
             product: { select: { title: true, images: true } },
@@ -131,12 +136,12 @@ export async function POST(req: Request) {
         await tx.deliveryEvent.create({
           data: {
             orderId: order.id,
-            status: nextStatus,
+            status: "AWAITING_CONFIRM",
             note:
               body.note ??
               (body.qrPayload
-                ? "Remise confirmée par scan QR"
-                : "Remise confirmée manuellement (code)"),
+                ? "QR scanné — en attente confirmation client"
+                : "Code saisi — en attente confirmation client"),
             actorUserId: session.user.id,
           },
         });
@@ -145,15 +150,13 @@ export async function POST(req: Request) {
       }),
     );
 
-    void notifyOrderEvent(
-      order.id,
-      nextStatus === "PICKED_UP" ? "PICKED_UP" : "DELIVERED",
-    ).catch(console.error);
+    void notifyOrderEvent(order.id, "HANDOVER_SCANNED").catch(console.error);
 
     return NextResponse.json({
       order: updated,
-      status: nextStatus,
-      message: "Remise confirmée — remboursement client désactivé",
+      status: "AWAITING_CONFIRM",
+      message:
+        "QR validé. Le client doit confirmer la réception dans son compte Chip Shop.",
     });
   } catch (error) {
     const message =

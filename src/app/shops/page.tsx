@@ -44,6 +44,7 @@ export default function ShopsPage() {
   const [members, setMembers] = useState<
     { id: string; role: string; user: { name: string; email: string } }[]
   >([]);
+  const [isOwner, setIsOwner] = useState(false);
 
   async function loadSeller() {
     const res = await fetch("/api/seller/onboard");
@@ -56,6 +57,12 @@ export default function ShopsPage() {
         organizationId: json.organization.id,
       });
     }
+    const kycRes = await fetch("/api/kyc");
+    if (kycRes.ok) {
+      const kycJson = await kycRes.json();
+      setIsOwner(Boolean(kycJson.isOwner));
+    }
+
     const mine = await fetch("/api/shops?mine=1");
     const mineJson = await mine.json();
     setShops(mineJson.shops ?? json.shops ?? []);
@@ -142,11 +149,25 @@ export default function ShopsPage() {
             Commandes
           </Link>
           <Link
+            href="/shops/reports"
+            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"
+          >
+            Rapports
+          </Link>
+          <Link
             href="/shops/messaging"
             className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"
           >
             Messages
           </Link>
+          {isOwner ? (
+            <Link
+              href="/shops/kyc"
+              className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"
+            >
+              KYC
+            </Link>
+          ) : null}
           <Link
             href="/onboarding"
             className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"

@@ -72,6 +72,7 @@ type OrderDetail = {
   pickupReceipt: {
     code: string;
     qrPayload: string;
+    scannedAt: string | null;
     redeemedAt: string | null;
   } | null;
   deliveryEvents: {
@@ -127,6 +128,26 @@ function OrderInner() {
     if (session) load();
   }, [session, id]);
 
+  async function confirmReceipt() {
+    setBusy(true);
+    const { res, data } = await fetchJson<{
+      error?: string;
+      message?: string;
+      status?: string;
+    }>(`/api/orders/${id}/confirm-receipt`, { method: "POST" });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Confirmation impossible");
+      return;
+    }
+    toast.success(data?.message ?? "Livraison confirmée");
+    await load();
+  }
+
+  const awaitingConfirm =
+    order?.status === "AWAITING_CONFIRM" ||
+    Boolean(order?.pickupReceipt?.scannedAt && !order.pickupReceipt.redeemedAt);
+
   // Polling live pendant la course
   const liveTracking =
     order?.fulfillmentType === "DELIVERY" &&
@@ -134,13 +155,13 @@ function OrderInner() {
     ["ASSIGNED", "FULFILLING", "OUT_FOR_DELIVERY"].includes(order.status);
 
   useEffect(() => {
-    if (!session || !liveTracking) return;
+    if (!session || (!liveTracking && !awaitingConfirm)) return;
     const t = setInterval(() => {
       load().catch(() => undefined);
-    }, 5000);
+    }, 4000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, liveTracking, id]);
+  }, [session, liveTracking, awaitingConfirm, id]);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -226,7 +247,8 @@ function OrderInner() {
 
   const total = order.totalCents || order.amountCents;
   const handedOver = Boolean(order.pickupReceipt?.redeemedAt);
-  const canRefund = REFUNDABLE.has(order.status) && !handedOver;
+  const canRefund =
+    REFUNDABLE.has(order.status) && !handedOver && !awaitingConfirm;
   const canReport =
     (order.status === "DELIVERED" || order.status === "PICKED_UP") &&
     handedOver &&
@@ -343,9 +365,27 @@ function OrderInner() {
             </p>
           </div>
           <p className="mb-4 text-[11px] text-muted-foreground">
-            Présentez ce QR au vendeur ou livreur. Les détails restent masqués
-            jusqu&apos;au scan.
+            Présentez ce QR au vendeur ou livreur. Après le scan, confirmez la
+            réception ici pour clôturer la commande.
           </p>
+          {awaitingConfirm && !handedOver ? (
+            <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-left">
+              <p className="text-sm font-semibold text-amber-300">
+                QR scanné par le vendeur
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Confirmez que vous avez bien reçu le colis. Le statut boutique
+                passera alors à livré (SUCCESS).
+              </p>
+              <Button
+                className="mt-3 h-10 w-full cursor-pointer"
+                disabled={busy}
+                onClick={confirmReceipt}
+              >
+                {busy ? "…" : "Confirmer la réception"}
+              </Button>
+            </div>
+          ) : null}
           {!handedOver ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img

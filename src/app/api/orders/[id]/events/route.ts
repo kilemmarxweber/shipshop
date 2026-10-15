@@ -12,8 +12,6 @@ const schema = z.object({
     "FULFILLING",
     "OUT_FOR_DELIVERY",
     "READY_FOR_PICKUP",
-    "PICKED_UP",
-    "DELIVERED",
     "FAILED",
   ]),
   note: z.string().max(300).optional(),
@@ -57,52 +55,19 @@ export async function POST(
       return NextResponse.json({ error: "Commande introuvable" }, { status: 404 });
     }
 
-    const isBuyer = order.buyerId === session.user.id;
     const isVendor = await assertShopMember(session.user.id, order.shopId);
-
-    if (body.status === "DELIVERED" || body.status === "PICKED_UP") {
-      if (!isBuyer && !isVendor) {
-        return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
-      }
-    } else if (!isVendor) {
+    if (!isVendor) {
       return NextResponse.json({ error: "Accès vendeur requis" }, { status: 403 });
     }
 
-    // Remise finale : uniquement vendeur + code/QR (pas le client)
-    if (body.status === "PICKED_UP" || body.status === "DELIVERED") {
-      if (!isVendor) {
-        return NextResponse.json(
-          {
-            error:
-              "Seul le vendeur / livreur boutique peut confirmer la remise (scan QR ou code)",
-          },
-          { status: 403 },
-        );
-      }
-      if (!order.pickupReceipt) {
-        return NextResponse.json(
-          { error: "Pas de reçu QR — utilisez /api/orders/confirm-handover" },
-          { status: 400 },
-        );
-      }
-      if (order.pickupReceipt.redeemedAt) {
-        return NextResponse.json(
-          { error: "Remise déjà confirmée" },
-          { status: 409 },
-        );
-      }
-      if (!body.pickupCode) {
-        return NextResponse.json(
-          {
-            error:
-              "Code reçu ou scan QR requis pour confirmer la remise (remboursement client se ferme ensuite)",
-          },
-          { status: 400 },
-        );
-      }
-      if (body.pickupCode.toUpperCase() !== order.pickupReceipt.code) {
-        return NextResponse.json({ error: "Code reçu invalide" }, { status: 400 });
-      }
+    if (order.status === "AWAITING_CONFIRM") {
+      return NextResponse.json(
+        {
+          error:
+            "QR déjà scanné — attendez la confirmation du client dans Chip Shop",
+        },
+        { status: 409 },
+      );
     }
 
     const updated = await withDbRetry(() =>
@@ -127,17 +92,6 @@ export async function POST(
           },
         });
 
-        if (
-          (body.status === "PICKED_UP" || body.status === "DELIVERED") &&
-          order.pickupReceipt &&
-          !order.pickupReceipt.redeemedAt
-        ) {
-          await tx.pickupReceipt.update({
-            where: { id: order.pickupReceipt.id },
-            data: { redeemedAt: new Date() },
-          });
-        }
-
         await tx.deliveryEvent.create({
           data: {
             orderId: id,
@@ -153,8 +107,6 @@ export async function POST(
 
     const notifyMap: Partial<Record<string, DeliveryEventKey>> = {
       OUT_FOR_DELIVERY: "OUT_FOR_DELIVERY",
-      DELIVERED: "DELIVERED",
-      PICKED_UP: "PICKED_UP",
       READY_FOR_PICKUP: "PICKUP_READY",
     };
     const eventKey = notifyMap[body.status];
