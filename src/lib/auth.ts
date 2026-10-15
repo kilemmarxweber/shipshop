@@ -1,7 +1,9 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
+import { isPlatformRole, orgAccessControl, orgRoles } from "@/lib/org-access";
 import { prisma } from "@/lib/prisma";
+import { ensureMembership } from "@/lib/system-org";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -17,6 +19,24 @@ export const auth = betterAuth({
       organizationLimit: 1,
       membershipLimit: 500,
       invitationExpiresIn: 60 * 60 * 24 * 7,
+      ac: orgAccessControl,
+      roles: orgRoles,
+      organizationHooks: {
+        async beforeCreateInvitation({ invitation, inviter, organization }) {
+          const member = await prisma.member.findFirst({
+            where: {
+              userId: inviter.id,
+              organizationId: organization.id,
+            },
+          });
+          if (!isPlatformRole(member?.role)) {
+            return { data: { role: "member" } };
+          }
+          if (member?.role !== "owner" && invitation.role === "owner") {
+            return { data: { role: "admin" } };
+          }
+        },
+      },
       async sendInvitationEmail(data) {
         // V1: log invitation link (no email provider yet)
         const base = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
@@ -37,6 +57,14 @@ export const auth = betterAuth({
               currency: "USD",
             },
           });
+          await ensureMembership(user.id);
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session) => {
+          await ensureMembership(session.userId);
         },
       },
     },

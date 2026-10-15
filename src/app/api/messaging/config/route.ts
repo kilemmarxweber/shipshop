@@ -5,17 +5,9 @@ import {
   ensureMessagingSetup,
   messagingFormState,
 } from "@/lib/messaging/config";
+import { assertChipShopOwner } from "@/lib/kyc";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-
-async function assertOwner(userId: string, organizationId: string) {
-  const member = await withDbRetry(() =>
-    prisma.member.findFirst({
-      where: { userId, organizationId, role: "owner" },
-    }),
-  );
-  return Boolean(member);
-}
 
 export async function GET() {
   const session = await getSession();
@@ -24,9 +16,12 @@ export async function GET() {
   }
 
   const { org, config } = await ensureMessagingSetup();
-  const isOwner = await assertOwner(session.user.id, org.id);
+  const { isOwner } = await assertChipShopOwner(session.user.id);
   if (!isOwner) {
-    return NextResponse.json({ error: "Réservé au owner Chip Shop" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Réservé à l'owner ou à un admin Chip Shop" },
+      { status: 403 },
+    );
   }
 
   return NextResponse.json({
@@ -59,8 +54,12 @@ export async function PATCH(req: Request) {
 
   try {
     const { org } = await ensureMessagingSetup();
-    if (!(await assertOwner(session.user.id, org.id))) {
-      return NextResponse.json({ error: "Réservé au owner" }, { status: 403 });
+    const { isOwner } = await assertChipShopOwner(session.user.id);
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: "Réservé à l'owner ou à un admin Chip Shop" },
+        { status: 403 },
+      );
     }
 
     const body = patchSchema.parse(await req.json());

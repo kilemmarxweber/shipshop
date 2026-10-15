@@ -3,7 +3,7 @@ import { prisma, withDbRetry } from "@/lib/prisma";
 export const SYSTEM_ORG_SLUG = "chipshop";
 export const SYSTEM_ORG_NAME = "Chip Shop";
 
-/** Organisation plateforme unique — tous les vendeurs y sont membres. */
+/** Organisation plateforme unique — tous les comptes (acheteurs et vendeurs) y sont membres. */
 export async function ensureSystemOrganization(ownerUserId?: string) {
   return withDbRetry(async () => {
     let org = await prisma.organization.findUnique({
@@ -41,8 +41,12 @@ export async function ensureSystemOrganization(ownerUserId?: string) {
   });
 }
 
-/** Rattache un vendeur à l'org système (role member) s'il n'y est pas déjà. */
-export async function ensureSellerMembership(userId: string) {
+/**
+ * Rattache un utilisateur à l'org système en member s'il n'y est pas déjà.
+ * Acheteurs (achats seulement) et vendeurs : même rôle de départ.
+ * Un rôle déjà attribué (owner/admin) n'est jamais rétrogradé.
+ */
+export async function ensureMembership(userId: string) {
   const org = await ensureSystemOrganization();
   const member = await withDbRetry(() =>
     prisma.member.findFirst({
@@ -61,4 +65,30 @@ export async function ensureSellerMembership(userId: string) {
     }),
   );
   return { org, member: created };
+}
+
+/** @deprecated alias — même comportement que ensureMembership */
+export const ensureSellerMembership = ensureMembership;
+
+/** Tous les users existants deviennent members Chip Shop (rôle member par défaut). */
+export async function backfillSystemMemberships() {
+  const org = await ensureSystemOrganization();
+  const missing = await withDbRetry(() =>
+    prisma.user.findMany({
+      where: { members: { none: { organizationId: org.id } } },
+      select: { id: true },
+    }),
+  );
+  if (missing.length === 0) return { org, created: 0 };
+
+  await withDbRetry(() =>
+    prisma.member.createMany({
+      data: missing.map((u) => ({
+        organizationId: org.id,
+        userId: u.id,
+        role: "member",
+      })),
+    }),
+  );
+  return { org, created: missing.length };
 }

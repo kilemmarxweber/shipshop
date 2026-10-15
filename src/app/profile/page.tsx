@@ -731,14 +731,14 @@ export default function ProfilePage() {
             href="/shops/messaging"
             className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
           >
-            Messages (owner)
+            Messages (admin)
           </Link>
           {isOwner ? (
             <Link
               href="/shops/kyc"
               className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
             >
-              Revue KYC (owner)
+              Revue KYC
             </Link>
           ) : null}
           <Link

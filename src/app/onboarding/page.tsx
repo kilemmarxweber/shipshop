@@ -56,8 +56,8 @@ export default function OnboardingPage() {
       <BackButton />
       <h1 className="font-heading text-2xl font-bold">Devenir vendeur</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Vous rejoignez l&apos;organisation système <strong>Chip Shop</strong>{" "}
-        puis créez votre boutique.
+        Votre compte est déjà member de <strong>Chip Shop</strong>. Créez
+        votre boutique — le rôle reste member (l&apos;owner peut le changer).
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-4">

@@ -11,7 +11,7 @@ const schema = z.object({
   description: z.string().max(500).optional(),
 });
 
-/** Devenir vendeur : rattache à l'org système Chip Shop + crée la boutique. */
+/** Devenir vendeur : le compte est déjà member Chip Shop ; crée la boutique. */
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) {

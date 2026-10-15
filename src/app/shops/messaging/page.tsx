@@ -154,7 +154,8 @@ export default function MessagingSettingsPage() {
     return (
       <div className="px-5 py-16 text-center">
         <p className="text-muted-foreground">
-          Réservé au <strong>owner</strong> de l&apos;organisation Chip Shop.
+          Réservé à l&apos;<strong>owner</strong> ou à un <strong>admin</strong>{" "}
+          Chip Shop.
         </p>
       </div>
     );
@@ -171,8 +172,8 @@ export default function MessagingSettingsPage() {
       <div className="mb-6">
         <h1 className="font-heading text-xl font-bold">Messages & notifs</h1>
         <p className="text-xs text-muted-foreground">
-          Config owner · Klambo / Infobip · templates Chip Shop pour tous les
-          vendeurs
+          Config owner / admin · Klambo / Infobip · templates Chip Shop pour
+          tous les vendeurs
         </p>
       </div>
 

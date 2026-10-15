@@ -1,14 +1,20 @@
+import { PLATFORM_ROLES } from "@/lib/org-access";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { ensureSystemOrganization } from "@/lib/system-org";
 
+/** Owner ou admin Chip Shop (l'admin n'a pas le droit de supprimer l'org). */
 export async function assertChipShopOwner(userId: string) {
   const org = await ensureSystemOrganization();
   const member = await withDbRetry(() =>
     prisma.member.findFirst({
-      where: { userId, organizationId: org.id, role: "owner" },
+      where: {
+        userId,
+        organizationId: org.id,
+        role: { in: [...PLATFORM_ROLES] },
+      },
     }),
   );
-  return { org, isOwner: Boolean(member) };
+  return { org, isOwner: Boolean(member), role: member?.role ?? null };
 }
 
 export function kycPublic(kyc: {

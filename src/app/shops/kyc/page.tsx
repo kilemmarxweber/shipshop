@@ -99,7 +99,8 @@ export default function ShopsKycPage() {
     return (
       <div className="px-5 py-16 text-center">
         <p className="text-muted-foreground">
-          Réservé au <strong>owner</strong> de l&apos;organisation Chip Shop.
+          Réservé à l&apos;<strong>owner</strong> ou à un <strong>admin</strong>{" "}
+          Chip Shop.
         </p>
       </div>
     );

@@ -4,6 +4,7 @@ import { DM_Sans, Space_Grotesk } from "next/font/google";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageLoader } from "@/components/page-loader";
 import { Providers } from "@/components/providers";
+import { getAppName } from "@/lib/app-name";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -35,7 +36,7 @@ export default function RootLayout({
       <body className="min-h-full font-sans antialiased">
         <Providers>
           <Suspense fallback={<PageLoader fullScreen />}>
-            <AppShell>{children}</AppShell>
+            <AppShell appName={getAppName()}>{children}</AppShell>
           </Suspense>
         </Providers>
       </body>

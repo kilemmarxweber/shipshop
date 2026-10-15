@@ -1,19 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { assertChipShopOwner } from "@/lib/kyc";
 import { ensureMessagingSetup } from "@/lib/messaging/config";
 import { DELIVERY_EVENT_KEYS } from "@/lib/messaging/templates";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-
-async function assertOwner(userId: string, organizationId: string) {
-  return Boolean(
-    await withDbRetry(() =>
-      prisma.member.findFirst({
-        where: { userId, organizationId, role: "owner" },
-      }),
-    ),
-  );
-}
 
 export async function GET() {
   const session = await getSession();
@@ -21,8 +12,12 @@ export async function GET() {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
   const { org } = await ensureMessagingSetup();
-  if (!(await assertOwner(session.user.id, org.id))) {
-    return NextResponse.json({ error: "Réservé au owner" }, { status: 403 });
+  const { isOwner } = await assertChipShopOwner(session.user.id);
+  if (!isOwner) {
+    return NextResponse.json(
+      { error: "Réservé à l'owner ou à un admin Chip Shop" },
+      { status: 403 },
+    );
   }
 
   const templates = await withDbRetry(() =>
@@ -55,8 +50,12 @@ export async function PATCH(req: Request) {
 
   try {
     const { org } = await ensureMessagingSetup();
-    if (!(await assertOwner(session.user.id, org.id))) {
-      return NextResponse.json({ error: "Réservé au owner" }, { status: 403 });
+    const { isOwner } = await assertChipShopOwner(session.user.id);
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: "Réservé à l'owner ou à un admin Chip Shop" },
+        { status: 403 },
+      );
     }
 
     const body = patchSchema.parse(await req.json());

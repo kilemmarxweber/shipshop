@@ -22,7 +22,7 @@ export async function POST(
   const { isOwner } = await assertChipShopOwner(session.user.id);
   if (!isOwner) {
     return NextResponse.json(
-      { error: "Réservé au owner Chip Shop" },
+      { error: "Réservé à l'owner ou à un admin Chip Shop" },
       { status: 403 },
     );
   }

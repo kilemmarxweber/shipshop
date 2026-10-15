@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   MessageCircle,
 } from "lucide-react";
+import { getAppInitials } from "@/lib/app-name";
 import { cn, formatMoney } from "@/lib/utils";
 import { fetchJson } from "@/lib/fetch-json";
 import { useEffect, useState } from "react";
@@ -28,7 +29,25 @@ const NAV = [
   { href: "/cart", label: "Panier", icon: ShoppingCart },
 ] as const;
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function BrandLabel({ name }: { name: string }) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return <>{name}</>;
+  const last = parts.pop()!;
+  return (
+    <>
+      {parts.join(" ")}
+      <span className="text-trust">{last}</span>
+    </>
+  );
+}
+
+export function AppShell({
+  children,
+  appName,
+}: {
+  children: React.ReactNode;
+  appName: string;
+}) {
   const pathname = usePathname();
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
@@ -86,10 +105,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex items-center justify-between gap-3">
                 <Link href="/" className="flex items-center gap-2">
                   <div className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-[#ff5722] to-[#ff7a45] text-sm font-bold shadow-[0_4px_14px_rgba(255,87,34,0.4)]">
-                    CS
+                    {getAppInitials(appName)}
                   </div>
                   <span className="font-heading text-lg font-bold tracking-tight">
-                    Chip<span className="text-trust">Shop</span>
+                    <BrandLabel name={appName} />
                   </span>
                 </Link>
                 <div className="flex items-center gap-2">

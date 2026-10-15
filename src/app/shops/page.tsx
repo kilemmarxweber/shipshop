@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Store, Users } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -33,6 +33,15 @@ type Shop = {
 
 type Org = { id: string; name: string; slug: string };
 
+type OrgMember = {
+  id: string;
+  role: string;
+  userId: string;
+  shopCount: number;
+  kind: "vendor" | "buyer";
+  user: { id: string; name: string; email: string };
+};
+
 export default function ShopsPage() {
   const { data: session } = authClient.useSession();
   const [orgs, setOrgs] = useState<Org[]>([]);
@@ -41,10 +50,11 @@ export default function ShopsPage() {
   const [shopName, setShopName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
-  const [members, setMembers] = useState<
-    { id: string; role: string; user: { name: string; email: string } }[]
-  >([]);
+  const [members, setMembers] = useState<OrgMember[]>([]);
   const [isOwner, setIsOwner] = useState(false);
+  const [isOrgOwner, setIsOrgOwner] = useState(false);
+  const [roleSavingId, setRoleSavingId] = useState<string | null>(null);
+  const activatedOrg = useRef<string | null>(null);
 
   async function loadSeller() {
     const res = await fetch("/api/seller/onboard");
@@ -53,9 +63,12 @@ export default function ShopsPage() {
     if (json.organization) {
       setOrgs([json.organization]);
       setActiveOrgId(json.organization.id);
-      await authClient.organization.setActive({
-        organizationId: json.organization.id,
-      });
+      if (activatedOrg.current !== json.organization.id) {
+        activatedOrg.current = json.organization.id;
+        await authClient.organization.setActive({
+          organizationId: json.organization.id,
+        });
+      }
     }
     const kycRes = await fetch("/api/kyc");
     if (kycRes.ok) {
@@ -63,21 +76,27 @@ export default function ShopsPage() {
       setIsOwner(Boolean(kycJson.isOwner));
     }
 
-    const mine = await fetch("/api/shops?mine=1");
-    const mineJson = await mine.json();
-    setShops(mineJson.shops ?? json.shops ?? []);
+    if (json.shops?.length) {
+      setShops(json.shops);
+    } else {
+      const mine = await fetch("/api/shops?mine=1");
+      const mineJson = await mine.json();
+      setShops(mineJson.shops ?? []);
+    }
 
-    if (json.organization?.id) {
-      const { data } = await authClient.organization.listMembers({
-        query: { organizationId: json.organization.id },
-      });
-      setMembers((data?.members as typeof members) ?? []);
+    const membersRes = await fetch("/api/org/members");
+    if (membersRes.ok) {
+      const membersJson = await membersRes.json();
+      const list = (membersJson.members as OrgMember[]) ?? [];
+      setMembers(list);
+      setIsOrgOwner(Boolean(membersJson.isOwner));
+      if (membersJson.isOwner) setIsOwner(true);
     }
   }
 
   useEffect(() => {
-    if (session) loadSeller();
-  }, [session]);
+    if (session?.user?.id) loadSeller();
+  }, [session?.user?.id]);
 
   if (!session) {
     return (
@@ -112,10 +131,28 @@ export default function ShopsPage() {
     loadSeller();
   }
 
+  async function changeMemberRole(memberId: string, role: string) {
+    setRoleSavingId(memberId);
+    const res = await fetch("/api/org/members", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId, role }),
+    });
+    const json = await res.json();
+    setRoleSavingId(null);
+    if (!res.ok) {
+      toast.error(json.error ?? "Rôle non modifié");
+      return;
+    }
+    toast.success("Rôle mis à jour");
+    loadSeller();
+  }
+
   async function inviteMember() {
+    const role = isOrgOwner ? (inviteRole as "member" | "admin") : "member";
     const { error } = await authClient.organization.inviteMember({
       email: inviteEmail,
-      role: inviteRole as "member" | "admin",
+      role,
       organizationId: activeOrgId,
     });
     if (error) {
@@ -262,8 +299,13 @@ export default function ShopsPage() {
       <div className="mt-10">
         <div className="mb-3 flex items-center gap-2">
           <Users className="size-4 text-primary" />
-          <h2 className="font-heading text-sm font-semibold">Équipe & invitations</h2>
+          <h2 className="font-heading text-sm font-semibold">Utilisateurs</h2>
         </div>
+        <p className="mb-4 text-[11px] text-muted-foreground">
+          Chaque compte est un user Chip Shop et member de l&apos;organisation.
+          Un acheteur (achats seulement) est un member simple. Un vendeur
+          aussi, jusqu&apos;à ce que l&apos;owner change son rôle.
+        </p>
         <div className="mb-4 flex flex-col gap-2 sm:flex-row">
           <Input
             type="email"
@@ -272,30 +314,64 @@ export default function ShopsPage() {
             onChange={(e) => setInviteEmail(e.target.value)}
             className="bg-[#1c1c26]"
           />
-          <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v)}>
-            <SelectTrigger className="w-full bg-[#1c1c26] sm:w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="member">Member</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-            </SelectContent>
-          </Select>
+          {isOrgOwner ? (
+            <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v)}>
+              <SelectTrigger className="w-full bg-[#1c1c26] sm:w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-xs text-muted-foreground">
+              Rôle : member
+            </span>
+          )}
           <Button onClick={inviteMember}>Inviter</Button>
         </div>
+        {!isOrgOwner ? (
+          <p className="mb-4 text-[11px] text-muted-foreground">
+            Seul l&apos;owner peut inviter un admin ou changer un rôle.
+          </p>
+        ) : null}
         <ul className="space-y-2">
           {members.map((m) => (
             <li
               key={m.id}
-              className="flex items-center justify-between rounded-xl border border-white/8 bg-[#13131a] px-3 py-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/8 bg-[#13131a] px-3 py-2 text-sm"
             >
-              <span>
+              <span className="min-w-0">
                 {m.user?.name}{" "}
                 <span className="text-muted-foreground">({m.user?.email})</span>
+                <span className="ml-2 text-[11px] text-muted-foreground">
+                  {m.kind === "vendor"
+                    ? `${m.shopCount} boutique${m.shopCount > 1 ? "s" : ""}`
+                    : "acheteur"}
+                </span>
               </span>
-              <span className="rounded-md bg-white/5 px-2 py-0.5 text-xs capitalize">
-                {m.role}
-              </span>
+              {isOrgOwner && m.role !== "owner" ? (
+                <Select
+                  value={m.role}
+                  onValueChange={(v) => {
+                    if (v && v !== m.role) changeMemberRole(m.id, v);
+                  }}
+                  disabled={roleSavingId === m.id}
+                >
+                  <SelectTrigger className="h-8 w-32 bg-[#1c1c26] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="rounded-md bg-white/5 px-2 py-0.5 text-xs capitalize">
+                  {m.role}
+                </span>
+              )}
             </li>
           ))}
         </ul>
