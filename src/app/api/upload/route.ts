@@ -1,15 +1,15 @@
 import { randomUUID } from "crypto";
-import { writeFile } from "fs/promises";
-import path from "path";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import {
   MEDIA_MAX_BYTES,
   detectMediaKind,
-  ensureUploadDirectory,
   extForMedia,
   uploadDirectoryError,
+  writeUploadBuffer,
 } from "@/lib/upload-file.server";
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -42,14 +42,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const dir = await ensureUploadDirectory();
     const filename = `${randomUUID()}.${extForMedia(file, kind)}`;
-    const abs = path.join(/*turbopackIgnore: true*/ dir, filename);
-    const buf = Buffer.from(await file.arrayBuffer());
-    await writeFile(/*turbopackIgnore: true*/ abs, buf);
+    const saved = await writeUploadBuffer(
+      filename,
+      Buffer.from(await file.arrayBuffer()),
+    );
 
     return NextResponse.json({
-      url: `/uploads/${filename}`,
+      url: saved.url,
       kind,
       size: file.size,
       name: file.name,

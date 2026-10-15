@@ -6,6 +6,7 @@ import {
   findUploadedFilePath,
   relativeUploadPathFromUrl,
 } from "@/lib/upload-file.server";
+import { toPublicUploadPath } from "@/lib/upload-url";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -60,7 +61,7 @@ export async function GET(
 ) {
   const { path: segments } = await ctx.params;
   const relativePath = relativeUploadPathFromUrl(
-    `/uploads/${(segments ?? []).join("/")}`,
+    toPublicUploadPath((segments ?? []).join("/")),
   );
   return fileResponse(relativePath, true);
 }
@@ -71,7 +72,7 @@ export async function HEAD(
 ) {
   const { path: segments } = await ctx.params;
   const relativePath = relativeUploadPathFromUrl(
-    `/uploads/${(segments ?? []).join("/")}`,
+    toPublicUploadPath((segments ?? []).join("/")),
   );
   return fileResponse(relativePath, false);
 }

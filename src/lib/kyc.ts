@@ -1,4 +1,5 @@
 import { PLATFORM_ROLES } from "@/lib/org-access";
+import { isPublicUploadPath } from "@/lib/upload-url";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { ensureSystemOrganization } from "@/lib/system-org";
 
@@ -58,7 +59,7 @@ export function kycPublic(kyc: {
 export function isUploadUrl(url: string) {
   const u = url.trim();
   return (
-    u.startsWith("/uploads/") ||
+    isPublicUploadPath(u) ||
     u.startsWith("http://") ||
     u.startsWith("https://")
   );

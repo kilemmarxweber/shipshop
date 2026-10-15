@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { isPublicUploadPath } from "@/lib/upload-url";
 
 const schema = z.object({
   name: z.string().min(2).max(80).optional(),
@@ -64,7 +65,7 @@ export async function PATCH(req: Request) {
     if (body.image !== undefined && body.image !== null) {
       const img = body.image.trim();
       const ok =
-        img.startsWith("/uploads/") ||
+        isPublicUploadPath(img) ||
         img.startsWith("http://") ||
         img.startsWith("https://");
       if (!ok) {

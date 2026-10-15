@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 
+const publicUploadUrl = (
+  process.env.NEXT_PUBLIC_UPLOAD_URL?.trim() || "/uploads"
+).replace(/\/+$/, "") || "/uploads";
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
@@ -13,7 +17,7 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         {
-          source: "/uploads/:path*",
+          source: `${publicUploadUrl}/:path*`,
           destination: "/api/uploads/:path*",
         },
       ],

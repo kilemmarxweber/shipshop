@@ -1,39 +1,61 @@
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
 import path from "path";
+import { DEFAULT_UPLOAD_URL, getPublicUploadUrl, toPublicUploadPath } from "@/lib/upload-url";
+
+export const WINDOWS_UPLOAD_DIRECTORY = "C:\\chipshop-uploads";
+export const LINUX_UPLOAD_DIRECTORY = "/var/www/chipshop-uploads";
+
+/** Lecture runtime (évite que Next inline UPLOAD_DIR au `next build`). */
+function runtimeEnv(name: string): string {
+  const bag = process.env as Record<string, string | undefined>;
+  return (bag[name] ?? "").trim();
+}
+
+function isWindowsDrivePath(value: string) {
+  return /^[A-Za-z]:[\\/]/.test(value);
+}
+
+function addUniqueDir(dirs: string[], value?: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) return;
+  if (process.platform !== "win32" && isWindowsDrivePath(trimmed)) return;
+  const resolved = path.resolve(/*turbopackIgnore: true*/ trimmed);
+  if (!dirs.includes(resolved)) dirs.push(resolved);
+}
+
+export function platformUploadDirectory(): string {
+  return process.platform === "win32"
+    ? WINDOWS_UPLOAD_DIRECTORY
+    : LINUX_UPLOAD_DIRECTORY;
+}
 
 /**
- * Dossier physique des uploads (images / vidéos produits).
- * Priorité : UPLOAD_DIR → C:\chipshop-uploads (Win) → /var/www/chipshop-uploads (Linux)
- * → public/uploads en dev.
+ * Dossier physique des photos / vidéos (comme Eteyelo).
+ * Windows : C:\chipshop-uploads — Linux : /var/www/chipshop-uploads
+ * UPLOAD_DIR surcharge si le chemin est valide pour l’OS.
  */
 export function getUploadDirectory(): string {
-  const configured = process.env.UPLOAD_DIR?.trim();
+  const configured = runtimeEnv("UPLOAD_DIR");
   if (configured) {
-    return path.resolve(/*turbopackIgnore: true*/ configured);
+    if (process.platform === "win32" || !isWindowsDrivePath(configured)) {
+      return path.resolve(/*turbopackIgnore: true*/ configured);
+    }
   }
+  return path.resolve(/*turbopackIgnore: true*/ platformUploadDirectory());
+}
 
+export function listUploadDirectories(): string[] {
+  const dirs: string[] = [];
+  addUniqueDir(dirs, getUploadDirectory());
   if (process.platform === "win32") {
-    return path.resolve(/*turbopackIgnore: true*/ "C:\\chipshop-uploads");
+    addUniqueDir(dirs, WINDOWS_UPLOAD_DIRECTORY);
+    addUniqueDir(dirs, "C:/chipshop-uploads");
+  } else {
+    addUniqueDir(dirs, LINUX_UPLOAD_DIRECTORY);
   }
-
-  if (process.platform === "linux") {
-    return path.resolve(
-      /*turbopackIgnore: true*/ "/var/www/chipshop-uploads",
-    );
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    return path.join(
-      /*turbopackIgnore: true*/ process.cwd(),
-      "public",
-      "uploads",
-    );
-  }
-
-  throw new Error(
-    "La variable d'environnement UPLOAD_DIR est obligatoire en production.",
-  );
+  addUniqueDir(dirs, runtimeEnv("UPLOAD_DIR"));
+  return dirs;
 }
 
 export function uploadDirectoryError(dir: string, err: unknown): string {
@@ -62,14 +84,6 @@ export async function ensureUploadDirectory(): Promise<string> {
   }
 }
 
-export function publicUploadsDirectory(): string {
-  return path.join(
-    /*turbopackIgnore: true*/ process.cwd(),
-    "public",
-    "uploads",
-  );
-}
-
 function isPathInside(root: string, absolute: string): boolean {
   const resolvedRoot = path.resolve(/*turbopackIgnore: true*/ root);
   const resolvedAbs = path.resolve(/*turbopackIgnore: true*/ absolute);
@@ -86,12 +100,17 @@ export function relativeUploadPathFromUrl(
   const raw = url?.trim().split("?")[0] ?? "";
   if (!raw) return null;
 
-  const normalized = raw
-    .replace(/\\/g, "/")
-    .replace(/^https?:\/\/[^/]+/i, "")
-    .replace(/^\/+/, "")
-    .replace(/^api\/uploads\//, "")
-    .replace(/^uploads\//, "");
+  const publicPrefix = getPublicUploadUrl().replace(/^\/+/, "");
+  const defaultPrefix = DEFAULT_UPLOAD_URL.replace(/^\/+/, "");
+
+  let normalized = raw.replace(/\\/g, "/").replace(/^https?:\/\/[^/]+/i, "");
+  normalized = normalized.replace(/^\/+/, "");
+  for (const prefix of [`api/${publicPrefix}`, publicPrefix, `api/${defaultPrefix}`, defaultPrefix]) {
+    if (normalized === prefix || normalized.startsWith(`${prefix}/`)) {
+      normalized = normalized.slice(prefix.length).replace(/^\/+/, "");
+      break;
+    }
+  }
 
   if (!normalized || normalized.includes("..")) return null;
 
@@ -118,45 +137,44 @@ export function resolveUploadAbsolutePath(relativePath: string): string {
   return absolute;
 }
 
+export async function writeUploadBuffer(fileName: string, buffer: Buffer) {
+  const relative = relativeUploadPathFromUrl(fileName) ?? fileName;
+  if (!relative || relative.includes("..")) {
+    throw new Error("Nom de fichier invalide.");
+  }
+  const uploadDirectory = await ensureUploadDirectory();
+  const filePath = path.join(
+    /*turbopackIgnore: true*/ uploadDirectory,
+    relative,
+  );
+  if (!isPathInside(uploadDirectory, filePath)) {
+    throw new Error("Chemin de fichier invalide.");
+  }
+  await fs.mkdir(/*turbopackIgnore: true*/ path.dirname(filePath), {
+    recursive: true,
+  });
+  await fs.writeFile(/*turbopackIgnore: true*/ filePath, buffer);
+  const stored = relative.replace(/\\/g, "/");
+  return { fileName: stored, url: toPublicUploadPath(stored) };
+}
+
 export async function findUploadedFilePath(
   relativePath: string,
 ): Promise<string | null> {
-  const sharedPath = resolveUploadAbsolutePath(relativePath);
-  try {
-    const stat = await fs.stat(/*turbopackIgnore: true*/ sharedPath);
-    if (stat.isFile()) return sharedPath;
-  } catch {
-    // pas encore dans le dossier partagé
-  }
-
-  const publicRoot = path.resolve(
-    /*turbopackIgnore: true*/ publicUploadsDirectory(),
-  );
-  const publicPath = path.resolve(
-    /*turbopackIgnore: true*/ publicRoot,
-    relativePath,
-  );
-  if (!isPathInside(publicRoot, publicPath)) return null;
-
-  try {
-    const stat = await fs.stat(/*turbopackIgnore: true*/ publicPath);
-    if (!stat.isFile()) return null;
-  } catch {
-    return null;
-  }
-
-  try {
-    await fs.mkdir(/*turbopackIgnore: true*/ path.dirname(sharedPath), {
-      recursive: true,
-    });
-    await fs.copyFile(
-      /*turbopackIgnore: true*/ publicPath,
-      /*turbopackIgnore: true*/ sharedPath,
+  for (const directory of listUploadDirectories()) {
+    const absolute = path.resolve(
+      /*turbopackIgnore: true*/ directory,
+      relativePath,
     );
-    return sharedPath;
-  } catch {
-    return publicPath;
+    if (!isPathInside(directory, absolute)) continue;
+    try {
+      const fileStat = await fs.stat(/*turbopackIgnore: true*/ absolute);
+      if (fileStat.isFile()) return absolute;
+    } catch {
+      // essayer le dossier suivant
+    }
   }
+  return null;
 }
 
 export const MEDIA_MAX_BYTES = 10 * 1024 * 1024; // 10 Mo

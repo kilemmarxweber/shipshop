@@ -50,8 +50,8 @@ const COORDS: Record<string, { lat: number; lng: number }> = {
 };
 
 async function main() {
-  const email = "demo@chipshop.cd";
-  const password = await hashPassword("demo12345");
+  const email = "kilem@chipshop.cd";
+  const password = await hashPassword("Kilem123456@");
 
   let user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
