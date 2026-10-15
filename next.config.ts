@@ -1,9 +1,24 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    proxyClientMaxBodySize: "12mb",
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
+  },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/uploads/:path*",
+          destination: "/api/uploads/:path*",
+        },
+      ],
+    };
+  },
   turbopack: {
     rules: {
       "*.css": {

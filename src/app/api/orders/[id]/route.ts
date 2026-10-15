@@ -1,0 +1,76 @@
+import { NextResponse } from "next/server";
+import { cancelOrder } from "@/lib/checkout";
+import { prisma, withDbRetry } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
+
+async function canViewOrder(userId: string, orderId: string) {
+  const order = await withDbRetry(() =>
+    prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        product: true,
+        shop: true,
+        courier: true,
+        pickupReceipt: true,
+        zone: true,
+        deliveryEvents: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: { select: { id: true, name: true } } },
+        },
+        buyer: { select: { id: true, name: true, phone: true, email: true } },
+      },
+    }),
+  );
+  if (!order) return null;
+  if (order.buyerId === userId) return order;
+
+  const member = await withDbRetry(() =>
+    prisma.member.findFirst({
+      where: {
+        userId,
+        organizationId: order.shop.organizationId,
+      },
+    }),
+  );
+  if (!member) return null;
+  return order;
+}
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const order = await canViewOrder(session.user.id, id);
+  if (!order) {
+    return NextResponse.json({ error: "Commande introuvable" }, { status: 404 });
+  }
+  return NextResponse.json({ order });
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+    const result = await withDbRetry(() =>
+      prisma.$transaction((tx) => cancelOrder(tx, session.user.id, id)),
+    );
+    return NextResponse.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Annulation impossible";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

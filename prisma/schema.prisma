@@ -1,0 +1,589 @@
+// Chip Shop — Prisma schema (Better Auth + domain)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Better Auth core ───────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  phone         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions          Session[]
+  accounts          Account[]
+  members           Member[]
+  invitations       Invitation[]
+  wallet            Wallet?
+  orders            Order[]         @relation("BuyerOrders")
+  cartItems         CartItem[]
+  likes             ProductLike[]
+  conversationsBuy  Conversation[]  @relation("ConversationBuyer")
+  messagesSent      Message[]
+  deliveryEvents    DeliveryEvent[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id @default(cuid())
+  expiresAt            DateTime
+  token                String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ─── Better Auth organization plugin ────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String
+  logo      String?
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  members          Member[]
+  invitations      Invitation[]
+  shops            Shop[]
+  messagingConfig  MessagingConfig?
+  messageTemplates MessageTemplate[]
+
+  @@unique([slug])
+  @@map("organization")
+}
+
+model Member {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String   @default("member")
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String   @default("pending")
+  expiresAt      DateTime
+  inviterId      String
+  user           User     @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+// ─── Domain: shops & catalog ────────────────────────────────────────
+
+model Shop {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownerUserId    String?
+  name           String
+  slug           String
+  description    String?
+  logoUrl        String?
+  lat            Float    @default(-4.305)
+  lng            Float    @default(15.311)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  products      Product[]
+  orders        Order[]
+  conversations Conversation[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([ownerUserId])
+  @@map("shop")
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  SOLD
+  HIDDEN
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  shopId      String
+  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  priceCents  Int
+  quantity    Int           @default(1)
+  currency    String        @default("USD")
+  category    String
+  images      String[]
+  colors      String[]      @default([])
+  sizes       String[]      @default([])
+  status      ProductStatus @default(DRAFT)
+  location    String?
+  protectionFeeCents Int?
+  shippingCents      Int?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  orders        Order[]
+  cartItems     CartItem[]
+  likes         ProductLike[]
+  conversations Conversation[]
+
+  @@index([category, status])
+  @@index([shopId, status])
+  @@map("product")
+}
+
+model ProductLike {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@map("product_like")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  buyerId   String
+  buyer     User     @relation("ConversationBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@unique([buyerId, shopId])
+  @@index([shopId])
+  @@map("conversation")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  /// Message urgent (soucis commande) — badge alerte côté vendeur
+  isUrgent       Boolean      @default(false)
+  /// Reste « non lu » jusqu'à réponse vendeur ou confirmation de changement
+  requiresAck    Boolean      @default(false)
+  readAt         DateTime?
+  orderIssueId   String?
+  orderIssue     OrderIssue?  @relation(fields: [orderIssueId], references: [id], onDelete: SetNull)
+  kind           String?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([requiresAck, isUrgent])
+  @@map("message")
+}
+
+enum OrderIssueType {
+  WRONG_SIZE
+  WRONG_COLOR
+  DEFECT
+  WRONG_PRODUCT
+  OTHER
+}
+
+enum OrderIssueStatus {
+  OPEN
+  SELLER_REPLIED
+  CHANGE_CONFIRMED
+  RESOLVED
+  REJECTED
+}
+
+/// Signalement client (taille / erreur) → message urgent vendeur
+model OrderIssue {
+  id             String           @id @default(cuid())
+  orderId        String
+  order          Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  buyerId        String
+  shopId         String
+  type           OrderIssueType
+  description    String
+  status         OrderIssueStatus @default(OPEN)
+  conversationId String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  resolvedAt     DateTime?
+
+  messages Message[]
+
+  @@index([orderId, status])
+  @@index([shopId, status])
+  @@map("order_issue")
+}
+
+// ─── Domain: cart ───────────────────────────────────────────────────
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("cart_item")
+}
+
+// ─── Domain: delivery zones & couriers ───────────────────────────────
+
+enum ZoneKind {
+  CENTER
+  REMOTE
+}
+
+model DeliveryZone {
+  id              String   @id @default(cuid())
+  name            String
+  commune         String   @unique
+  kind            ZoneKind
+  baseCents       Int
+  ratePerKmCents  Int
+  centerLat       Float
+  centerLng       Float
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  couriers Courier[]
+  orders   Order[]
+
+  @@map("delivery_zone")
+}
+
+model Courier {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String
+  lat         Float
+  lng         Float
+  zoneId      String?
+  zone        DeliveryZone? @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  isAvailable Boolean  @default(true)
+  /// Dernière position GPS (mise à jour livreur / mock)
+  lastLat     Float?
+  lastLng     Float?
+  lastSeenAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([isAvailable])
+  @@map("courier")
+}
+
+// ─── Domain: wallet ─────────────────────────────────────────────────
+
+model Wallet {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balanceCents Int      @default(0)
+  currency     String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions WalletTransaction[]
+
+  @@map("wallet")
+}
+
+enum WalletTxnType {
+  DEPOSIT
+  PURCHASE
+  REFUND
+  ADJUSTMENT
+}
+
+enum MobileMoneyProvider {
+  MPESA
+  ORANGE
+  AIRTEL
+  INTERNAL
+}
+
+enum WalletTxnStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model WalletTransaction {
+  id               String              @id @default(cuid())
+  walletId         String
+  wallet           Wallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type             WalletTxnType
+  amountCents      Int
+  balanceAfterCents Int?
+  provider         MobileMoneyProvider @default(INTERNAL)
+  phone            String?
+  reference        String?
+  status           WalletTxnStatus     @default(PENDING)
+  metadata         Json?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([walletId, createdAt])
+  @@index([reference])
+  @@map("wallet_transaction")
+}
+
+// ─── Domain: orders & fulfillment ───────────────────────────────────
+
+enum FulfillmentType {
+  DELIVERY
+  PICKUP
+}
+
+enum OrderStatus {
+  PAID
+  ASSIGNED
+  FULFILLING
+  OUT_FOR_DELIVERY
+  READY_FOR_PICKUP
+  PICKED_UP
+  DELIVERED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+model Order {
+  id                 String          @id @default(cuid())
+  buyerId            String
+  buyer              User            @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Cascade)
+  shopId             String
+  shop               Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productId          String
+  product            Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productCents       Int
+  shippingCents      Int             @default(0)
+  protectionFeeCents Int             @default(0)
+  totalCents         Int
+  /// @deprecated use productCents / totalCents — kept for legacy rows
+  amountCents        Int             @default(0)
+  fulfillmentType    FulfillmentType @default(PICKUP)
+  deliveryCity       String?
+  deliveryAddress    String?
+  deliveryCommune    String?
+  deliveryQuartier   String?
+  deliveryAvenue     String?
+  deliveryParcelle   String?
+  deliveryLat        Float?
+  deliveryLng        Float?
+  contactPhone       String?
+  zoneId             String?
+  zone               DeliveryZone?   @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  courierId          String?
+  courier            Courier?        @relation(fields: [courierId], references: [id], onDelete: SetNull)
+  distanceKm         Float?
+  /// Distance livreur → client (km) au moment de l'assignation / MAJ GPS
+  courierDistanceKm  Float?
+  /// ETA minutes (trafic inclus)
+  etaMinutes         Int?
+  etaAt              DateTime?
+  /// Client déjà notifié à ~100 m
+  proximityNotifiedAt DateTime?
+  status             OrderStatus     @default(PAID)
+  paidAt             DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  pickupReceipt  PickupReceipt?
+  deliveryEvents DeliveryEvent[]
+  notifications  NotificationLog[]
+  issues         OrderIssue[]
+
+  @@index([buyerId, createdAt])
+  @@index([shopId, status])
+  @@index([courierId])
+  @@map("order")
+}
+
+/// Reçu / preuve de remise (retrait boutique OU livraison) — QR à scanner
+model PickupReceipt {
+  id         String    @id @default(cuid())
+  orderId    String    @unique
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  code       String    @unique
+  qrPayload  String
+  expiresAt  DateTime?
+  redeemedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("pickup_receipt")
+}
+
+model DeliveryEvent {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      OrderStatus
+  note        String?
+  actorUserId String?
+  actor       User?       @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
+
+  @@index([orderId, createdAt])
+  @@map("delivery_event")
+}
+
+// ─── Messaging plateforme (config owner Chip Shop) ─────────────────
+
+enum WhatsappProvider {
+  klambo
+  infobip
+}
+
+enum MsgChannel {
+  whatsapp
+  sms
+}
+
+/// Config unique (org système) — Klambo / Infobip SMS / Infobip WhatsApp
+model MessagingConfig {
+  id                    String           @id @default(cuid())
+  organizationId        String           @unique
+  organization          Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  whatsappProvider      WhatsappProvider @default(klambo)
+  /// Klambo
+  klamboApiKeyEnc       String?
+  klamboBaseUrl         String           @default("https://whatsapp-api.klambocore.com")
+  klamboDefaultCountry  String           @default("CD")
+  /// Infobip SMS
+  smsApiKeyEnc          String?
+  smsBaseUrl            String           @default("https://l2gerd.api.infobip.com")
+  smsSender             String           @default("ChipShop")
+  /// Infobip WhatsApp
+  waApiKeyEnc           String?
+  waBaseUrl             String           @default("https://l2gerd.api.infobip.com")
+  waFromNumber          String?
+  notifySms             Boolean          @default(true)
+  notifyWhatsapp        Boolean          @default(true)
+  brandPrefix           String           @default("Chip Shop")
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@map("messaging_config")
+}
+
+/// Templates uniques owner — partagés par tous les vendeurs
+model MessageTemplate {
+  id                  String     @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Clé événement: COURIER_ASSIGNED, COURIER_NEAR_100M, PICKED_UP…
+  eventKey            String
+  name                String
+  channel             MsgChannel @default(whatsapp)
+  body                String
+  infobipTemplateName String?
+  infobipLanguage     String     @default("fr")
+  isActive            Boolean    @default(true)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@unique([organizationId, eventKey, channel])
+  @@index([organizationId, eventKey])
+  @@map("message_template")
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  eventKey  String
+  channel   MsgChannel
+  toPhone   String
+  body      String
+  status    String   @default("SENT")
+  provider  String?
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId, eventKey])
+  @@map("notification_log")
+}
