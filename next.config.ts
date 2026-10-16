@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
+import { normalizePublicUploadUrl } from "./src/lib/upload-url";
 
-const publicUploadUrl = (
-  process.env.NEXT_PUBLIC_UPLOAD_URL?.trim() || "/uploads"
-).replace(/\/+$/, "") || "/uploads";
+const publicUploadUrl = normalizePublicUploadUrl(
+  process.env.NEXT_PUBLIC_UPLOAD_URL,
+);
 
 const nextConfig: NextConfig = {
   cacheComponents: true,

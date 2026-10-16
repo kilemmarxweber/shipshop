@@ -1,3 +1,4 @@
+import type { AccessControl } from "better-auth/plugins/access";
 import {
   adminAc,
   defaultAc,
@@ -20,7 +21,7 @@ export const sellerMemberAc = defaultAc.newRole({
   ac: ["read"],
 });
 
-export const orgAccessControl = defaultAc;
+export const orgAccessControl = defaultAc as unknown as AccessControl;
 
 export const orgRoles = {
   owner: ownerAc,

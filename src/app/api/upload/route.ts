@@ -9,8 +9,6 @@ import {
   writeUploadBuffer,
 } from "@/lib/upload-file.server";
 
-export const runtime = "nodejs";
-
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) {
