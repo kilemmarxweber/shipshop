@@ -60,6 +60,15 @@ pnpm prisma migrate deploy
 Ne pas lancer `prisma migrate dev`.  
 Ne pas lancer `pnpm db:seed` en prod (compte démo).
 
+Si une migration est **en échec** (`P3018`) :
+
+```bash
+pnpm prisma migrate resolve --rolled-back 20261015233000_handover_buyer_confirm
+pnpm prisma migrate deploy
+```
+
+Ne jamais `resolve --applied` tant que le SQL n’a pas réellement réussi.
+
 ---
 
 ## 3. Dossier photos (comme Eteyelo)
