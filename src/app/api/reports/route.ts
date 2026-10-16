@@ -124,9 +124,13 @@ export async function GET(req: Request) {
       })
       .sort((a, b) => b.soldCents - a.soldCents);
 
-    const topProducts = [...products]
-      .sort((a, b) => b.soldCents - a.soldCents)
-      .slice(0, 12);
+    // Owner : top 12 plateforme. Vendeur : tous ses produits (budget qté × prix).
+    const sortedProducts = [...products].sort(
+      (a, b) => b.soldCents - a.soldCents,
+    );
+    const topProducts = scope.isOwner
+      ? sortedProducts.slice(0, 12)
+      : sortedProducts;
 
     const peakWeekday = [...weekdayHeat].sort(
       (a, b) => b.revenueCents - a.revenueCents,

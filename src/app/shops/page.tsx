@@ -232,14 +232,14 @@ export default function ShopsPage() {
           >
             Rapports
           </Link>
-          <Link
-            href="/shops/messaging"
-            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
-          >
-            Messages
-          </Link>
           {isOwner ? (
             <>
+              <Link
+                href="/shops/messaging"
+                className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
+              >
+                Messages
+              </Link>
               <Link
                 href="/shops/admin/products"
                 className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"

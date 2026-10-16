@@ -64,18 +64,12 @@ export async function resolveReportScope(userId: string) {
     return { isOwner: true as const, orgId: org.id, shops };
   }
 
+  // Vendeur : uniquement ses boutiques (pas toutes via membership org).
   const shops = await withDbRetry(() =>
     prisma.shop.findMany({
       where: {
+        ownerUserId: userId,
         isActive: true,
-        OR: [
-          { ownerUserId: userId },
-          {
-            organization: {
-              members: { some: { userId } },
-            },
-          },
-        ],
       },
       select: {
         id: true,

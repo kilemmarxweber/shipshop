@@ -302,9 +302,13 @@ export default function ReportsPage() {
             />
             <Kpi
               icon={<Package className="size-4 text-amber-400" />}
-              label="Stock non vendu"
+              label={isOwner ? "Stock non vendu" : "Budget stock"}
               value={formatMoney(report.insights.inventoryValueCents)}
-              hint={`${report.insights.sellThrough}% écoulé`}
+              hint={
+                isOwner
+                  ? `${report.insights.sellThrough}% écoulé`
+                  : `${report.products.reduce((a, p) => a + p.stockQty, 0)} art. · qté × prix`
+              }
             />
             <Kpi
               icon={<Wallet className="size-4 text-violet-400" />}
@@ -458,7 +462,9 @@ export default function ReportsPage() {
           {tab === "products" && (
             <section className="space-y-2">
               <p className="text-[11px] text-muted-foreground">
-                Montant vendu (période) vs valeur stock restant (qté × prix)
+                {isOwner
+                  ? "Top produits plateforme — vendu vs stock (qté × prix)"
+                  : "Vos produits uniquement — vendu vs budget stock (qté × prix)"}
               </p>
               {report.products.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">

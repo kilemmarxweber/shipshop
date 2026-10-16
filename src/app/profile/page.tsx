@@ -708,9 +708,9 @@ export default function ProfilePage() {
               ["/shops/products", "Mes produits (prix, stock…)"],
               ["/shops/orders", "Commandes & livreurs"],
               ["/shops/reports", "Rapports & statistiques"],
-              ["/shops/messaging", "Messages (admin)"],
               ...(isOwner
                 ? ([
+                    ["/shops/messaging", "Messages (admin)"],
                     ["/shops/admin/products", "Modération produits (tout)"],
                     ["/shops/admin/vendors", "Vendeurs & clients"],
                     ["/shops/kyc", "Revue KYC"],
