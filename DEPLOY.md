@@ -16,7 +16,7 @@ PostgreSQL **local** sur le port **5432** (pas Docker). Photos dans **`chipshop-
 | Package manager | **pnpm** |
 | PostgreSQL | **16** en local, `127.0.0.1:5432` seulement |
 | Reverse proxy | **Nginx** + **Certbot** (HTTPS) |
-| Processus | **systemd** (ou PM2) : `pnpm start` |
+| Processus | **PM2** : `pnpm start` (port **3000**) |
 | Pare-feu | **80 / 443** ouverts ; **5432 fermé** sur Internet |
 | Timezone | `Africa/Kinshasa` |
 
@@ -169,34 +169,45 @@ sudo certbot --nginx -d shipshop.klambocore.com
 
 ---
 
-## 6. systemd
+## 6. PM2
 
+Chemin VPS : **`/var/www/shop/shipshop`**.  
 L’app écoute en interne sur le **port 3000**. Nginx termine TLS.
 
-```ini
-[Unit]
-Description=Ship Shop
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/var/www/shipshop
-EnvironmentFile=/var/www/shipshop/.env
-ExecStart=/usr/bin/pnpm start
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Ajuster `User`, `WorkingDirectory` et le chemin de `pnpm`.
+Prérequis : `.env` prod, `pnpm install`, `pnpm prisma migrate deploy`, `pnpm build`.
 
 ```bash
-sudo systemctl enable --now shipshop
-sudo systemctl status shipshop
+cd /var/www/shop/shipshop
+
+# une fois
+npm i -g pm2   # si pm2 n’est pas déjà installé
+
+pm2 start pnpm --name shipshop -- start
+pm2 save
+pm2 startup    # suivre la commande sudo qu’il affiche
 ```
+
+Commandes utiles :
+
+```bash
+pm2 status
+pm2 logs shipshop
+pm2 restart shipshop
+pm2 stop shipshop
+```
+
+Après un `git pull` :
+
+```bash
+cd /var/www/shop/shipshop
+pnpm install --frozen-lockfile
+pnpm prisma migrate deploy
+pnpm build
+pm2 restart shipshop
+```
+
+PM2 charge le `.env` du dossier via Next (`cwd` = `/var/www/shop/shipshop`).  
+Si le process démarre sans les variables : `pm2 restart shipshop --update-env`.
 
 ---
 
@@ -208,7 +219,7 @@ sudo systemctl status shipshop
 4. `pnpm install --frozen-lockfile`
 5. `pnpm prisma migrate deploy`
 6. `pnpm build`
-7. systemd + Nginx + SSL
+7. PM2 + Nginx + SSL
 8. Créer le **vrai owner** (pas `demo@chipshop.cd`)
 9. Configurer SMS / WhatsApp dans `/shops/messaging` (clés Infobip / Klambo dans l’UI, pas dans `.env`)
 

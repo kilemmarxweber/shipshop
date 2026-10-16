@@ -19,6 +19,8 @@ import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AppearanceSettings } from "@/components/appearance-settings";
+import { useI18n } from "@/components/i18n-provider";
 
 type Order = {
   id: string;
@@ -57,6 +59,7 @@ const IMAGE_TYPES = new Set([
 
 export default function ProfilePage() {
   const { data: session } = authClient.useSession();
+  const { t } = useI18n();
   const userId = session?.user?.id;
   const fileRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"buyer" | "seller">("buyer");
@@ -594,7 +597,7 @@ export default function ProfilePage() {
             ))}
           </div>
 
-          <div className="mb-3 flex flex-wrap gap-1.5">
+          <div className="h-scroll mb-3 gap-1.5">
             {(
               [
                 ["7d", "7 j"],
@@ -608,7 +611,7 @@ export default function ProfilePage() {
                 type="button"
                 onClick={() => setPeriod(key)}
                 className={cn(
-                  "rounded-lg px-2.5 py-1 text-[11px] font-semibold",
+                  "rounded-lg px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap",
                   period === key
                     ? "bg-primary text-white"
                     : "bg-white/5 text-muted-foreground",
@@ -762,13 +765,15 @@ export default function ProfilePage() {
         </div>
       )}
 
+      <AppearanceSettings />
+
       <Button
         variant="ghost"
         className="mt-8 w-full gap-2 text-muted-foreground"
         onClick={() => authClient.signOut()}
       >
         <LogOut className="size-4" />
-        Se déconnecter
+        {t("settings.logout")}
       </Button>
     </div>
   );

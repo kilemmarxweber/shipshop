@@ -18,6 +18,8 @@ model User {
   emailVerified Boolean   @default(false)
   image         String?
   phone         String?
+  locale        String?   @default("fr")
+  theme         String?   @default("dark")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -34,6 +36,7 @@ model User {
   deliveryEvents    DeliveryEvent[]
   sellerKyc         SellerKyc?
   kycReviews        SellerKyc[]     @relation("KycReviewer")
+  ownedShops        Shop[]          @relation("ShopOwner")
 
   @@unique([email])
   @@map("user")
@@ -146,6 +149,7 @@ model Shop {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ownerUserId    String?
+  owner          User?    @relation("ShopOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   name           String
   slug           String
   description    String?

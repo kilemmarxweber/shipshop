@@ -255,14 +255,14 @@ function PublishInner() {
           </div>
           <div>
             <Label className="mb-2 block">Catégorie</Label>
-            <div className="flex flex-wrap gap-2">
+            <div className="h-scroll h-scroll-fade gap-2">
               {CATEGORIES.map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setCategory(c.id)}
                   className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-semibold",
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold whitespace-nowrap",
                     category === c.id
                       ? "border-primary bg-primary text-white"
                       : "border-white/10 bg-[#1c1c26]",
@@ -276,7 +276,7 @@ function PublishInner() {
 
           <div>
             <Label className="mb-2 block">Couleurs disponibles</Label>
-            <div className="flex flex-wrap gap-2">
+            <div className="h-scroll h-scroll-fade gap-2">
               {PRESET_COLORS.map((c) => (
                 <button
                   key={c.name}
@@ -284,7 +284,7 @@ function PublishInner() {
                   title={c.name}
                   onClick={() => toggleColor(c.name)}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold",
+                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold whitespace-nowrap",
                     colors.includes(c.name)
                       ? "border-primary bg-primary/15"
                       : "border-white/10 bg-[#1c1c26]",
@@ -302,14 +302,14 @@ function PublishInner() {
 
           <div>
             <Label className="mb-2 block">Tailles disponibles</Label>
-            <div className="flex flex-wrap gap-2">
+            <div className="h-scroll h-scroll-fade gap-2">
               {PRESET_SIZES.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => toggleSize(s)}
                   className={cn(
-                    "rounded-xl border px-2.5 py-1.5 text-[11px] font-bold",
+                    "rounded-xl border px-2.5 py-1.5 text-[11px] font-bold whitespace-nowrap",
                     sizes.includes(s)
                       ? "border-primary bg-primary text-white"
                       : "border-white/10 bg-[#1c1c26]",

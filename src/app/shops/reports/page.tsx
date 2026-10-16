@@ -247,11 +247,11 @@ export default function ReportsPage() {
               : "Vos boutiques · ventes, stock et pics d'achats"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="h-scroll gap-2">
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value as Period)}
-            className="h-9 rounded-lg border border-white/10 bg-[#1c1c26] px-2 text-xs"
+            className="h-9 shrink-0 rounded-lg border border-white/10 bg-[#1c1c26] px-2 text-xs"
           >
             <option value="7d">7 jours</option>
             <option value="30d">30 jours</option>

@@ -147,7 +147,7 @@ function ChatInner() {
   const hasUrgent = messages.some((m) => m.isUrgent && m.requiresAck);
 
   return (
-    <div className="flex h-[calc(100dvh-8.5rem)] flex-col md:h-[calc(100dvh-6rem)]">
+    <div className="flex h-[calc(100dvh-8.5rem)] min-h-0 flex-col md:h-[calc(100%-0.5rem)] md:max-h-[calc(100dvh-7rem)]">
       <div className="border-b border-white/8 px-4 pb-3 pt-0">
         <div className="min-w-0">
           <p className="flex items-center gap-2 truncate font-heading text-sm font-bold">

@@ -165,49 +165,49 @@ export default function ShopsPage() {
 
   return (
     <div className="px-4 pb-6 pt-0 md:px-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-6 space-y-3">
         <div>
           <h1 className="font-heading text-xl font-bold">Mes boutiques</h1>
           <p className="text-sm text-muted-foreground">
             1 organisation → plusieurs shops
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="h-scroll h-scroll-fade w-full gap-2">
           <Link
             href="/shops/products"
-            className="inline-flex h-7 items-center rounded-lg bg-primary px-2.5 text-[0.8rem] font-medium text-primary-foreground"
+            className="inline-flex h-7 items-center rounded-lg bg-primary px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary-foreground"
           >
             Produits
           </Link>
           <Link
             href="/shops/orders"
-            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"
+            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
           >
             Commandes
           </Link>
           <Link
             href="/shops/reports"
-            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"
+            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
           >
             Rapports
           </Link>
           <Link
             href="/shops/messaging"
-            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"
+            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
           >
             Messages
           </Link>
           {isOwner ? (
             <Link
               href="/shops/kyc"
-              className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"
+              className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
             >
               KYC
             </Link>
           ) : null}
           <Link
             href="/onboarding"
-            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium"
+            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
           >
             + Boutique
           </Link>

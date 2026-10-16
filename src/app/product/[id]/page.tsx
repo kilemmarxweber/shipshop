@@ -345,7 +345,7 @@ function ProductInner() {
             <p className="mb-2 text-xs font-semibold text-muted-foreground">
               Couleur{selectedColor ? ` · ${selectedColor}` : ""}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="h-scroll gap-2">
               {product.colors.map((c) => (
                 <button
                   key={c}
@@ -353,7 +353,7 @@ function ProductInner() {
                   title={c}
                   onClick={() => setSelectedColor(c)}
                   className={cn(
-                    "size-8 cursor-pointer rounded-full border-2 transition",
+                    "size-8 shrink-0 cursor-pointer rounded-full border-2 transition",
                     selectedColor === c
                       ? "border-primary scale-110"
                       : "border-white/20",
@@ -370,14 +370,14 @@ function ProductInner() {
             <p className="mb-2 text-xs font-semibold text-muted-foreground">
               Taille
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="h-scroll gap-2">
               {product.sizes.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => setSelectedSize(s)}
                   className={cn(
-                    "min-w-10 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold",
+                    "min-w-10 shrink-0 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold whitespace-nowrap",
                     selectedSize === s
                       ? "border-primary bg-primary text-white"
                       : "border-white/10 bg-[#1c1c26]",

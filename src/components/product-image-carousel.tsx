@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -12,6 +12,20 @@ type Props = {
   /** cover = remplit la card ; contain = image entière visible */
   fit?: "cover" | "contain";
 };
+
+const SWIPE_MIN_PX = 42;
+const IN_VIEW_RATIO = 0.55;
+const LEFT_VIEW_RATIO = 0.4;
+
+function scrollRootFor(el: HTMLElement): Element | null {
+  const snap = el.closest(".feed-snap");
+  if (snap instanceof HTMLElement) {
+    const overflowY = getComputedStyle(snap).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") return snap;
+  }
+  const main = el.closest(".app-main");
+  return main instanceof HTMLElement ? main : null;
+}
 
 export function ProductImageCarousel({
   images,
@@ -26,30 +40,137 @@ export function ProductImageCarousel({
       ? images
       : ["https://picsum.photos/seed/chipshop/800/1000"];
   const [index, setIndex] = useState(0);
+  const [inView, setInView] = useState(true);
+  /** Pause auto tant que l'utilisateur reste sur cette card après un swap manuel */
+  const [manualHold, setManualHold] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const startRef = useRef<{ x: number; y: number; id: number } | null>(null);
+  const lockedAxis = useRef<"x" | "y" | null>(null);
 
   useEffect(() => {
-    if (list.length <= 1) return;
+    const el = rootRef.current;
+    if (!el || list.length <= 1) return;
+
+    const target =
+      el.closest(".feed-snap-item") instanceof HTMLElement
+        ? (el.closest(".feed-snap-item") as HTMLElement)
+        : el;
+    const root = scrollRootFor(el);
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) return;
+        const ratio = entry.intersectionRatio;
+        if (ratio < LEFT_VIEW_RATIO) {
+          setInView(false);
+          setManualHold(false);
+          return;
+        }
+        if (ratio >= IN_VIEW_RATIO) {
+          setInView(true);
+        }
+      },
+      {
+        root,
+        threshold: [0, 0.25, LEFT_VIEW_RATIO, IN_VIEW_RATIO, 0.75, 1],
+      },
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, [list.length]);
+
+  useEffect(() => {
+    if (list.length <= 1 || manualHold || !inView) return;
     const t = setInterval(() => {
       setIndex((i) => (i + 1) % list.length);
     }, intervalMs);
     return () => clearInterval(t);
-  }, [list.length, intervalMs]);
+  }, [list.length, intervalMs, manualHold, inView]);
+
+  function goManual(next: number) {
+    setIndex(((next % list.length) + list.length) % list.length);
+    setManualHold(true);
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (list.length <= 1 || e.button !== 0) return;
+    startRef.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    lockedAxis.current = null;
+    try {
+      rootRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const start = startRef.current;
+    if (!start || start.id !== e.pointerId) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (!lockedAxis.current) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      lockedAxis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    }
+    if (lockedAxis.current === "x") {
+      e.preventDefault();
+    }
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    const start = startRef.current;
+    if (!start || start.id !== e.pointerId) return;
+    const dx = e.clientX - start.x;
+    const axis = lockedAxis.current;
+    startRef.current = null;
+    lockedAxis.current = null;
+    try {
+      rootRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+
+    if (axis !== "x" || Math.abs(dx) < SWIPE_MIN_PX) return;
+    if (dx < 0) goManual(index + 1);
+    else goManual(index - 1);
+  }
+
+  function onPointerCancel() {
+    startRef.current = null;
+    lockedAxis.current = null;
+  }
 
   return (
-    <div className={cn("relative overflow-hidden bg-[#1c1c26]", className)}>
+    <div
+      ref={rootRef}
+      className={cn(
+        "relative touch-pan-y overflow-hidden bg-[#1c1c26] select-none",
+        className,
+      )}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      role="group"
+      aria-roledescription="carousel"
+      aria-label="Images produit"
+    >
       {list.map((src, i) => (
         <div
           key={`${src}-${i}`}
           className={cn(
-            "absolute inset-0 flex items-center justify-center overflow-hidden transition-opacity duration-700",
-            i === index ? "opacity-100" : "opacity-0",
+            "absolute inset-0 flex items-center justify-center overflow-hidden transition-opacity duration-500",
+            i === index ? "opacity-100" : "opacity-0 pointer-events-none",
           )}
+          aria-hidden={i !== index}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={src}
             alt=""
+            draggable={false}
             className={cn(
+              "pointer-events-none",
               fit === "cover"
                 ? "absolute inset-0 size-full object-cover object-center"
                 : "max-h-full max-w-full object-contain object-center",
@@ -68,7 +189,12 @@ export function ProductImageCarousel({
               key={i}
               type="button"
               aria-label={`Image ${i + 1}`}
-              onClick={() => setIndex(i)}
+              aria-current={i === index}
+              onClick={(e) => {
+                e.stopPropagation();
+                goManual(i);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
               className={cn(
                 "h-1.5 rounded-full transition-all",
                 i === index ? "w-4 bg-white" : "w-1.5 bg-white/40",

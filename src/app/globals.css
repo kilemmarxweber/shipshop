@@ -51,25 +51,25 @@
 }
 
 :root {
-  --background: #0a0a0f;
-  --foreground: #ffffff;
-  --card: #13131a;
-  --card-foreground: #ffffff;
-  --popover: #1c1c26;
-  --popover-foreground: #ffffff;
+  --background: #f6f6f8;
+  --foreground: #14141c;
+  --card: #ffffff;
+  --card-foreground: #14141c;
+  --popover: #ffffff;
+  --popover-foreground: #14141c;
   --primary: #ff5722;
   --primary-foreground: #ffffff;
-  --secondary: #1c1c26;
-  --secondary-foreground: #ffffff;
-  --muted: #1c1c26;
-  --muted-foreground: #a0a0b0;
-  --accent: #1c1c26;
-  --accent-foreground: #ffffff;
-  --destructive: #ff3b5c;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.1);
+  --secondary: #ececf2;
+  --secondary-foreground: #14141c;
+  --muted: #ececf2;
+  --muted-foreground: #5c5c6e;
+  --accent: #ececf2;
+  --accent-foreground: #14141c;
+  --destructive: #e11d48;
+  --border: rgba(20, 20, 28, 0.1);
+  --input: rgba(20, 20, 28, 0.12);
   --ring: #ff5722;
-  --trust: #00d68f;
+  --trust: #009e6b;
   --trust-foreground: #04150f;
   --chart-1: #ff5722;
   --chart-2: #00d68f;
@@ -77,13 +77,13 @@
   --chart-4: #fbbf24;
   --chart-5: #a855f7;
   --radius: 0.8rem;
-  --sidebar: #13131a;
-  --sidebar-foreground: #ffffff;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #14141c;
   --sidebar-primary: #ff5722;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1c1c26;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-accent: #ececf2;
+  --sidebar-accent-foreground: #14141c;
+  --sidebar-border: rgba(20, 20, 28, 0.1);
   --sidebar-ring: #ff5722;
 }
 
@@ -115,16 +115,26 @@
     @apply border-border outline-ring/50;
   }
   html {
-    @apply font-sans;
+    @apply font-sans h-full;
+    overscroll-behavior: none;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased h-full overflow-hidden;
   }
 }
 
 /* App shell atmosphere */
 .app-viewport {
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 87, 34, 0.12), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 214, 143, 0.08), transparent),
+    #ececf4;
+}
+
+.dark .app-viewport {
   background:
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 87, 34, 0.18), transparent),
     radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 214, 143, 0.08), transparent),
@@ -133,23 +143,45 @@
 
 .app-shell {
   position: relative;
+  display: flex;
+  flex-direction: column;
   margin: 0 auto;
   width: 100%;
   max-width: 480px;
-  min-height: 100dvh;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: var(--background);
   box-shadow: 0 0 80px rgba(255, 87, 34, 0.12);
 }
 
+/* Contenu scrollable — tablette & mobile */
+.app-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+
 @media (min-width: 768px) {
+  .app-viewport {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    padding: 1rem 0.75rem;
+  }
+
   .app-shell {
     max-width: 960px;
-    min-height: calc(100dvh - 2rem);
-    margin-top: 1rem;
-    margin-bottom: 1rem;
+    height: 100%;
+    max-height: 100%;
+    margin: 0;
     border-radius: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    overflow: hidden;
+    border: 1px solid var(--border);
   }
 }
 
@@ -159,13 +191,61 @@
   }
 }
 
+/* Scroll horizontal tactile (filtres, chips, catégories) */
+.h-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+  padding-bottom: 0.35rem;
+  margin-inline: -0.25rem;
+  padding-inline: 0.25rem;
+}
+
+.h-scroll > * {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.h-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.h-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.h-scroll::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 140, 0.35);
+  border-radius: 999px;
+}
+
+.h-scroll-fade {
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 12px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+}
+
 .feed-snap {
   scroll-snap-type: y mandatory;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
 }
 .feed-snap::-webkit-scrollbar {
   display: none;
 }
 .feed-snap-item {
   scroll-snap-align: start;
+  scroll-snap-stop: always;
 }

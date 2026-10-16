@@ -20,13 +20,15 @@ import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { BackButton } from "@/components/back-button";
 import { BackNavProvider } from "@/components/back-nav-context";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { useI18n } from "@/components/i18n-provider";
 
 const NAV = [
-  { href: "/", label: "Accueil", icon: Home },
-  { href: "/discover", label: "Découvrir", icon: Search },
-  { href: "/publish", label: "Publier", icon: Plus, accent: true },
-  { href: "/messages", label: "Messages", icon: MessageCircle },
-  { href: "/cart", label: "Panier", icon: ShoppingCart },
+  { href: "/", key: "home" as const, icon: Home },
+  { href: "/discover", key: "discover" as const, icon: Search },
+  { href: "/publish", key: "publish" as const, icon: Plus, accent: true },
+  { href: "/messages", key: "messages" as const, icon: MessageCircle },
+  { href: "/cart", key: "cart" as const, icon: ShoppingCart },
 ] as const;
 
 function BrandLabel({ name }: { name: string }) {
@@ -49,6 +51,7 @@ export function AppShell({
   appName: string;
 }) {
   const pathname = usePathname();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
   const [balance, setBalance] = useState<number | null>(null);
@@ -99,9 +102,9 @@ export function AppShell({
   return (
     <BackNavProvider>
       <div className="app-viewport">
-        <div className="app-shell flex flex-col">
+        <div className="app-shell">
           {!hideChrome && (
-            <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0f]/90 px-4 pb-1.5 pt-2.5 backdrop-blur-xl">
+            <header className="z-40 shrink-0 border-b border-border bg-background/90 px-4 pb-1.5 pt-2.5 backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3">
                 <Link href="/" className="flex items-center gap-2">
                   <div className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-[#ff5722] to-[#ff7a45] text-sm font-bold shadow-[0_4px_14px_rgba(255,87,34,0.4)]">
@@ -116,15 +119,15 @@ export function AppShell({
                     <>
                       <Link
                         href="/wallet"
-                        className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-trust transition hover:bg-white/10"
+                        className="flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-semibold text-trust transition hover:bg-muted"
                       >
                         <Wallet className="size-3.5" />
                         {balance === null ? "…" : formatMoney(balance)}
                       </Link>
                       <Link
                         href="/cart"
-                        className="relative grid size-9 place-items-center rounded-full border border-white/10 bg-white/5"
-                        aria-label="Panier"
+                        className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50"
+                        aria-label={t("nav.cart")}
                       >
                         <ShoppingCart className="size-4" />
                         {cartCount > 0 && (
@@ -135,18 +138,19 @@ export function AppShell({
                       </Link>
                     </>
                   )}
+                  <ThemeToggle />
                   <button
                     type="button"
-                    className="relative grid size-9 place-items-center rounded-full border border-white/10 bg-white/5"
-                    aria-label="Notifications"
+                    className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50"
+                    aria-label={t("nav.notifications")}
                   >
                     <Bell className="size-4" />
                   </button>
                   <Link
                     href={session ? "/profile" : "/auth/login"}
                     prefetch={false}
-                    className="grid size-9 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/5"
-                    aria-label="Profil"
+                    className="grid size-9 place-items-center overflow-hidden rounded-full border border-border bg-muted/50"
+                    aria-label={t("nav.profile")}
                   >
                     {session?.user.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -166,8 +170,10 @@ export function AppShell({
 
           <main
             className={cn(
-              "flex-1 overflow-y-auto",
-              !hideChrome && "pb-24",
+              "app-main",
+              /* Espace clair au-dessus du menu bas (safe area inclus) */
+              !hideChrome &&
+                "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
             )}
           >
             {showBack && (
@@ -179,7 +185,7 @@ export function AppShell({
           </main>
 
           {!hideChrome && (
-            <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[480px] -translate-x-1/2 border-t border-white/8 bg-[#0a0a0f]/92 px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl md:max-w-[960px] lg:max-w-[1024px]">
+            <nav className="absolute bottom-0 left-0 right-0 z-40 shrink-0 border-t border-border bg-background/92 px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
               <div className="grid grid-cols-5 gap-0.5">
                 {NAV.map((item) => {
                   const active =
@@ -215,7 +221,7 @@ export function AppShell({
                           )}
                         </span>
                       )}
-                      <span>{item.label}</span>
+                      <span>{t(`nav.${item.key}`)}</span>
                     </Link>
                   );
                 })}

@@ -149,35 +149,39 @@ export default function FeedPage() {
   }
 
   return (
-    <div>
-      <div className="flex justify-center gap-6 border-b border-white/5 px-4 py-2 text-sm font-semibold">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 justify-center gap-6 border-b border-white/5 px-4 py-2 text-sm font-semibold">
         <span className="text-muted-foreground">Abonnements</span>
-        <span className="border-b-2 border-primary pb-1 text-white">Pour toi</span>
+        <span className="border-b-2 border-primary pb-1 text-white">
+          Pour toi
+        </span>
       </div>
 
-      <div className="feed-snap h-[calc(100dvh-8.5rem)] overflow-y-auto md:grid md:h-auto md:grid-cols-2 md:gap-3 md:overflow-visible md:p-4">
+      {/* Hauteur = zone visible au-dessus du menu bas (pb-24 du shell ≈ 6rem) */}
+      <div className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4">
         {products.map((p) => (
           <article
             key={p.id}
-            className="feed-snap-item relative flex h-[calc(100dvh-8.5rem)] flex-col justify-end overflow-hidden md:h-[520px] md:rounded-2xl"
+            className="feed-snap-item relative flex h-[calc(100dvh-12.5rem)] max-h-[calc(100dvh-12.5rem)] flex-col justify-end overflow-hidden sm:h-[calc(100dvh-12rem)] sm:max-h-[calc(100dvh-12rem)] md:h-[min(520px,70dvh)] md:max-h-none md:rounded-2xl"
           >
             <ProductImageCarousel
               images={p.images}
               overlay
+              fit="cover"
               className="absolute inset-0"
             />
 
-            <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-              <span className="rounded-full border border-trust/30 bg-trust/15 px-2.5 py-1 text-[10px] font-semibold text-trust backdrop-blur">
+            <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
+              <span className="w-fit rounded-full border border-trust/30 bg-trust/15 px-2.5 py-1 text-[10px] font-semibold text-trust backdrop-blur">
                 <ShieldCheck className="mr-1 inline size-3" />
                 Argent protégé
               </span>
-              <span className="rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[10px] font-semibold backdrop-blur">
+              <span className="w-fit rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[10px] font-semibold backdrop-blur">
                 {p.category}
               </span>
             </div>
 
-            <div className="absolute right-3 bottom-28 z-20 flex flex-col items-center gap-4 md:bottom-24">
+            <div className="absolute right-2.5 bottom-[7.5rem] z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:bottom-36 sm:gap-4 md:bottom-28">
               <button
                 type="button"
                 onClick={() => toggleLike(p)}
@@ -228,16 +232,18 @@ export default function FeedPage() {
               </ShareMenu>
             </div>
 
-            <div className="relative z-10 p-4 pr-16 pb-6">
+            <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 sm:px-4 sm:pb-6 sm:pr-16">
               <div className="mb-2 flex items-center gap-2">
-                <div className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-bold">
+                <div className="grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-bold">
                   {p.shop.name.slice(0, 1)}
                 </div>
-                <div>
-                  <p className="text-sm font-bold">@{p.shop.name}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold">@{p.shop.name}</p>
                   <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <MapPin className="size-3" />
-                    {p.location ?? "Kinshasa"}
+                    <MapPin className="size-3 shrink-0" />
+                    <span className="truncate">
+                      {p.location ?? "Kinshasa"}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -262,16 +268,16 @@ export default function FeedPage() {
                 </div>
               )}
               {p.description && (
-                <p className="mb-3 line-clamp-2 text-xs text-white/85">
+                <p className="mb-2.5 line-clamp-2 text-xs text-white/85 sm:mb-3">
                   {p.description}
                 </p>
               )}
               <Link
                 href={`/product/${p.id}`}
-                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/8 p-2.5 backdrop-blur-xl transition hover:bg-white/12"
+                className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-black/55 sm:gap-3 sm:p-2.5"
               >
                 <div
-                  className="size-12 shrink-0 rounded-xl bg-cover bg-center"
+                  className="size-11 shrink-0 rounded-xl bg-cover bg-center ring-1 ring-white/10 sm:size-12"
                   style={{
                     backgroundImage: `url(${p.images[0]})`,
                   }}
@@ -282,7 +288,7 @@ export default function FeedPage() {
                     {formatMoney(p.priceCents)}
                   </p>
                 </div>
-                <span className="rounded-full bg-primary px-3 py-1.5 text-[11px] font-bold">
+                <span className="shrink-0 rounded-full bg-primary px-3.5 py-2 text-[11px] font-bold text-white">
                   Voir
                 </span>
               </Link>
@@ -290,7 +296,6 @@ export default function FeedPage() {
           </article>
         ))}
       </div>
-
     </div>
   );
 }
