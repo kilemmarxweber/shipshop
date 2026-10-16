@@ -115,6 +115,15 @@ ENCRYPTION_SECRET="...autre secret, à ne jamais changer après coup..."
 UPLOAD_DIR=/var/www/chipshop-uploads
 #UPLOAD_DIR=C:/chipshop-uploads
 NEXT_PUBLIC_UPLOAD_URL=/uploads
+
+MODERATION_PROVIDER=rekognition
+MODERATION_FAIL_CLOSED=true
+AWS_REGION=eu-west-1
+AWS_ACCESS_KEY_ID="..."
+AWS_SECRET_ACCESS_KEY="..."
+# Sans ces clés, aucun scan NSFW (upload direct).
+# ffmpeg sur le VPS pour scanner les vidéos produit
+# FFMPEG_PATH=/usr/bin/ffmpeg
 ```
 
 Notes :

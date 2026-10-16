@@ -18,10 +18,22 @@ import {
   type UserLocale,
 } from "@/lib/user-locale";
 
-type MessagePath =
+export type MessagePath =
   | `nav.${keyof Messages["nav"]}`
   | `auth.${keyof Messages["auth"]}`
-  | `settings.${keyof Messages["settings"]}`;
+  | `settings.${keyof Messages["settings"]}`
+  | `common.${keyof Messages["common"]}`
+  | `feed.${keyof Messages["feed"]}`
+  | `discover.${keyof Messages["discover"]}`
+  | `shop.${keyof Messages["shop"]}`
+  | `product.${keyof Messages["product"]}`
+  | `cart.${keyof Messages["cart"]}`
+  | `share.${keyof Messages["share"]}`
+  | `follow.${keyof Messages["follow"]}`
+  | `categories.${keyof Messages["categories"]}`
+  | `messages.${keyof Messages["messages"]}`
+  | `wallet.${keyof Messages["wallet"]}`
+  | `shopExtra.${keyof Messages["shopExtra"]}`;
 
 type I18nContextValue = {
   locale: UserLocale;

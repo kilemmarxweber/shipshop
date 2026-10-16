@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useI18n } from "@/components/i18n-provider";
 
 function BrandIcon({
   children,
@@ -92,6 +93,7 @@ export function ShareMenu({
   align = "end",
   side = "bottom",
 }: Props) {
+  const { t } = useI18n();
   const shareUrl =
     url || (typeof window !== "undefined" ? window.location.href : "");
   const fullText = `${text}\n${shareUrl}`;
@@ -133,9 +135,9 @@ export function ShareMenu({
     try {
       await navigator.clipboard.writeText(shareUrl);
       recordProductShare(productId, shareUrl);
-      toast.success("Lien Chip Shop copié");
+      toast.success(t("share.copied"));
     } catch {
-      toast.error("Copie impossible");
+      toast.error(t("share.copyFailed"));
     }
   }
 
@@ -156,7 +158,7 @@ export function ShareMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         type="button"
-        aria-label="Partager"
+        aria-label={t("share.aria")}
         className={cn(
           "inline-flex cursor-pointer items-center justify-center outline-none",
           triggerClassName,
@@ -193,8 +195,8 @@ export function ShareMenu({
           ))}
           <span className="mx-0.5 h-6 w-px shrink-0 self-center bg-border" />
           <DropdownMenuItem
-            title="Copier le lien"
-            aria-label="Copier le lien"
+            title={t("share.copyLink")}
+            aria-label={t("share.copyLink")}
             className={cn(iconBtnClass, "text-primary")}
             onClick={copyLink}
           >
@@ -204,8 +206,8 @@ export function ShareMenu({
           </DropdownMenuItem>
           {typeof navigator !== "undefined" && "share" in navigator && (
             <DropdownMenuItem
-              title="Plus d'apps"
-              aria-label="Plus d'apps"
+              title={t("share.moreApps")}
+              aria-label={t("share.moreApps")}
               className={iconBtnClass}
               onClick={nativeShare}
             >

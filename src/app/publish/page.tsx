@@ -196,7 +196,7 @@ function PublishInner() {
           </div>
 
           <div className="space-y-2">
-            <Label>Images / vidéos (max 10 Mo)</Label>
+            <Label>Images / vidéos (compressées auto, &lt; 5 Mo)</Label>
             <MediaUploader urls={images} onChange={setImages} max={12} />
           </div>
 

@@ -1,36 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { canAccessConversation } from "@/lib/conversation-access";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-
-async function canAccessConversation(userId: string, conversationId: string) {
-  const conversation = await withDbRetry(() =>
-    prisma.conversation.findUnique({
-      where: { id: conversationId },
-      include: {
-        shop: { select: { id: true, name: true, organizationId: true } },
-        product: {
-          select: { id: true, title: true, images: true, priceCents: true },
-        },
-        buyer: { select: { id: true, name: true, image: true } },
-      },
-    }),
-  );
-  if (!conversation) return null;
-
-  if (conversation.buyerId === userId) return conversation;
-
-  const member = await withDbRetry(() =>
-    prisma.member.findFirst({
-      where: {
-        userId,
-        organizationId: conversation.shop.organizationId,
-      },
-    }),
-  );
-  if (!member) return null;
-  return conversation;
-}
 
 export async function GET(
   _req: Request,
@@ -46,6 +18,18 @@ export async function GET(
   if (!conversation) {
     return NextResponse.json({ error: "Conversation introuvable" }, { status: 404 });
   }
+
+  await withDbRetry(() =>
+    prisma.message.updateMany({
+      where: {
+        conversationId: id,
+        senderId: { not: session.user.id },
+        readAt: null,
+        NOT: { isUrgent: true, requiresAck: true },
+      },
+      data: { readAt: new Date() },
+    }),
+  );
 
   const [messages, openIssues] = await Promise.all([
     withDbRetry(() =>

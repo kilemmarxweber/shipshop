@@ -11,6 +11,7 @@ import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { uploadCompressedMedia } from "@/lib/compress-media";
 import { cn } from "@/lib/utils";
 
 type Kyc = {
@@ -404,25 +405,17 @@ async function uploadKycImage(file: File) {
     toast.error("Choisissez une image (JPG, PNG, WebP…)");
     return null;
   }
-  if (file.size > 10 * 1024 * 1024) {
-    toast.error("Image trop lourde (max 10 Mo)");
+  try {
+    const uploaded = await uploadCompressedMedia(file, "document");
+    if (uploaded.kind !== "image") {
+      toast.error("Seules les images sont acceptées");
+      return null;
+    }
+    return uploaded.url;
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Upload impossible");
     return null;
   }
-  const form = new FormData();
-  form.append("file", file);
-  const up = await fetchJson<{ url?: string; kind?: string; error?: string }>(
-    "/api/upload",
-    { method: "POST", body: form },
-  );
-  if (!up.res.ok || !up.data?.url) {
-    toast.error(up.data?.error ?? "Upload impossible");
-    return null;
-  }
-  if (up.data.kind && up.data.kind !== "image") {
-    toast.error("Seules les images sont acceptées");
-    return null;
-  }
-  return up.data.url;
 }
 
 function DocSlot({

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { assertChipShopOwner } from "@/lib/kyc";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -27,8 +28,9 @@ async function assertCanEdit(userId: string, shopId: string) {
       where: { organizationId: shop.organizationId, userId },
     }),
   );
-  if (!member) return null;
-  return shop;
+  if (member) return shop;
+  const { isOwner } = await assertChipShopOwner(userId);
+  return isOwner ? shop : null;
 }
 
 export async function GET(

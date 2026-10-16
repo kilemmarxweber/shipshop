@@ -6,12 +6,15 @@ import { AlertTriangle, Shield } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
+import { intlLocaleFromUserLocale } from "@/lib/user-locale";
 
 type Conversation = {
   id: string;
   updatedAt: string;
   urgentPending?: boolean;
+  unreadCount?: number;
   shop: { id: string; name: string };
   product: { id: string; title: string; images: string[] } | null;
   buyer: { id: string; name: string };
@@ -26,6 +29,7 @@ type Conversation = {
 
 export default function MessagesPage() {
   const { data: session } = authClient.useSession();
+  const { t, locale } = useI18n();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,12 +42,12 @@ export default function MessagesPage() {
       .then(({ data }) => {
         const list = data?.conversations ?? [];
         list.sort((a, b) => {
-          if (a.urgentPending === b.urgentPending) {
-            return (
-              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-            );
-          }
-          return a.urgentPending ? -1 : 1;
+          const au = a.urgentPending ? 2 : (a.unreadCount ?? 0) > 0 ? 1 : 0;
+          const bu = b.urgentPending ? 2 : (b.unreadCount ?? 0) > 0 ? 1 : 0;
+          if (au !== bu) return bu - au;
+          return (
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
         });
         setConversations(list);
       })
@@ -53,14 +57,12 @@ export default function MessagesPage() {
   if (!session) {
     return (
       <div className="px-5 py-16 text-center">
-        <p className="text-muted-foreground">
-          Connectez-vous pour voir vos messages
-        </p>
+        <p className="text-muted-foreground">{t("messages.guestHint")}</p>
         <Link
           href="/auth/login"
           className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
         >
-          Connexion
+          {t("auth.login")}
         </Link>
       </div>
     );
@@ -69,7 +71,7 @@ export default function MessagesPage() {
   return (
     <div className="pt-3">
       <div className="border-b border-border px-4 pb-3">
-        <h1 className="font-heading text-lg font-bold">Messages</h1>
+        <h1 className="font-heading text-lg font-bold">{t("messages.title")}</h1>
         <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
           <Shield className="size-3 text-trust" />
           Conversations protégées — les urgences restent non lues jusqu&apos;à
@@ -81,7 +83,7 @@ export default function MessagesPage() {
         <PageLoader className="h-[40dvh]" />
       ) : conversations.length === 0 ? (
         <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-          Aucune conversation. Touchez l&apos;icône message sur un produit.
+          {t("messages.empty")}
         </p>
       ) : (
         <ul>
@@ -90,6 +92,7 @@ export default function MessagesPage() {
             const title =
               c.buyer.id === session.user.id ? c.shop.name : c.buyer.name;
             const urgent = Boolean(c.urgentPending);
+            const unread = (c.unreadCount ?? 0) > 0;
             return (
               <li key={c.id}>
                 <Link
@@ -97,9 +100,10 @@ export default function MessagesPage() {
                   className={cn(
                     "flex gap-3 border-b border-border px-4 py-3 transition hover:bg-muted/30",
                     urgent && "bg-amber-500/8",
+                    unread && !urgent && "bg-primary/5",
                   )}
                 >
-                  <div className="relative grid size-11 place-items-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-sm font-bold">
+                  <div className="relative grid size-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-sm font-bold">
                     {title.slice(0, 1)}
                     {urgent && (
                       <span className="absolute -right-0.5 -top-0.5 grid size-5 place-items-center rounded-full bg-amber-500 text-black shadow">
@@ -109,22 +113,39 @@ export default function MessagesPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="flex min-w-0 items-center gap-1.5 text-sm font-bold">
+                      <p
+                        className={cn(
+                          "flex min-w-0 items-center gap-1.5 text-sm",
+                          unread ? "font-bold" : "font-semibold",
+                        )}
+                      >
                         <span className="truncate">{title}</span>
                         {urgent && (
                           <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-400">
-                            Urgent
+                            {t("messages.urgent")}
                           </span>
                         )}
                       </p>
-                      {last && (
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
-                          {new Date(last.createdAt).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {last && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(last.createdAt).toLocaleTimeString(
+                              intlLocaleFromUserLocale(locale),
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </span>
+                        )}
+                        {unread && (
+                          <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1 py-0.5 text-[10px] font-bold text-white">
+                            {(c.unreadCount ?? 0) > 9
+                              ? "9+"
+                              : c.unreadCount}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {c.product && (
                       <p className="truncate text-[10px] text-primary">
@@ -133,14 +154,18 @@ export default function MessagesPage() {
                     )}
                     <p
                       className={cn(
-                        "truncate text-xs",
+                        "break-words text-xs",
                         urgent
                           ? "font-semibold text-amber-300"
-                          : "text-muted-foreground",
+                          : unread
+                            ? "font-medium text-foreground"
+                            : "text-muted-foreground",
                       )}
                     >
                       {urgent ? "⚠ " : ""}
-                      {last?.body ?? "Nouvelle conversation"}
+                      <span className="line-clamp-2">
+                        {last?.body ?? "Nouvelle conversation"}
+                      </span>
                     </p>
                   </div>
                 </Link>

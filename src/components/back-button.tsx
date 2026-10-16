@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useBackNav } from "@/components/back-nav-context";
+import { useI18n } from "@/components/i18n-provider";
 
 type Props = {
   fallbackHref?: string;
@@ -22,6 +23,7 @@ export function BackButton({
 }: Props) {
   const router = useRouter();
   const nav = useBackNav();
+  const { t } = useI18n();
 
   function goBack() {
     const custom = onBack ?? nav?.onBack ?? null;
@@ -47,7 +49,7 @@ export function BackButton({
       <button
         type="button"
         onClick={goBack}
-        aria-label="Retour"
+        aria-label={t("common.back")}
         className="group grid size-8 cursor-pointer place-items-center rounded-full border border-border bg-muted/40 transition-all duration-200 ease-out hover:-translate-x-1.5 hover:border-white/20 hover:bg-muted active:-translate-x-2.5 active:scale-95"
       >
         <ArrowLeft className="size-3.5 transition-transform duration-200 ease-out group-hover:-translate-x-0.5 group-active:-translate-x-1" />

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { conversationInboxWhere } from "@/lib/conversation-access";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -16,34 +17,9 @@ export async function GET() {
   }
 
   try {
-    const memberShops = await withDbRetry(() =>
-      prisma.member.findMany({
-        where: { userId: session.user.id },
-        select: { organizationId: true },
-      }),
-    );
-    const orgIds = memberShops.map((m) => m.organizationId);
-    const sellerShopIds = orgIds.length
-      ? (
-          await withDbRetry(() =>
-            prisma.shop.findMany({
-              where: { organizationId: { in: orgIds } },
-              select: { id: true },
-            }),
-          )
-        ).map((s) => s.id)
-      : [];
-
     const conversations = await withDbRetry(() =>
       prisma.conversation.findMany({
-        where: {
-          OR: [
-            { buyerId: session.user.id },
-            ...(sellerShopIds.length
-              ? [{ shopId: { in: sellerShopIds } }]
-              : []),
-          ],
-        },
+        where: conversationInboxWhere(session.user.id),
         include: {
           shop: { select: { id: true, name: true, slug: true, logoUrl: true } },
           product: { select: { id: true, title: true, images: true } },
@@ -57,12 +33,16 @@ export async function GET() {
               senderId: true,
               isUrgent: true,
               requiresAck: true,
+              readAt: true,
             },
           },
           _count: {
             select: {
               messages: {
-                where: { isUrgent: true, requiresAck: true },
+                where: {
+                  senderId: { not: session.user.id },
+                  readAt: null,
+                },
               },
             },
           },
@@ -71,10 +51,16 @@ export async function GET() {
       }),
     );
 
-    const enriched = conversations.map((c) => ({
-      ...c,
-      urgentPending: c._count.messages > 0,
-    }));
+    const enriched = conversations.map((c) => {
+      const unreadCount = c._count.messages;
+      return {
+        ...c,
+        unreadCount,
+        urgentPending: Boolean(
+          c.messages[0]?.isUrgent && c.messages[0]?.requiresAck,
+        ),
+      };
+    });
 
     return NextResponse.json({ conversations: enriched });
   } catch (error) {

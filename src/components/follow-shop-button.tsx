@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { useI18n } from "@/components/i18n-provider";
 import { fetchJson } from "@/lib/fetch-json";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ export function FollowShopButton({
   onChange,
 }: Props) {
   const router = useRouter();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
 
   if (isOwnShop) return null;
@@ -43,7 +45,7 @@ export function FollowShopButton({
     }>(`/api/shops/${slug}/follow`, { method });
     if (!res.ok) {
       onChange?.(followedByMe);
-      toast.error(data?.error ?? "Impossible de suivre");
+      toast.error(data?.error ?? t("follow.failed"));
       return;
     }
     onChange?.(Boolean(data?.followedByMe));
@@ -62,7 +64,7 @@ export function FollowShopButton({
           className,
         )}
       >
-        {followedByMe ? "Suivi" : "Suivre"}
+        {followedByMe ? t("follow.following") : t("follow.follow")}
       </button>
     );
   }
@@ -79,7 +81,7 @@ export function FollowShopButton({
         className,
       )}
     >
-      {followedByMe ? "Abonné" : "S'abonner"}
+      {followedByMe ? t("follow.subscribed") : t("follow.subscribe")}
     </button>
   );
 }

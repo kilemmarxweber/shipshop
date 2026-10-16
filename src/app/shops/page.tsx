@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Store, Users } from "lucide-react";
+import { KeyRound, Plus, Store, Users } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { fetchJson } from "@/lib/fetch-json";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,9 +53,13 @@ export default function ShopsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [members, setMembers] = useState<OrgMember[]>([]);
+  const [memberFilter, setMemberFilter] = useState<"all" | "vendor" | "buyer">(
+    "all",
+  );
   const [isOwner, setIsOwner] = useState(false);
   const [isOrgOwner, setIsOrgOwner] = useState(false);
   const [roleSavingId, setRoleSavingId] = useState<string | null>(null);
+  const [resetBusyId, setResetBusyId] = useState<string | null>(null);
   const activatedOrg = useRef<string | null>(null);
 
   async function loadSeller() {
@@ -148,6 +154,41 @@ export default function ShopsPage() {
     loadSeller();
   }
 
+  async function resetMemberPassword(user: {
+    id: string;
+    name: string;
+    email: string;
+  }) {
+    if (
+      !confirm(
+        `Réinitialiser le mot de passe de ${user.name} (${user.email}) et l'envoyer par e-mail + WhatsApp ?`,
+      )
+    ) {
+      return;
+    }
+    setResetBusyId(user.id);
+    const { res, data } = await fetchJson<{
+      error?: string;
+      temporaryPassword?: string;
+      channels?: {
+        email?: { ok: boolean; provider?: string; error?: string };
+        whatsapp?: { ok: boolean; error?: string };
+        sms?: { ok: boolean; provider?: string };
+      };
+    }>(`/api/admin/users/${user.id}/reset-password`, { method: "POST" });
+    setResetBusyId(null);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Reset impossible");
+      return;
+    }
+    toast.success("Mot de passe réinitialisé et envoyé");
+    if (data?.temporaryPassword) {
+      toast.message(`MDP temporaire : ${data.temporaryPassword}`, {
+        duration: 15000,
+      });
+    }
+  }
+
   async function inviteMember() {
     const role = isOrgOwner ? (inviteRole as "member" | "admin") : "member";
     const { error } = await authClient.organization.inviteMember({
@@ -198,12 +239,32 @@ export default function ShopsPage() {
             Messages
           </Link>
           {isOwner ? (
-            <Link
-              href="/shops/kyc"
-              className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
-            >
-              KYC
-            </Link>
+            <>
+              <Link
+                href="/shops/admin/products"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Produits
+              </Link>
+              <Link
+                href="/shops/admin/vendors"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Vendeurs
+              </Link>
+              <Link
+                href="/shops/kyc"
+                className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
+              >
+                KYC
+              </Link>
+              <Link
+                href="/shops/admin/moderation"
+                className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
+              >
+                NSFW
+              </Link>
+            </>
           ) : null}
           <Link
             href="/onboarding"
@@ -301,11 +362,41 @@ export default function ShopsPage() {
           <Users className="size-4 text-primary" />
           <h2 className="font-heading text-sm font-semibold">Utilisateurs</h2>
         </div>
-        <p className="mb-4 text-[11px] text-muted-foreground">
-          Chaque compte est un user Chip Shop et member de l&apos;organisation.
-          Un acheteur (achats seulement) est un member simple. Un vendeur
-          aussi, jusqu&apos;à ce que l&apos;owner change son rôle.
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          Filtrez vendeurs (ont une boutique) et acheteurs (members sans
+          boutique).
         </p>
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {(
+            [
+              ["all", "Tous", members.length],
+              [
+                "vendor",
+                "Vendeurs",
+                members.filter((m) => m.kind === "vendor").length,
+              ],
+              [
+                "buyer",
+                "Acheteurs",
+                members.filter((m) => m.kind === "buyer").length,
+              ],
+            ] as const
+          ).map(([key, label, count]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setMemberFilter(key)}
+              className={cn(
+                "rounded-lg px-2.5 py-1.5 text-[11px] font-semibold",
+                memberFilter === key
+                  ? "bg-primary text-white"
+                  : "bg-muted/40 text-muted-foreground",
+              )}
+            >
+              {label} ({count})
+            </button>
+          ))}
+        </div>
         <div className="mb-4 flex flex-col gap-2 sm:flex-row">
           <Input
             type="email"
@@ -337,7 +428,11 @@ export default function ShopsPage() {
           </p>
         ) : null}
         <ul className="space-y-2">
-          {members.map((m) => (
+          {members
+            .filter((m) =>
+              memberFilter === "all" ? true : m.kind === memberFilter,
+            )
+            .map((m) => (
             <li
               key={m.id}
               className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm"
@@ -345,35 +440,67 @@ export default function ShopsPage() {
               <span className="min-w-0">
                 {m.user?.name}{" "}
                 <span className="text-muted-foreground">({m.user?.email})</span>
-                <span className="ml-2 text-[11px] text-muted-foreground">
+                <span
+                  className={cn(
+                    "ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
+                    m.kind === "vendor"
+                      ? "bg-primary/15 text-primary"
+                      : "bg-muted/50 text-muted-foreground",
+                  )}
+                >
                   {m.kind === "vendor"
-                    ? `${m.shopCount} boutique${m.shopCount > 1 ? "s" : ""}`
-                    : "acheteur"}
+                    ? `Vendeur · ${m.shopCount} boutique${m.shopCount > 1 ? "s" : ""}`
+                    : "Acheteur"}
                 </span>
               </span>
-              {isOrgOwner && m.role !== "owner" ? (
-                <Select
-                  value={m.role}
-                  onValueChange={(v) => {
-                    if (v && v !== m.role) changeMemberRole(m.id, v);
-                  }}
-                  disabled={roleSavingId === m.id}
-                >
-                  <SelectTrigger className="h-8 w-32 bg-surface-2 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="member">Member</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <span className="rounded-md bg-muted/40 px-2 py-0.5 text-xs capitalize">
-                  {m.role}
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {isOwner ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1 text-xs"
+                    disabled={resetBusyId === m.user.id}
+                    onClick={() => resetMemberPassword(m.user)}
+                  >
+                    <KeyRound className="size-3" />
+                    Reset MDP
+                  </Button>
+                ) : null}
+                {isOrgOwner && m.role !== "owner" ? (
+                  <Select
+                    value={m.role}
+                    onValueChange={(v) => {
+                      if (v && v !== m.role) changeMemberRole(m.id, v);
+                    }}
+                    disabled={roleSavingId === m.id}
+                  >
+                    <SelectTrigger className="h-8 w-32 bg-surface-2 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">Member</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="rounded-md bg-muted/40 px-2 py-0.5 text-xs capitalize">
+                    {m.role}
+                  </span>
+                )}
+              </div>
             </li>
           ))}
+          {members.filter((m) =>
+            memberFilter === "all" ? true : m.kind === memberFilter,
+          ).length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {memberFilter === "vendor"
+                ? "Aucun vendeur"
+                : memberFilter === "buyer"
+                  ? "Aucun acheteur"
+                  : "Aucun utilisateur"}
+            </p>
+          )}
         </ul>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { ISSUE_TYPE_LABELS } from "@/lib/handover";
+import { useI18n } from "@/components/i18n-provider";
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ type Conversation = {
 
 function ChatInner() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -134,7 +136,7 @@ function ChatInner() {
     return (
       <div className="px-5 py-16 text-center">
         <Link href="/auth/login" className="text-primary">
-          Connexion
+          {t("auth.login")}
         </Link>
       </div>
     );
@@ -155,7 +157,7 @@ function ChatInner() {
             {hasUrgent && (
               <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-400">
                 <AlertTriangle className="size-3" />
-                Urgent
+                {t("messages.urgent")}
               </span>
             )}
           </p>
@@ -220,7 +222,7 @@ function ChatInner() {
         </div>
       )}
 
-      <div className="flex-1 space-y-2 overflow-y-auto px-3 py-4">
+      <div className="min-w-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4">
         {messages.map((m) => {
           const mine = m.senderId === session.user.id;
           const urgent = Boolean(m.isUrgent);
@@ -228,16 +230,19 @@ function ChatInner() {
           return (
             <div
               key={m.id}
-              className={cn("flex", mine ? "justify-end" : "justify-start")}
+              className={cn(
+                "flex min-w-0",
+                mine ? "justify-end" : "justify-start",
+              )}
             >
               <div
                 className={cn(
-                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm",
+                  "min-w-0 max-w-[min(80%,22rem)] overflow-hidden rounded-2xl px-3 py-2 text-sm",
                   urgent
                     ? "rounded-bl-md border border-amber-500/50 bg-amber-500/15 text-amber-50"
                     : mine
                       ? "rounded-br-md bg-primary text-white"
-                      : "rounded-bl-md bg-surface-2 text-white",
+                      : "rounded-bl-md bg-muted text-foreground",
                 )}
               >
                 {urgent && (
@@ -247,7 +252,9 @@ function ChatInner() {
                     {pending && " · non lu"}
                   </p>
                 )}
-                <p className="whitespace-pre-wrap">{m.body}</p>
+                <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                  {m.body}
+                </p>
                 <p
                   className={cn(
                     "mt-1 text-[10px]",
@@ -276,8 +283,8 @@ function ChatInner() {
           onChange={(e) => setBody(e.target.value)}
           placeholder={
             !isBuyer && hasUrgent
-              ? "Répondre pour acquitter l'urgence…"
-              : "Écrire un message…"
+              ? t("messages.ackPlaceholder")
+              : t("messages.writePlaceholder")
           }
           className="h-11 bg-surface-2"
           onKeyDown={(e) => {

@@ -20,6 +20,9 @@ model User {
   phone         String?
   locale        String?   @default("fr")
   theme         String?   @default("dark")
+  disabledAt        DateTime?
+  disabledReason    String?
+  nsfwStrikeCount   Int       @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -39,6 +42,7 @@ model User {
   ownedShops        Shop[]          @relation("ShopOwner")
   shopFollows       ShopFollow[]
   productShares     ProductShare[]
+  moderationEvents  MediaModerationEvent[]
 
   @@unique([email])
   @@map("user")
@@ -193,6 +197,30 @@ enum ProductStatus {
   ACTIVE
   SOLD
   HIDDEN
+}
+
+enum MediaModerationDecision {
+  ALLOW
+  REJECT
+  BAN
+  CSAM_HOLD
+}
+
+model MediaModerationEvent {
+  id          String                   @id @default(cuid())
+  userId      String
+  user        User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant     String
+  kind        String
+  decision    MediaModerationDecision
+  labels      Json
+  score       Float
+  contentHash String
+  createdAt   DateTime                 @default(now())
+
+  @@index([userId, createdAt])
+  @@index([decision, createdAt])
+  @@map("media_moderation_event")
 }
 
 model Product {

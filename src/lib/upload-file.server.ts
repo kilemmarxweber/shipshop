@@ -177,7 +177,7 @@ export async function findUploadedFilePath(
   return null;
 }
 
-export const MEDIA_MAX_BYTES = 10 * 1024 * 1024; // 10 Mo
+export const MEDIA_MAX_BYTES = 8 * 1024 * 1024; // marge post-compression client
 
 const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const VIDEO_EXT = new Set([".mp4", ".webm", ".mov"]);

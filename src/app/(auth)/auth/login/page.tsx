@@ -25,7 +25,14 @@ export default function LoginPage() {
     const { error } = await authClient.signIn.email({ email, password });
     setLoading(false);
     if (error) {
-      toast.error(error.message ?? t("auth.failed"));
+      const code = (error as { code?: string }).code;
+      toast.error(
+        code === "ACCOUNT_DISABLED" ||
+          error.message?.toLowerCase().includes("désactivé") ||
+          error.message?.toLowerCase().includes("disabled")
+          ? t("auth.accountDisabled")
+          : (error.message ?? t("auth.failed")),
+      );
       return;
     }
     toast.success(t("auth.welcome"));

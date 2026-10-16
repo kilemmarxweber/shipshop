@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { CATEGORIES } from "@/lib/categories";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
+import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { Input } from "@/components/ui/input";
 
@@ -18,6 +19,7 @@ type Product = {
 };
 
 export default function DiscoverPage() {
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -26,12 +28,12 @@ export default function DiscoverPage() {
     const params = new URLSearchParams({ status: "ACTIVE" });
     if (q) params.set("q", q);
     if (category) params.set("category", category);
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       fetchJson<{ products?: Product[] }>(`/api/products?${params}`)
         .then(({ data }) => setProducts(data?.products ?? []))
         .catch(() => setProducts([]));
     }, 200);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [q, category]);
 
   return (
@@ -41,12 +43,14 @@ export default function DiscoverPage() {
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Rechercher un produit, vendeur…"
+          placeholder={t("discover.searchPlaceholder")}
           className="border-0 bg-transparent shadow-none focus-visible:ring-0"
         />
       </div>
 
-      <h2 className="mb-3 font-heading text-sm font-bold">Catégories</h2>
+      <h2 className="mb-3 font-heading text-sm font-bold">
+        {t("discover.categoriesHeading")}
+      </h2>
       <div className="h-scroll h-scroll-fade mb-6 gap-2.5 pb-2">
         {CATEGORIES.map((c) => (
           <button
@@ -58,18 +62,19 @@ export default function DiscoverPage() {
             className={cn(
               "relative size-[4.5rem] shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br p-2 sm:size-20",
               c.gradient,
-              category === c.id && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+              category === c.id &&
+                "ring-2 ring-primary ring-offset-2 ring-offset-background",
             )}
           >
             <span className="absolute inset-x-0 bottom-1 text-center text-[9px] font-bold">
-              {c.label}
+              {t(`categories.${c.id}` as MessagePath)}
             </span>
           </button>
         ))}
       </div>
 
       <h2 className="mb-3 font-heading text-sm font-bold">
-        Tendances à Kinshasa
+        {t("discover.trendsHeading")}
       </h2>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         {products.map((p) => (
@@ -95,7 +100,7 @@ export default function DiscoverPage() {
       </div>
       {products.length === 0 && (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          Aucun résultat
+          {t("discover.emptyResults")}
         </p>
       )}
     </div>

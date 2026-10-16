@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Smartphone, Wallet } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { formatMoney, cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,7 @@ type Txn = {
 
 export default function WalletPage() {
   const { data: session } = authClient.useSession();
+  const { t } = useI18n();
   const [balance, setBalance] = useState(0);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [provider, setProvider] = useState<"MPESA" | "ORANGE" | "AIRTEL">("MPESA");
@@ -52,12 +54,12 @@ export default function WalletPage() {
   if (!session) {
     return (
       <div className="px-5 py-16 text-center">
-        <p className="text-muted-foreground">Connectez-vous pour voir votre solde</p>
+        <p className="text-muted-foreground">{t("wallet.guestHint")}</p>
         <Link
           href="/auth/login"
           className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
         >
-          Connexion
+          {t("auth.login")}
         </Link>
       </div>
     );
@@ -109,7 +111,7 @@ export default function WalletPage() {
       <div className="rounded-3xl border border-border bg-gradient-to-br from-[#13131a] to-[#1c1c26] p-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Wallet className="size-4" />
-          Mon portefeuille
+          {t("wallet.title")}
         </div>
         <p className="mt-2 font-heading text-4xl font-extrabold text-trust">
           {formatMoney(balance)}
@@ -120,7 +122,7 @@ export default function WalletPage() {
       </div>
 
       <div className="mt-8 space-y-4">
-        <h2 className="font-heading text-sm font-bold">Recharger (simulé)</h2>
+        <h2 className="font-heading text-sm font-bold">{t("wallet.topUpSimulated")}</h2>
         <div className="grid grid-cols-3 gap-2">
           {PROVIDERS.map((p) => (
             <button
@@ -185,7 +187,7 @@ export default function WalletPage() {
       </div>
 
       <div className="mt-10">
-        <h2 className="mb-3 font-heading text-sm font-bold">Historique</h2>
+        <h2 className="mb-3 font-heading text-sm font-bold">{t("wallet.history")}</h2>
         <ul className="space-y-2">
           {txns.map((t) => (
             <li
@@ -213,7 +215,7 @@ export default function WalletPage() {
           ))}
           {txns.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Aucune transaction
+              {t("wallet.emptyHistory")}
             </p>
           )}
         </ul>

@@ -1,6 +1,9 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { compressImageBuffer } from "@/lib/compress-image.server";
+import { STORED_MAX_BYTES } from "@/lib/media";
+import { enforceCatalogModeration } from "@/lib/moderation.server";
 import {
   MEDIA_MAX_BYTES,
   detectMediaKind,
@@ -27,7 +30,7 @@ export async function POST(req: Request) {
     }
     if (file.size > MEDIA_MAX_BYTES) {
       return NextResponse.json(
-        { error: "Fichier trop lourd (max 10 Mo)" },
+        { error: "Fichier trop lourd (max 5 Mo après compression)" },
         { status: 400 },
       );
     }
@@ -40,16 +43,45 @@ export async function POST(req: Request) {
       );
     }
 
-    const filename = `${randomUUID()}.${extForMedia(file, kind)}`;
-    const saved = await writeUploadBuffer(
-      filename,
-      Buffer.from(await file.arrayBuffer()),
-    );
+    const raw = Buffer.from(await file.arrayBuffer());
+    let stored: Buffer = raw;
+    let ext = extForMedia(file, kind);
+    const variantRaw = String(form.get("variant") ?? "product");
+    const variant =
+      variantRaw === "avatar" || variantRaw === "document"
+        ? variantRaw
+        : "product";
+    if (kind === "image") {
+      const compressed = await compressImageBuffer(raw, variant);
+      stored = Buffer.from(compressed.buffer);
+      ext = compressed.ext;
+    } else if (stored.length > STORED_MAX_BYTES) {
+      return NextResponse.json(
+        { error: "Vidéo trop lourde (max 5 Mo)" },
+        { status: 400 },
+      );
+    }
+
+    const verdict = await enforceCatalogModeration({
+      userId: session.user.id,
+      buffer: stored,
+      kind,
+      variant,
+    });
+    if (!verdict.allowed) {
+      return NextResponse.json(
+        { error: verdict.error, code: verdict.code },
+        { status: verdict.httpStatus },
+      );
+    }
+
+    const filename = `${randomUUID()}.${ext}`;
+    const saved = await writeUploadBuffer(filename, stored);
 
     return NextResponse.json({
       url: saved.url,
       kind,
-      size: file.size,
+      size: stored.length,
       name: file.name,
     });
   } catch (error) {

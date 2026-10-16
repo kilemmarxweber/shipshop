@@ -6,7 +6,7 @@ import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
 const schema = z.object({
-  action: z.enum(["APPROVE", "REJECT"]),
+  action: z.enum(["APPROVE", "REJECT", "REVOKE"]),
   rejectReason: z.string().max(500).optional(),
 });
 
@@ -37,6 +37,28 @@ export async function POST(
     if (!existing) {
       return NextResponse.json({ error: "Dossier introuvable" }, { status: 404 });
     }
+    if (body.action === "REVOKE") {
+      if (existing.status !== "APPROVED") {
+        return NextResponse.json(
+          { error: "Seul un dossier approuvé peut être révoqué" },
+          { status: 409 },
+        );
+      }
+      const reason = body.rejectReason?.trim() || "Révoqué par l'admin plateforme";
+      const kyc = await withDbRetry(() =>
+        prisma.sellerKyc.update({
+          where: { id },
+          data: {
+            status: KycStatus.REJECTED,
+            rejectReason: reason,
+            reviewedAt: new Date(),
+            reviewedById: session.user.id,
+          },
+        }),
+      );
+      return NextResponse.json({ kyc: kycPublic(kyc) });
+    }
+
     if (existing.status !== "PENDING") {
       return NextResponse.json(
         { error: "Ce dossier n’est pas en revue" },

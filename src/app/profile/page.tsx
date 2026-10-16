@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import {
+  mediaUploadToastMessage,
+  uploadCompressedMedia,
+} from "@/lib/compress-media";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -134,25 +138,10 @@ export default function ProfilePage() {
       toast.error("Choisissez une image (JPG, PNG, WebP…)");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image trop lourde (max 5 Mo)");
-      return;
-    }
-
     setUploadingAvatar(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const up = await fetchJson<{
-        url?: string;
-        kind?: string;
-        error?: string;
-      }>("/api/upload", { method: "POST", body: form });
-      if (!up.res.ok || !up.data?.url) {
-        toast.error(up.data?.error ?? "Upload impossible");
-        return;
-      }
-      if (up.data.kind && up.data.kind !== "image") {
+      const uploaded = await uploadCompressedMedia(file, "avatar");
+      if (uploaded.kind !== "image") {
         toast.error("Seules les images sont acceptées pour le profil");
         return;
       }
@@ -163,7 +152,7 @@ export default function ProfilePage() {
       }>("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: up.data.url }),
+        body: JSON.stringify({ image: uploaded.url }),
       });
       if (!res.ok || !data?.user) {
         toast.error(data?.error ?? "Enregistrement impossible");
@@ -172,6 +161,8 @@ export default function ProfilePage() {
       applyProfile(data.user);
       await syncSessionUser({ image: data.user.image });
       toast.success("Photo de profil enregistrée");
+    } catch (error) {
+      toast.error(mediaUploadToastMessage(error, t));
     } finally {
       setUploadingAvatar(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -711,57 +702,50 @@ export default function ProfilePage() {
           </ul>
         </div>
       ) : (
-        <div className="mt-6 flex flex-col gap-3">
-          <Link
-            href="/shops/products"
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary text-sm font-medium text-primary-foreground"
-          >
-            Mes produits (prix, stock…)
-          </Link>
-          <Link
-            href="/shops/orders"
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
-          >
-            Commandes & livreurs
-          </Link>
-          <Link
-            href="/shops/reports"
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
-          >
-            Rapports & statistiques
-          </Link>
-          <Link
-            href="/shops/messaging"
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
-          >
-            Messages (admin)
-          </Link>
-          {isOwner ? (
+        <div className="mt-6 flex flex-col gap-2">
+          {(
+            [
+              ["/shops/products", "Mes produits (prix, stock…)", "primary"],
+              ["/shops/orders", "Commandes & livreurs", "secondary"],
+              ["/shops/reports", "Rapports & statistiques", "secondary"],
+              ["/shops/messaging", "Messages (admin)", "secondary"],
+              ...(isOwner
+                ? ([
+                    [
+                      "/shops/admin/products",
+                      "Modération produits (tout)",
+                      "primary",
+                    ],
+                    ["/shops/admin/vendors", "Tous les vendeurs", "primary"],
+                    ["/shops/kyc", "Revue KYC", "secondary"],
+                    [
+                      "/shops/admin/moderation",
+                      "Modération NSFW",
+                      "secondary",
+                    ],
+                  ] as const)
+                : []),
+              ["/shops", "Mes boutiques", "secondary"],
+              ["/publish", "Publier un produit", "secondary"],
+              ["/onboarding", "Créer une boutique", "outline"],
+            ] as const
+          ).map(([href, label, tone]) => (
             <Link
-              href="/shops/kyc"
-              className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
+              key={href}
+              href={href}
+              className={cn(
+                "inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium transition-none",
+                tone === "primary" &&
+                  "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                tone === "secondary" &&
+                  "bg-secondary text-secondary-foreground hover:bg-secondary hover:text-secondary-foreground",
+                tone === "outline" &&
+                  "border border-border bg-transparent hover:bg-transparent hover:text-foreground",
+              )}
             >
-              Revue KYC
+              {label}
             </Link>
-          ) : null}
-          <Link
-            href="/shops"
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
-          >
-            Mes boutiques
-          </Link>
-          <Link
-            href="/publish"
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-secondary text-sm font-medium"
-          >
-            Publier un produit
-          </Link>
-          <Link
-            href="/onboarding"
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border text-sm font-medium"
-          >
-            Créer une boutique
-          </Link>
+          ))}
         </div>
       )}
 

@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 12;
+const PRISMA_SCHEMA_REV = 13;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -37,7 +37,8 @@ function getPrismaClient() {
     existing &&
     globalForPrisma.prismaSchemaRev === PRISMA_SCHEMA_REV &&
     typeof existing.cartItem?.findMany === "function" &&
-    typeof existing.sellerKyc?.findMany === "function"
+    typeof existing.sellerKyc?.findMany === "function" &&
+    typeof existing.mediaModerationEvent?.findMany === "function"
   ) {
     return existing;
   }

@@ -17,6 +17,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { colorHex } from "@/lib/product-options";
+import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { FulfillmentForm } from "@/components/fulfillment-form";
@@ -48,6 +49,7 @@ type Product = {
 function ProductInner() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState<"cart" | "buy" | null>(null);
@@ -284,7 +286,7 @@ function ProductInner() {
                 ? "border-destructive/40 bg-destructive/15"
                 : "border-border bg-muted/40",
             )}
-            aria-label="Aimer"
+            aria-label={t("product.likeAria")}
           >
             <Heart
               className={cn(
@@ -296,7 +298,7 @@ function ProductInner() {
           <ShareMenu
             title={product.title}
             productId={product.id}
-            text={`${product.title} — ${formatMoney(product.priceCents)} sur Chip Shop`}
+            text={`${product.title} — ${formatMoney(product.priceCents)} ${t("product.onShipShop")}`}
             url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${product.id}`}
             triggerClassName="grid size-8 place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 hover:bg-muted active:scale-95"
           >
@@ -306,7 +308,7 @@ function ProductInner() {
             type="button"
             onClick={messageSeller}
             className="grid size-8 cursor-pointer place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 active:scale-95"
-            aria-label="Message vendeur"
+            aria-label={t("product.messageAria")}
           >
             <MessageCircle className="size-3.5" />
           </button>
@@ -318,6 +320,7 @@ function ProductInner() {
           <ProductImageCarousel
             images={product.images}
             fit="cover"
+            eager
             className="aspect-[4/3.6] w-full"
             intervalMs={2800}
           />
@@ -327,10 +330,10 @@ function ProductInner() {
       <div className="mx-auto max-w-2xl px-4 pt-2">
         <div className="mb-3 flex items-center gap-2 text-xs text-trust">
           <ShieldCheck className="size-4" />
-          Paiement depuis solde prépayé
+          {t("product.payFromWallet")}
           {product.likesCount > 0 && (
             <span className="text-muted-foreground">
-              · {product.likesCount} j’aime
+              · {product.likesCount} {t("product.likes")}
             </span>
           )}
         </div>
@@ -355,7 +358,8 @@ function ProductInner() {
         {product.colors.length > 0 && (
           <div className="mt-5">
             <p className="mb-2 text-xs font-semibold text-muted-foreground">
-              Couleur{selectedColor ? ` · ${selectedColor}` : ""}
+              {t("product.color")}
+              {selectedColor ? ` · ${selectedColor}` : ""}
             </p>
             <div className="h-scroll gap-2">
               {product.colors.map((c) => (
@@ -380,7 +384,7 @@ function ProductInner() {
         {product.sizes.length > 0 && (
           <div className="mt-4">
             <p className="mb-2 text-xs font-semibold text-muted-foreground">
-              Taille
+              {t("product.size")}
             </p>
             <div className="h-scroll gap-2">
               {product.sizes.map((s) => (
@@ -410,7 +414,9 @@ function ProductInner() {
 
         {product.status !== "ACTIVE" ? (
           <Button disabled className="mt-6 h-12 w-full">
-            {product.status === "SOLD" ? "Déjà vendu" : "Indisponible"}
+            {product.status === "SOLD"
+              ? t("product.sold")
+              : t("product.unavailable")}
           </Button>
         ) : (
           <div className="mt-6 space-y-3">
@@ -427,7 +433,7 @@ function ProductInner() {
               className="h-12 w-full cursor-pointer gap-2 bg-gradient-to-r from-[#ff5722] to-[#ff7a45] text-base font-bold"
             >
               <ShoppingCart className="size-4" />
-              {loading === "cart" ? "Ajout…" : "Ajouter au panier"}
+              {loading === "cart" ? t("product.adding") : t("product.addToCart")}
             </Button>
             <Button
               onClick={buyNow}
@@ -435,7 +441,7 @@ function ProductInner() {
               variant="secondary"
               className="h-11 w-full cursor-pointer text-sm font-semibold"
             >
-              {loading === "buy" ? "Traitement…" : "Payer maintenant"}
+              {loading === "buy" ? t("product.processing") : t("product.payNow")}
             </Button>
             <Button
               onClick={messageSeller}
@@ -443,7 +449,7 @@ function ProductInner() {
               className="h-11 w-full cursor-pointer gap-2 text-sm font-semibold"
             >
               <MessageCircle className="size-4" />
-              Contacter le vendeur
+              {t("product.contactSeller")}
             </Button>
           </div>
         )}
@@ -452,7 +458,9 @@ function ProductInner() {
       <Sheet open={showTopUp} onOpenChange={setShowTopUp}>
         <SheetContent side="bottom" className="rounded-t-3xl bg-surface">
           <SheetHeader>
-            <SheetTitle className="font-heading">Solde insuffisant</SheetTitle>
+            <SheetTitle className="font-heading">
+              {t("product.insufficientTitle")}
+            </SheetTitle>
           </SheetHeader>
           <div className="space-y-4 p-4">
             <p className="text-sm text-muted-foreground">
@@ -464,7 +472,7 @@ function ProductInner() {
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-bold text-primary-foreground"
             >
               <Wallet className="size-4" />
-              Recharger mon compte
+              {t("product.topUpCta")}
             </Link>
           </div>
         </SheetContent>

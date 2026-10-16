@@ -57,33 +57,37 @@ export function AppShell({
   const [balance, setBalance] = useState<number | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [urgentCount, setUrgentCount] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
     if (!userId) {
       setBalance(null);
       setCartCount(0);
       setUrgentCount(0);
+      setUnreadMessages(0);
       return;
     }
     Promise.all([
       fetchJson<{ wallet?: { balanceCents?: number } }>("/api/wallet"),
       fetchJson<{ count?: number }>("/api/cart"),
-      fetchJson<{ conversations?: { urgentPending?: boolean }[] }>(
-        "/api/conversations",
-      ),
+      fetchJson<{
+        conversations?: { urgentPending?: boolean; unreadCount?: number }[];
+      }>("/api/conversations"),
     ])
       .then(([wallet, cart, convos]) => {
         setBalance(wallet.data?.wallet?.balanceCents ?? 0);
         setCartCount(cart.data?.count ?? 0);
-        setUrgentCount(
-          (convos.data?.conversations ?? []).filter((c) => c.urgentPending)
-            .length,
+        const list = convos.data?.conversations ?? [];
+        setUrgentCount(list.filter((c) => c.urgentPending).length);
+        setUnreadMessages(
+          list.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0),
         );
       })
       .catch(() => {
         setBalance(null);
         setCartCount(0);
         setUrgentCount(0);
+        setUnreadMessages(0);
       });
   }, [userId, pathname]);
 
@@ -223,9 +227,23 @@ export function AppShell({
                               {cartCount > 9 ? "9+" : cartCount}
                             </span>
                           )}
-                          {item.href === "/messages" && urgentCount > 0 && (
-                            <span className="absolute -top-1.5 -right-2.5 grid size-4 place-items-center rounded-full bg-amber-500 text-black shadow">
-                              <AlertTriangle className="size-2.5" />
+                          {item.href === "/messages" &&
+                            (urgentCount > 0 || unreadMessages > 0) && (
+                            <span
+                              className={cn(
+                                "absolute -top-1.5 -right-2.5 grid min-w-4 place-items-center rounded-full px-0.5 text-[8px] font-bold shadow",
+                                urgentCount > 0
+                                  ? "size-4 bg-amber-500 text-black"
+                                  : "bg-primary text-white",
+                              )}
+                            >
+                              {urgentCount > 0 ? (
+                                <AlertTriangle className="size-2.5" />
+                              ) : unreadMessages > 9 ? (
+                                "9+"
+                              ) : (
+                                unreadMessages
+                              )}
                             </span>
                           )}
                         </span>

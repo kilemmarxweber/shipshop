@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
 import { isPlatformRole, orgAccessControl, orgRoles } from "@/lib/org-access";
@@ -63,6 +64,19 @@ export const auth = betterAuth({
     },
     session: {
       create: {
+        before: async (session) => {
+          const user = await prisma.user.findUnique({
+            where: { id: session.userId },
+            select: { disabledAt: true },
+          });
+          if (user?.disabledAt) {
+            throw new APIError("FORBIDDEN", {
+              message: "Compte désactivé — contenu interdit",
+              code: "ACCOUNT_DISABLED",
+            });
+          }
+          return { data: session };
+        },
         after: async (session) => {
           await ensureMembership(session.userId);
         },

@@ -19,6 +19,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { fetchJson } from "@/lib/fetch-json";
 import { colorHex } from "@/lib/product-options";
 import { formatMoney, cn } from "@/lib/utils";
+import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { FollowShopButton } from "@/components/follow-shop-button";
 import { PageLoader } from "@/components/page-loader";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
@@ -63,6 +64,7 @@ type Product = {
 function ShopInner() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const [shop, setShop] = useState<ShopProfile | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -98,12 +100,12 @@ function ShopInner() {
     });
     if (q.trim()) params.set("q", q.trim());
     if (category) params.set("category", category);
-    const t = setTimeout(() => {
+    const debounce = setTimeout(() => {
       fetchJson<{ products?: Product[] }>(`/api/products?${params}`)
         .then(({ data }) => setProducts(data?.products ?? []))
         .catch(() => setProducts([]));
     }, 200);
-    return () => clearTimeout(t);
+    return () => clearTimeout(debounce);
   }, [shop?.id, q, category]);
 
   const categoryChips = useMemo(() => {
@@ -112,13 +114,15 @@ function ShopInner() {
     return shop.categories.map((c) => ({
       id: c.id,
       count: c.count,
-      label: CATEGORIES.find((x) => x.id === c.id)?.label ?? c.id,
+      label: CATEGORIES.find((x) => x.id === c.id)
+        ? t(`categories.${c.id}` as MessagePath)
+        : c.id,
       gradient:
         CATEGORIES.find((x) => x.id === c.id)?.gradient ??
         "from-slate-500 to-slate-700",
       known: known.has(c.id),
     }));
-  }, [shop]);
+  }, [shop, t]);
 
   async function toggleLike(product: Product) {
     if (!session) {
@@ -152,7 +156,7 @@ function ShopInner() {
             : p,
         ),
       );
-      toast.error("Impossible d'aimer");
+      toast.error(t("feed.likeFailed"));
     }
   }
 
@@ -170,11 +174,11 @@ function ShopInner() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         shopId: shop.id,
-        message: `Bonjour, je suis intéressé par ${shop.name}.`,
+        message: `${t("shop.interestedIn")} ${shop.name}.`,
       }),
     });
     if (!res.ok || !data?.conversation) {
-      toast.error(data?.error ?? "Message impossible");
+      toast.error(data?.error ?? t("shop.messageFailed"));
       return;
     }
     router.push(`/messages/${data.conversation.id}`);
@@ -182,8 +186,8 @@ function ShopInner() {
 
   function copyShopLink() {
     void navigator.clipboard.writeText(shopUrl).then(
-      () => toast.success("Lien boutique copié"),
-      () => toast.error("Copie impossible"),
+      () => toast.success(t("shop.linkCopied")),
+      () => toast.error(t("common.copyImpossible")),
     );
   }
 
@@ -192,9 +196,9 @@ function ShopInner() {
   if (!shop) {
     return (
       <div className="px-5 py-16 text-center">
-        <p className="font-heading text-lg font-bold">Boutique introuvable</p>
+        <p className="font-heading text-lg font-bold">{t("shop.notFound")}</p>
         <Link href="/" className="mt-4 inline-block text-sm text-primary">
-          Retour au feed
+          {t("shop.backToFeed")}
         </Link>
       </div>
     );
@@ -225,10 +229,16 @@ function ShopInner() {
               {shop.name}
             </h1>
             <p className="text-[11px] text-muted-foreground">
-              @{shop.slug} · réf. {refCode} · {shop.productsCount} produit
-              {shop.productsCount > 1 ? "s" : ""}
+              @{shop.slug} · {t("shop.ref")} {refCode} · {shop.productsCount}{" "}
+              {shop.productsCount > 1
+                ? t("shop.productOther")
+                : t("shop.productOne")}
               {typeof shop.followersCount === "number"
-                ? ` · ${shop.followersCount} abonné${shop.followersCount > 1 ? "s" : ""}`
+                ? ` · ${shop.followersCount} ${
+                    shop.followersCount > 1
+                      ? t("shopExtra.followerOther")
+                      : t("shopExtra.followerOne")
+                  }`
                 : ""}
             </p>
             {shop.description && (
@@ -270,7 +280,7 @@ function ShopInner() {
           ) : (
             <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-2.5 text-xs text-muted-foreground">
               <Phone className="size-3.5" />
-              Contact non publié
+              {t("shop.contactUnpublished")}
             </span>
           )}
           <Button
@@ -279,8 +289,8 @@ function ShopInner() {
             size="icon"
             className="size-9 shrink-0 cursor-pointer"
             onClick={() => setShowAddress((v) => !v)}
-            aria-label="Voir l'adresse"
-            title="Voir l'adresse"
+            aria-label={t("shop.seeAddress")}
+            title={t("shop.seeAddress")}
           >
             <MapPin className="size-4" />
           </Button>
@@ -290,27 +300,27 @@ function ShopInner() {
             size="icon"
             className="size-9 shrink-0 cursor-pointer"
             onClick={copyShopLink}
-            aria-label="Copier le lien"
-            title="Copier le lien"
+            aria-label={t("shop.copyLink")}
+            title={t("shop.copyLink")}
           >
             <Link2 className="size-4" />
           </Button>
           <ShareMenu
             title={shop.name}
-            text={`Découvrez ${shop.name} sur Chip Shop`}
+            text={`${t("shop.discoverShop")} ${shop.name} ${t("product.onShipShop")}`}
             url={shopUrl}
             triggerClassName="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border bg-background"
           >
             <Share2 className="size-4" aria-hidden />
-            <span className="sr-only">Partager</span>
+            <span className="sr-only">{t("shop.share")}</span>
           </ShareMenu>
           <Button
             type="button"
             size="icon"
             className="size-9 shrink-0 cursor-pointer"
             onClick={messageSeller}
-            aria-label="Message"
-            title="Message"
+            aria-label={t("shop.message")}
+            title={t("shop.message")}
           >
             <MessageCircle className="size-4" />
           </Button>
@@ -323,7 +333,7 @@ function ShopInner() {
               {shop.addressHint}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Coordonnées · {shop.lat.toFixed(5)}, {shop.lng.toFixed(5)}
+              {t("shop.coordinates")} · {shop.lat.toFixed(5)}, {shop.lng.toFixed(5)}
             </p>
             <a
               href={mapsUrl}
@@ -331,7 +341,7 @@ function ShopInner() {
               rel="noreferrer"
               className="mt-2 inline-flex text-xs font-bold text-primary"
             >
-              Ouvrir dans Maps →
+              {t("shop.openInMaps")}
             </a>
           </div>
         )}
@@ -341,7 +351,7 @@ function ShopInner() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher un produit…"
+            placeholder={t("shop.searchPlaceholder")}
             className="border-0 bg-transparent shadow-none focus-visible:ring-0"
           />
         </div>
@@ -358,7 +368,7 @@ function ShopInner() {
                   : "border-border bg-surface",
               )}
             >
-              Tout ({shop.productsCount})
+              {t("shop.filterAll")} ({shop.productsCount})
             </button>
             {categoryChips.map((c) => (
               <button
@@ -385,11 +395,9 @@ function ShopInner() {
       {products.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
           <Store className="mb-3 size-10 text-muted-foreground" />
-          <p className="font-heading font-bold">Aucun produit</p>
+          <p className="font-heading font-bold">{t("shop.emptyTitle")}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {q || category
-              ? "Aucun résultat pour ce filtre"
-              : "Cette boutique n'a pas encore d'annonces actives"}
+            {q || category ? t("shop.emptyFilter") : t("shop.emptyNone")}
           </p>
         </div>
       ) : (
@@ -434,7 +442,7 @@ function ShopInner() {
                     />
                   </span>
                   <span className="text-[10px] font-semibold text-white drop-shadow">
-                    {p.likesCount || "Like"}
+                    {p.likesCount || t("feed.like")}
                   </span>
                 </button>
                 <ShareMenu
@@ -450,7 +458,7 @@ function ShopInner() {
                     <Share2 className="size-5" />
                   </span>
                   <span className="text-[10px] font-semibold drop-shadow">
-                    Share
+                    {t("feed.share")}
                   </span>
                 </ShareMenu>
               </div>
@@ -504,7 +512,7 @@ function ShopInner() {
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-primary px-3.5 py-2 text-[11px] font-bold text-white">
-                    Voir
+                    {t("common.see")}
                   </span>
                 </Link>
               </div>

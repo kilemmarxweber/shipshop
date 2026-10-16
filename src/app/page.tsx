@@ -8,11 +8,14 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { FollowShopButton } from "@/components/follow-shop-button";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
+import { isVideoUrl } from "@/lib/media";
 import { colorHex } from "@/lib/product-options";
+import type { MessagePath } from "@/components/i18n-provider";
 
 type Product = {
   id: string;
@@ -38,8 +41,18 @@ type Product = {
 
 type FeedTab = "foryou" | "following";
 
+function categoryLabel(
+  t: (path: MessagePath) => string,
+  id: string,
+): string {
+  const key = `categories.${id}` as MessagePath;
+  const label = t(key);
+  return label === key ? id : label;
+}
+
 export default function FeedPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +128,7 @@ export default function FeedPage() {
             : p,
         ),
       );
-      toast.error(data?.error ?? "Impossible d'aimer");
+      toast.error(data?.error ?? t("feed.likeFailed"));
       return;
     }
 
@@ -132,9 +145,9 @@ export default function FeedPage() {
     );
 
     if (data?.liked && data.notified) {
-      toast.success("Like envoyé au vendeur");
+      toast.success(t("feed.likeSent"));
     } else if (data && !data.liked && data.messageRemoved) {
-      toast.success("Like retiré — message vendeur annulé");
+      toast.success(t("feed.likeRemoved"));
     }
   }
 
@@ -155,7 +168,7 @@ export default function FeedPage() {
       }),
     });
     if (!res.ok || !data?.conversation) {
-      toast.error(data?.error ?? "Impossible d'ouvrir la conversation");
+      toast.error(data?.error ?? t("feed.conversationFailed"));
       return;
     }
     router.push(`/messages/${data.conversation.id}`);
@@ -173,7 +186,7 @@ export default function FeedPage() {
             : "text-muted-foreground",
         )}
       >
-        Abonnements
+        {t("feed.tabFollowing")}
       </button>
       <button
         type="button"
@@ -185,7 +198,7 @@ export default function FeedPage() {
             : "text-muted-foreground",
         )}
       >
-        Pour toi
+        {t("feed.tabForYou")}
       </button>
     </div>
   );
@@ -205,17 +218,16 @@ export default function FeedPage() {
         {tabs}
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
           <p className="font-heading text-lg font-bold">
-            Connectez-vous pour voir vos abonnements
+            {t("feed.loginToFollowTitle")}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Suivez des boutiques, aimez, achetez ou partagez : tout ça
-            apparaîtra ici.
+            {t("feed.loginToFollowHint")}
           </p>
           <Link
             href="/auth/login"
             className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
           >
-            Connexion
+            {t("auth.login")}
           </Link>
         </div>
       </div>
@@ -230,33 +242,32 @@ export default function FeedPage() {
           {tab === "following" ? (
             <>
               <p className="font-heading text-lg font-bold">
-                Rien dans Abonnements
+                {t("feed.emptyFollowingTitle")}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Ici : nouveautés des boutiques suivies, plus tes likes, achats,
-                commandes reçues et partages.
+                {t("feed.emptyFollowingHint")}
               </p>
               <button
                 type="button"
                 onClick={() => setTab("foryou")}
                 className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
               >
-                Explorer Pour toi
+                {t("feed.exploreForYou")}
               </button>
             </>
           ) : (
             <>
               <p className="font-heading text-lg font-bold">
-                Aucune annonce encore
+                {t("feed.emptyForYouTitle")}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Soyez le premier à publier sur Chip Shop
+                {t("feed.emptyForYouHint")}
               </p>
               <Link
                 href="/publish"
                 className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
               >
-                Publier
+                {t("nav.publish")}
               </Link>
             </>
           )}
@@ -269,7 +280,6 @@ export default function FeedPage() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden md:h-auto md:overflow-visible">
       {tabs}
 
-      {/* Hauteur = zone visible du feed (pas 100dvh) pour que la dernière card soit entière */}
       <div className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4 md:pb-8">
         {products.map((p) => (
           <article
@@ -286,10 +296,10 @@ export default function FeedPage() {
             <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
               <span className="w-fit rounded-full border border-trust/30 bg-trust/15 px-2.5 py-1 text-[10px] font-semibold text-trust backdrop-blur">
                 <ShieldCheck className="mr-1 inline size-3" />
-                Argent protégé
+                {t("feed.moneyProtected")}
               </span>
               <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
-                {p.category}
+                {categoryLabel(t, p.category)}
               </span>
             </div>
 
@@ -315,26 +325,26 @@ export default function FeedPage() {
                   />
                 </span>
                 <span className="text-[10px] font-semibold text-white drop-shadow">
-                  {p.likesCount || "Like"}
+                  {p.likesCount || t("feed.like")}
                 </span>
               </button>
               <button
                 type="button"
                 onClick={() => messageSeller(p)}
                 className="flex cursor-pointer flex-col items-center gap-1"
-                aria-label="Message au vendeur"
+                aria-label={t("feed.messageSeller")}
               >
                 <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95">
                   <MessageCircle className="size-5" />
                 </span>
                 <span className="text-[10px] font-semibold text-white drop-shadow">
-                  Msg
+                  {t("feed.msg")}
                 </span>
               </button>
               <ShareMenu
                 title={p.title}
                 productId={p.id}
-                text={`${p.title} — ${formatMoney(p.priceCents)} sur Chip Shop`}
+                text={`${p.title} — ${formatMoney(p.priceCents)} ${t("product.onShipShop")}`}
                 url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
                 align="end"
                 side="left"
@@ -344,42 +354,42 @@ export default function FeedPage() {
                   <Share2 className="size-5" />
                 </span>
                 <span className="text-[10px] font-semibold text-white drop-shadow">
-                  Share
+                  {t("feed.share")}
                 </span>
               </ShareMenu>
             </div>
 
             <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
               <div className="mb-2 flex items-center gap-2">
-              <Link
-                href={`/shop/${p.shop.slug}`}
-                onClick={(e) => e.stopPropagation()}
-                className="flex min-w-0 flex-1 items-center gap-2"
-              >
-                <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-bold text-white ring-2 ring-white/20">
-                  {p.shop.logoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.shop.logoUrl}
-                      alt=""
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    p.shop.name.slice(0, 1)
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-white underline-offset-2 hover:underline">
-                    @{p.shop.name}
-                  </p>
-                  <p className="flex items-center gap-1 text-[10px] text-white/70">
-                    <MapPin className="size-3 shrink-0" />
-                    <span className="truncate">
-                      {p.location ?? "Kinshasa"}
-                    </span>
-                  </p>
-                </div>
-              </Link>
+                <Link
+                  href={`/shop/${p.shop.slug}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex min-w-0 flex-1 items-center gap-2"
+                >
+                  <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-bold text-white ring-2 ring-white/20">
+                    {p.shop.logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.shop.logoUrl}
+                        alt=""
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      p.shop.name.slice(0, 1)
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-white underline-offset-2 hover:underline">
+                      @{p.shop.name}
+                    </p>
+                    <p className="flex items-center gap-1 text-[10px] text-white/70">
+                      <MapPin className="size-3 shrink-0" />
+                      <span className="truncate">
+                        {p.location ?? t("common.kinshasa")}
+                      </span>
+                    </p>
+                  </div>
+                </Link>
                 <FollowShopButton
                   slug={p.shop.slug}
                   followedByMe={Boolean(p.shop.followedByMe)}
@@ -421,10 +431,12 @@ export default function FeedPage() {
                 className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-black/55 sm:gap-3 sm:p-2.5"
               >
                 <div
-                  className="size-11 shrink-0 rounded-xl bg-cover bg-center ring-1 ring-white/10 sm:size-12"
-                  style={{
-                    backgroundImage: `url(${p.images[0]})`,
-                  }}
+                  className="size-11 shrink-0 overflow-hidden rounded-xl bg-cover bg-center ring-1 ring-white/10 sm:size-12"
+                  style={
+                    p.images[0] && !isVideoUrl(p.images[0])
+                      ? { backgroundImage: `url(${p.images[0]})` }
+                      : undefined
+                  }
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold text-white">
@@ -435,7 +447,7 @@ export default function FeedPage() {
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-primary px-3.5 py-2 text-[11px] font-bold text-white">
-                  Voir
+                  {t("common.see")}
                 </span>
               </Link>
             </div>

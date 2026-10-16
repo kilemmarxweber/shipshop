@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney } from "@/lib/utils";
+import { useI18n } from "@/components/i18n-provider";
 import { FulfillmentForm } from "@/components/fulfillment-form";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ type CartPayload = {
 
 export default function CartPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const [items, setItems] = useState<CartItem[]>([]);
   const [totalCents, setTotalCents] = useState(0);
@@ -187,15 +189,15 @@ export default function CartPage() {
     return (
       <div className="px-5 py-16 text-center">
         <ShoppingCart className="mx-auto mb-3 size-8 text-muted-foreground" />
-        <p className="font-heading text-lg font-bold">Votre panier</p>
+        <p className="font-heading text-lg font-bold">{t("cart.title")}</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Connectez-vous pour ajouter des produits
+          {t("cart.guestHint")}
         </p>
         <Link
           href="/auth/login"
           className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
         >
-          Connexion
+          {t("auth.login")}
         </Link>
       </div>
     );
@@ -211,9 +213,10 @@ export default function CartPage() {
     <div className="px-4 pb-6 pt-3 md:px-8">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h1 className="font-heading text-xl font-bold">Panier</h1>
+          <h1 className="font-heading text-xl font-bold">{t("cart.title")}</h1>
           <p className="text-xs text-muted-foreground">
-            {items.length} article{items.length === 1 ? "" : "s"}
+            {items.length}{" "}
+            {items.length > 1 ? t("cart.itemOther") : t("cart.itemOne")}
           </p>
         </div>
         {items.length > 0 && (
@@ -225,19 +228,19 @@ export default function CartPage() {
             className="gap-1.5 text-muted-foreground"
           >
             <X className="size-4" />
-            Annuler
+            {t("common.cancel")}
           </Button>
         )}
       </div>
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-border bg-surface px-4 py-12 text-center">
-          <p className="text-sm text-muted-foreground">Votre panier est vide</p>
+          <p className="text-sm text-muted-foreground">{t("cart.empty")}</p>
           <Link
             href="/discover"
             className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
           >
-            Découvrir
+            {t("nav.discover")}
           </Link>
         </div>
       ) : (
@@ -270,7 +273,7 @@ export default function CartPage() {
                   </p>
                   {item.product.status !== "ACTIVE" && (
                     <p className="text-[11px] text-destructive">
-                      Plus disponible
+                      {t("cart.unavailable")}
                     </p>
                   )}
                 </div>
@@ -279,7 +282,7 @@ export default function CartPage() {
                   disabled={busy}
                   onClick={() => removeItem(item.productId)}
                   className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground hover:text-destructive"
-                  aria-label="Retirer du panier"
+                  aria-label={t("cart.removeAria")}
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -301,7 +304,7 @@ export default function CartPage() {
               onClick={confirmPurchase}
               className="h-12 w-full bg-gradient-to-r from-[#ff5722] to-[#ff7a45] text-base font-bold"
             >
-              {busy ? "Traitement…" : "Confirmer l'achat"}
+              {busy ? t("product.processing") : t("cart.confirmPurchase")}
             </Button>
             <Button
               variant="ghost"
@@ -309,7 +312,7 @@ export default function CartPage() {
               onClick={cancelCart}
               className="mt-2 w-full text-muted-foreground"
             >
-              Annuler le panier
+              {t("cart.cancelCart")}
             </Button>
           </div>
           </div>

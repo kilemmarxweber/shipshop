@@ -3,9 +3,14 @@
 import { useRef, useState } from "react";
 import { Plus, X, Film, ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  mediaUploadToastMessage,
+  uploadCompressedMedia,
+} from "@/lib/compress-media";
+import { useI18n } from "@/components/i18n-provider";
+import { SOURCE_MAX_BYTES, isVideoUrl } from "@/lib/media";
 import { cn } from "@/lib/utils";
 
-const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPT = "image/*,video/mp4,video/webm,video/quicktime";
 
 type Props = {
@@ -14,11 +19,8 @@ type Props = {
   max?: number;
 };
 
-function isVideoUrl(url: string) {
-  return /\.(mp4|webm|mov)(\?|$)/i.test(url) || url.includes("video");
-}
-
 export function MediaUploader({ urls, onChange, max = 12 }: Props) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -35,8 +37,8 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
     const next = [...urls];
 
     for (const file of list) {
-      if (file.size > MAX_BYTES) {
-        toast.error(`${file.name} dépasse 10 Mo`);
+      if (file.size > SOURCE_MAX_BYTES) {
+        toast.error(`${file.name} dépasse 80 Mo`);
         continue;
       }
       if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
@@ -44,18 +46,11 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
         continue;
       }
 
-      const form = new FormData();
-      form.append("file", file);
       try {
-        const res = await fetch("/api/upload", { method: "POST", body: form });
-        const json = await res.json();
-        if (!res.ok) {
-          toast.error(json.error ?? `Échec ${file.name}`);
-          continue;
-        }
-        if (json.url && !next.includes(json.url)) next.push(json.url);
-      } catch {
-        toast.error(`Échec upload ${file.name}`);
+        const uploaded = await uploadCompressedMedia(file, "product");
+        if (uploaded.url && !next.includes(uploaded.url)) next.push(uploaded.url);
+      } catch (error) {
+        toast.error(mediaUploadToastMessage(error, t));
       }
     }
 
@@ -89,11 +84,12 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
         ) : (
           <Plus className="size-4" />
         )}
-        {uploading ? "Upload…" : "Ajouter images / vidéos"}
+        {uploading ? "Compression…" : "Ajouter images / vidéos"}
       </button>
 
       <p className="text-[11px] text-muted-foreground">
-        Images ou vidéos · max 10 Mo · {urls.length}/{max}
+        Toute taille acceptée · compressé auto en 800×1000 (&lt; 5 Mo) ·{" "}
+        {urls.length}/{max}
       </p>
 
       {urls.length > 0 && (
@@ -104,20 +100,28 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
               className="relative aspect-square overflow-hidden rounded-xl bg-surface-2"
             >
               {isVideoUrl(src) ? (
-                <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground">
-                  <Film className="size-6" />
+                <div className="relative size-full bg-black">
                   <video
                     src={src}
-                    className="absolute inset-0 size-full object-cover opacity-60"
-                    muted
+                    className="size-full object-cover"
+                    controls
                     playsInline
+                    preload="metadata"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                   />
+                  <Film className="pointer-events-none absolute top-1.5 left-1.5 size-4 text-white/90 drop-shadow" />
                 </div>
               ) : (
-                <div
-                  className="size-full bg-cover bg-center"
-                  style={{ backgroundImage: `url(${src})` }}
-                >
+                <div className="size-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="size-full object-cover"
+                  />
                   <ImageIcon className="sr-only" />
                 </div>
               )}

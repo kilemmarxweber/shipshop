@@ -1,3 +1,5 @@
+"use client";
+
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +15,8 @@ export function PageLoader({
   label,
   fullScreen = false,
 }: Props) {
+  const aria = label ?? "Chargement";
+
   return (
     <div
       className={cn(
@@ -22,7 +26,7 @@ export function PageLoader({
       )}
       role="status"
       aria-live="polite"
-      aria-label={label ?? "Chargement"}
+      aria-label={aria}
     >
       <Loader2 className="size-8 animate-spin text-primary" />
       {label ? <p className="text-xs">{label}</p> : null}
