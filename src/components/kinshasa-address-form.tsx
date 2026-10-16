@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 const AddressMapPicker = dynamic(() => import("@/components/address-map-picker"), {
   ssr: false,
   loading: () => (
-    <div className="grid h-[240px] place-items-center rounded-2xl border border-white/10 bg-[#1c1c26]">
+    <div className="grid h-[240px] place-items-center rounded-2xl border border-border bg-surface-2">
       <Loader2 className="size-6 animate-spin text-primary" />
     </div>
   ),
@@ -166,7 +166,7 @@ export function KinshasaAddressForm({
         <Input
           value={value.city || cityName}
           readOnly
-          className="bg-[#1c1c26] opacity-90"
+          className="bg-surface-2 opacity-90"
         />
       </div>
 
@@ -231,7 +231,7 @@ export function KinshasaAddressForm({
               avenue: "",
             })
           }
-          className="h-10 w-full rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-sm"
+          className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm"
         >
           <option value="">—</option>
           {communes.map((c) => (
@@ -248,7 +248,7 @@ export function KinshasaAddressForm({
           value={value.quartier}
           onChange={(e) => onChange({ ...value, quartier: e.target.value })}
           disabled={!selected}
-          className="h-10 w-full rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-sm disabled:opacity-40"
+          className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm disabled:opacity-40"
         >
           <option value="">—</option>
           {(selected?.quartiers ?? []).map((q) => (
@@ -265,7 +265,7 @@ export function KinshasaAddressForm({
           value={value.avenue}
           onChange={(e) => onChange({ ...value, avenue: e.target.value })}
           disabled={!selected}
-          className="h-10 w-full rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-sm disabled:opacity-40"
+          className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm disabled:opacity-40"
         >
           <option value="">—</option>
           {(selected?.avenues ?? []).map((a) => (
@@ -282,7 +282,7 @@ export function KinshasaAddressForm({
           value={value.parcelle}
           onChange={(e) => onChange({ ...value, parcelle: e.target.value })}
           placeholder="ex. 45"
-          className="bg-[#1c1c26]"
+          className="bg-surface-2"
         />
       </div>
 

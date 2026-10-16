@@ -177,7 +177,7 @@ export default function MessagingSettingsPage() {
         </p>
       </div>
 
-      <section className="mb-8 space-y-4 rounded-2xl border border-white/8 bg-[#13131a] p-4">
+      <section className="mb-8 space-y-4 rounded-2xl border border-border bg-surface p-4">
         <h2 className="font-heading text-sm font-bold">Marque & canaux</h2>
         <div className="space-y-2">
           <Label>Préfixe marque (ex. Chip Shop)</Label>
@@ -186,7 +186,7 @@ export default function MessagingSettingsPage() {
             onChange={(e) =>
               setConfig({ ...config, brandPrefix: e.target.value })
             }
-            className="bg-[#1c1c26]"
+            className="bg-surface-2"
           />
         </div>
         <div className="flex flex-wrap gap-4 text-sm">
@@ -218,7 +218,7 @@ export default function MessagingSettingsPage() {
             onChange={(e) =>
               setConfig({ ...config, whatsappProvider: e.target.value })
             }
-            className="h-10 w-full rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-sm"
+            className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm"
           >
             <option value="klambo">Klambo</option>
             <option value="infobip">Infobip WhatsApp</option>
@@ -226,7 +226,7 @@ export default function MessagingSettingsPage() {
         </div>
       </section>
 
-      <section className="mb-8 space-y-3 rounded-2xl border border-white/8 bg-[#13131a] p-4">
+      <section className="mb-8 space-y-3 rounded-2xl border border-border bg-surface p-4">
         <h2 className="font-heading text-sm font-bold">
           Klambo{" "}
           <span className="text-[10px] font-normal text-muted-foreground">
@@ -240,19 +240,19 @@ export default function MessagingSettingsPage() {
           placeholder="Nouvelle clé API Klambo"
           value={klamboKey}
           onChange={(e) => setKlamboKey(e.target.value)}
-          className="bg-[#1c1c26]"
+          className="bg-surface-2"
         />
         <Input
           value={config.klamboBaseUrl}
           onChange={(e) =>
             setConfig({ ...config, klamboBaseUrl: e.target.value })
           }
-          className="bg-[#1c1c26]"
+          className="bg-surface-2"
           placeholder="Base URL"
         />
       </section>
 
-      <section className="mb-8 space-y-3 rounded-2xl border border-white/8 bg-[#13131a] p-4">
+      <section className="mb-8 space-y-3 rounded-2xl border border-border bg-surface p-4">
         <h2 className="font-heading text-sm font-bold">
           Infobip SMS{" "}
           <span className="text-[10px] font-normal text-muted-foreground">
@@ -266,7 +266,7 @@ export default function MessagingSettingsPage() {
           placeholder="Nouvelle clé API SMS"
           value={smsKey}
           onChange={(e) => setSmsKey(e.target.value)}
-          className="bg-[#1c1c26]"
+          className="bg-surface-2"
         />
         <div className="grid grid-cols-2 gap-2">
           <Input
@@ -274,7 +274,7 @@ export default function MessagingSettingsPage() {
             onChange={(e) =>
               setConfig({ ...config, smsBaseUrl: e.target.value })
             }
-            className="bg-[#1c1c26]"
+            className="bg-surface-2"
             placeholder="Base URL"
           />
           <Input
@@ -282,13 +282,13 @@ export default function MessagingSettingsPage() {
             onChange={(e) =>
               setConfig({ ...config, smsSender: e.target.value })
             }
-            className="bg-[#1c1c26]"
+            className="bg-surface-2"
             placeholder="Sender"
           />
         </div>
       </section>
 
-      <section className="mb-8 space-y-3 rounded-2xl border border-white/8 bg-[#13131a] p-4">
+      <section className="mb-8 space-y-3 rounded-2xl border border-border bg-surface p-4">
         <h2 className="font-heading text-sm font-bold">
           Infobip WhatsApp{" "}
           <span className="text-[10px] font-normal text-muted-foreground">
@@ -302,14 +302,14 @@ export default function MessagingSettingsPage() {
           placeholder="Nouvelle clé API WA"
           value={waKey}
           onChange={(e) => setWaKey(e.target.value)}
-          className="bg-[#1c1c26]"
+          className="bg-surface-2"
         />
         <Input
           value={config.waFromNumber}
           onChange={(e) =>
             setConfig({ ...config, waFromNumber: e.target.value })
           }
-          className="bg-[#1c1c26]"
+          className="bg-surface-2"
           placeholder="From number WhatsApp"
         />
         <Input
@@ -317,7 +317,7 @@ export default function MessagingSettingsPage() {
           onChange={(e) =>
             setConfig({ ...config, waBaseUrl: e.target.value })
           }
-          className="bg-[#1c1c26]"
+          className="bg-surface-2"
           placeholder="Base URL"
         />
       </section>
@@ -343,7 +343,7 @@ export default function MessagingSettingsPage() {
         {templates.map((t) => (
           <li
             key={t.id}
-            className="rounded-xl border border-white/8 bg-[#13131a] p-3"
+            className="rounded-xl border border-border bg-surface p-3"
           >
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -375,7 +375,7 @@ export default function MessagingSettingsPage() {
 
       {editTpl && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-[#13131a] p-4">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-4">
             <h3 className="mb-3 font-heading font-bold">
               {editTpl.name} · {editTpl.channel}
             </h3>
@@ -385,14 +385,14 @@ export default function MessagingSettingsPage() {
                 onChange={(e) =>
                   setEditTpl({ ...editTpl, name: e.target.value })
                 }
-                className="bg-[#1c1c26]"
+                className="bg-surface-2"
               />
               <Textarea
                 value={editTpl.body}
                 onChange={(e) =>
                   setEditTpl({ ...editTpl, body: e.target.value })
                 }
-                className="min-h-36 bg-[#1c1c26] text-sm"
+                className="min-h-36 bg-surface-2 text-sm"
               />
               {editTpl.channel === "whatsapp" && (
                 <Input
@@ -404,7 +404,7 @@ export default function MessagingSettingsPage() {
                     })
                   }
                   placeholder="Nom template Infobip (optionnel)"
-                  className="bg-[#1c1c26]"
+                  className="bg-surface-2"
                 />
               )}
               <label className="flex items-center gap-2 text-sm">

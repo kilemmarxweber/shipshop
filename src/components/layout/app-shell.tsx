@@ -13,13 +13,13 @@ import {
   ShoppingCart,
   MessageCircle,
 } from "lucide-react";
-import { getAppInitials } from "@/lib/app-name";
 import { cn, formatMoney } from "@/lib/utils";
 import { fetchJson } from "@/lib/fetch-json";
 import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { BackButton } from "@/components/back-button";
 import { BackNavProvider } from "@/components/back-nav-context";
+import { LocaleToggle } from "@/components/locale-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useI18n } from "@/components/i18n-provider";
 
@@ -97,7 +97,10 @@ export function AppShell({
     "/messages",
     "/cart",
   ]);
-  const showBack = !hideChrome && !hideBackOn.has(pathname);
+  const showBack =
+    !hideChrome &&
+    !hideBackOn.has(pathname) &&
+    !pathname.startsWith("/shop/");
 
   return (
     <BackNavProvider>
@@ -107,8 +110,13 @@ export function AppShell({
             <header className="z-40 shrink-0 border-b border-border bg-background/90 px-4 pb-1.5 pt-2.5 backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3">
                 <Link href="/" className="flex items-center gap-2">
-                  <div className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-[#ff5722] to-[#ff7a45] text-sm font-bold shadow-[0_4px_14px_rgba(255,87,34,0.4)]">
-                    {getAppInitials(appName)}
+                  <div className="grid size-8 place-items-center overflow-hidden rounded-lg bg-transparent">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/shipshop-logo.png"
+                      alt={appName}
+                      className="size-8 object-contain"
+                    />
                   </div>
                   <span className="font-heading text-lg font-bold tracking-tight">
                     <BrandLabel name={appName} />
@@ -138,10 +146,11 @@ export function AppShell({
                       </Link>
                     </>
                   )}
+                  <LocaleToggle />
                   <ThemeToggle />
                   <button
                     type="button"
-                    className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50"
+                    className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50 text-foreground"
                     aria-label={t("nav.notifications")}
                   >
                     <Bell className="size-4" />

@@ -117,7 +117,7 @@ export function FulfillmentForm({
   };
 
   return (
-    <div className="space-y-4 rounded-2xl border border-white/8 bg-[#13131a] p-4">
+    <div className="space-y-4 rounded-2xl border border-border bg-surface p-4">
       <p className="font-heading text-sm font-bold">Livraison ou retrait</p>
       <div className="grid grid-cols-2 gap-2">
         {(
@@ -144,7 +144,7 @@ export function FulfillmentForm({
               "rounded-xl border px-3 py-2.5 text-xs font-semibold",
               value.fulfillmentType === key
                 ? "border-primary bg-primary text-white"
-                : "border-white/10 bg-[#1c1c26]",
+                : "border-border bg-surface-2",
             )}
           >
             {label}
@@ -158,7 +158,7 @@ export function FulfillmentForm({
           value={value.contactPhone}
           onChange={(e) => onChange({ ...value, contactPhone: e.target.value })}
           placeholder="+243 8XX XXX XXX"
-          className="bg-[#1c1c26]"
+          className="bg-surface-2"
         />
       </div>
 
@@ -202,7 +202,7 @@ export function FulfillmentForm({
         </p>
       )}
 
-      <div className="rounded-xl border border-white/8 bg-black/30 p-3 text-sm">
+      <div className="rounded-xl border border-border bg-black/30 p-3 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Produit</span>
           <span>{formatMoney(productCents)}</span>

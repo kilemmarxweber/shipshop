@@ -252,7 +252,7 @@ export default function KycPage() {
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-1 rounded-2xl border border-white/8 bg-[#13131a] p-1">
+      <div className="mt-4 grid grid-cols-2 gap-1 rounded-2xl border border-border bg-surface p-1">
         <button
           type="button"
           onClick={() => setStep(1)}
@@ -280,7 +280,7 @@ export default function KycPage() {
       </div>
 
       {step === 1 ? (
-        <div className="mt-4 space-y-3 rounded-2xl border border-white/8 bg-[#13131a] p-3">
+        <div className="mt-4 space-y-3 rounded-2xl border border-border bg-surface p-3">
           <Label>Type de vendeur</Label>
           <div className="grid grid-cols-2 gap-2">
             {(
@@ -297,7 +297,7 @@ export default function KycPage() {
                   "rounded-xl border py-2.5 text-xs font-semibold",
                   sellerType === key
                     ? "border-primary bg-primary/15 text-white"
-                    : "border-white/8 text-muted-foreground",
+                    : "border-border text-muted-foreground",
                 )}
               >
                 {label}
@@ -311,7 +311,7 @@ export default function KycPage() {
               value={legalName}
               onChange={(e) => setLegalName(e.target.value)}
               placeholder="Nom et prénom ou raison sociale"
-              className="h-10 bg-[#1c1c26]"
+              className="h-10 bg-surface-2"
             />
           </div>
           <div className="space-y-1.5">
@@ -321,7 +321,7 @@ export default function KycPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+243 8XX XXX XXX"
-              className="h-10 bg-[#1c1c26]"
+              className="h-10 bg-surface-2"
             />
           </div>
           <div className="space-y-1.5">
@@ -331,7 +331,7 @@ export default function KycPage() {
               value={idNumber}
               onChange={(e) => setIdNumber(e.target.value)}
               placeholder="CNI, passeport…"
-              className="h-10 bg-[#1c1c26]"
+              className="h-10 bg-surface-2"
             />
           </div>
           <Button
@@ -343,7 +343,7 @@ export default function KycPage() {
           </Button>
         </div>
       ) : (
-        <div className="mt-4 space-y-3 rounded-2xl border border-white/8 bg-[#13131a] p-3">
+        <div className="mt-4 space-y-3 rounded-2xl border border-border bg-surface p-3">
           <DocSlot
             label="Pièce — recto"
             url={idFrontUrl}
@@ -457,7 +457,7 @@ function DocSlot({
   }
 
   return (
-    <div className="rounded-xl border border-white/8 bg-[#1c1c26] p-2.5">
+    <div className="rounded-xl border border-border bg-surface-2 p-2.5">
       {mode === "document" ? (
         <input
           ref={galleryRef}
@@ -468,7 +468,7 @@ function DocSlot({
         />
       ) : null}
       <div className="flex items-center gap-2.5">
-        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-white/5">
+        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted/40">
           {url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={url} alt="" className="size-full object-cover" />

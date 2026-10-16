@@ -184,7 +184,7 @@ export default function SellerProductsPage() {
               "rounded-lg px-2.5 py-1.5 text-[11px] font-semibold",
               tab === key
                 ? "bg-primary text-white"
-                : "bg-white/5 text-muted-foreground",
+                : "bg-muted/40 text-muted-foreground",
             )}
           >
             {label}
@@ -201,7 +201,7 @@ export default function SellerProductsPage() {
         {filtered.map((p) => (
           <li
             key={p.id}
-            className="rounded-2xl border border-white/8 bg-[#13131a] p-3"
+            className="rounded-2xl border border-border bg-surface p-3"
           >
             <div className="flex gap-3">
               <div
@@ -326,7 +326,7 @@ export default function SellerProductsPage() {
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-[#13131a] p-4">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-4">
             <h2 className="mb-3 font-heading text-lg font-bold">Éditer</h2>
             <div className="space-y-3">
               <div className="space-y-1">
@@ -336,7 +336,7 @@ export default function SellerProductsPage() {
                   onChange={(e) =>
                     setEditing({ ...editing, title: e.target.value })
                   }
-                  className="bg-[#1c1c26]"
+                  className="bg-surface-2"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -353,7 +353,7 @@ export default function SellerProductsPage() {
                         ),
                       })
                     }
-                    className="bg-[#1c1c26]"
+                    className="bg-surface-2"
                   />
                 </div>
                 <div className="space-y-1">
@@ -368,7 +368,7 @@ export default function SellerProductsPage() {
                         quantity: parseInt(e.target.value || "0", 10) || 0,
                       })
                     }
-                    className="bg-[#1c1c26]"
+                    className="bg-surface-2"
                   />
                 </div>
               </div>
@@ -379,7 +379,7 @@ export default function SellerProductsPage() {
                   onChange={(e) =>
                     setEditing({ ...editing, status: e.target.value })
                   }
-                  className="h-10 w-full rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-sm"
+                  className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm"
                 >
                   <option value="DRAFT">Brouillon</option>
                   <option value="ACTIVE">Publié</option>
@@ -394,7 +394,7 @@ export default function SellerProductsPage() {
                   onChange={(e) =>
                     setEditing({ ...editing, description: e.target.value })
                   }
-                  className="min-h-20 bg-[#1c1c26]"
+                  className="min-h-20 bg-surface-2"
                 />
               </div>
               <div className="space-y-1">

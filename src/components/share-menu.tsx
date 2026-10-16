@@ -48,8 +48,8 @@ const ICONS = {
     </BrandIcon>
   ),
   x: (
-    <BrandIcon className="size-3.5 text-white">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.903L2.25 2.25h6.993l4.261 5.697L18.244 2.25Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
+    <BrandIcon className="size-[1.1rem] text-foreground">
+      <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.939ZM17.61 20.644h2.039L6.486 3.24H4.298Z" />
     </BrandIcon>
   ),
   facebook: (
@@ -59,10 +59,14 @@ const ICONS = {
   ),
 };
 
+const iconBtnClass =
+  "size-10 cursor-pointer justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors hover:bg-muted focus:bg-muted data-highlighted:bg-muted";
+
 type Props = {
   title: string;
   text: string;
   url: string;
+  productId?: string;
   /** Contenu du bouton trigger (icône, etc.) */
   children: ReactNode;
   triggerClassName?: string;
@@ -70,11 +74,19 @@ type Props = {
   side?: "top" | "bottom" | "left" | "right";
 };
 
+function recordProductShare(productId?: string, url?: string) {
+  const id =
+    productId ?? url?.match(/\/product\/([^/?#]+)/)?.[1] ?? undefined;
+  if (!id) return;
+  void fetch(`/api/products/${id}/share`, { method: "POST" }).catch(() => {});
+}
+
 /** Menu dropdown stylisé : réseaux + copier le lien (pas de popup plein écran). */
 export function ShareMenu({
   title,
   text,
   url,
+  productId,
   children,
   triggerClassName,
   align = "end",
@@ -120,6 +132,7 @@ export function ShareMenu({
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(shareUrl);
+      recordProductShare(productId, shareUrl);
       toast.success("Lien Chip Shop copié");
     } catch {
       toast.error("Copie impossible");
@@ -133,6 +146,7 @@ export function ShareMenu({
     }
     try {
       await navigator.share({ title, text, url: shareUrl });
+      recordProductShare(productId, shareUrl);
     } catch {
       /* cancelled */
     }
@@ -158,39 +172,46 @@ export function ShareMenu({
         align={align}
         side={side}
         sideOffset={8}
-        className="z-[120] w-auto min-w-0 rounded-2xl border border-white/10 bg-[#13131a]/95 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+        className="z-[120] w-auto min-w-0 rounded-2xl border border-border bg-popover/95 p-2 text-popover-foreground shadow-lg backdrop-blur-xl"
       >
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           {actions.map((action) => (
             <DropdownMenuItem
               key={action.id}
               title={action.label}
               aria-label={action.label}
-              className="size-10 cursor-pointer justify-center rounded-xl border-0 bg-transparent p-0 focus:bg-white/10 data-highlighted:bg-white/10"
+              className={iconBtnClass}
               onClick={() => {
+                recordProductShare(productId, shareUrl);
                 window.open(action.href, "_blank", "noopener,noreferrer");
               }}
             >
-              {action.icon}
+              <span className="grid size-9 place-items-center rounded-full">
+                {action.icon}
+              </span>
             </DropdownMenuItem>
           ))}
-          <span className="mx-1 h-6 w-px shrink-0 self-center bg-white/15" />
+          <span className="mx-0.5 h-6 w-px shrink-0 self-center bg-border" />
           <DropdownMenuItem
             title="Copier le lien"
             aria-label="Copier le lien"
-            className="size-10 cursor-pointer justify-center rounded-xl border-0 bg-transparent p-0 text-primary focus:bg-white/10 data-highlighted:bg-white/10"
+            className={cn(iconBtnClass, "text-primary")}
             onClick={copyLink}
           >
-            <Copy className="size-4" />
+            <span className="grid size-9 place-items-center rounded-full">
+              <Copy className="size-4" />
+            </span>
           </DropdownMenuItem>
           {typeof navigator !== "undefined" && "share" in navigator && (
             <DropdownMenuItem
               title="Plus d'apps"
               aria-label="Plus d'apps"
-              className="size-10 cursor-pointer justify-center rounded-xl border-0 bg-transparent p-0 text-white focus:bg-white/10 data-highlighted:bg-white/10"
+              className={iconBtnClass}
               onClick={nativeShare}
             >
-              <Share2 className="size-4" />
+              <span className="grid size-9 place-items-center rounded-full">
+                <Share2 className="size-4" />
+              </span>
             </DropdownMenuItem>
           )}
         </div>

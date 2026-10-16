@@ -267,9 +267,12 @@ function ProductInner() {
           <p className="truncate font-heading text-sm font-bold leading-none">
             {product.title}
           </p>
-          <p className="mt-0.5 truncate text-[11px] leading-none text-muted-foreground">
+          <Link
+            href={`/shop/${product.shop.slug}`}
+            className="mt-0.5 truncate text-[11px] leading-none text-muted-foreground hover:text-primary hover:underline"
+          >
             @{product.shop.name}
-          </p>
+          </Link>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -279,7 +282,7 @@ function ProductInner() {
               "grid size-8 cursor-pointer place-items-center rounded-full border transition hover:scale-105 active:scale-95",
               product.likedByMe
                 ? "border-destructive/40 bg-destructive/15"
-                : "border-white/10 bg-white/5",
+                : "border-border bg-muted/40",
             )}
             aria-label="Aimer"
           >
@@ -292,16 +295,17 @@ function ProductInner() {
           </button>
           <ShareMenu
             title={product.title}
+            productId={product.id}
             text={`${product.title} — ${formatMoney(product.priceCents)} sur Chip Shop`}
             url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${product.id}`}
-            triggerClassName="grid size-8 place-items-center rounded-full border border-white/10 bg-white/5 transition hover:scale-105 hover:bg-white/10 active:scale-95"
+            triggerClassName="grid size-8 place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 hover:bg-muted active:scale-95"
           >
             <Share2 className="size-3.5" />
           </ShareMenu>
           <button
             type="button"
             onClick={messageSeller}
-            className="grid size-8 cursor-pointer place-items-center rounded-full border border-white/10 bg-white/5 transition hover:scale-105 active:scale-95"
+            className="grid size-8 cursor-pointer place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 active:scale-95"
             aria-label="Message vendeur"
           >
             <MessageCircle className="size-3.5" />
@@ -310,7 +314,7 @@ function ProductInner() {
       </div>
 
       <div className="relative mx-auto w-full max-w-2xl px-2 md:px-3">
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#13131a] shadow-[0_8px_32px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
+        <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_8px_32px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
           <ProductImageCarousel
             images={product.images}
             fit="cover"
@@ -335,9 +339,17 @@ function ProductInner() {
         <p className="mt-1 font-heading text-3xl font-extrabold text-trust">
           {formatMoney(product.priceCents)}
         </p>
-        <p className="mt-2 flex items-center gap-1 text-sm text-muted-foreground">
-          <MapPin className="size-3.5" />
-          {product.location} · {product.category} · @{product.shop.name}
+        <p className="mt-2 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+          <MapPin className="size-3.5 shrink-0" />
+          <span>
+            {product.location} · {product.category} ·{" "}
+            <Link
+              href={`/shop/${product.shop.slug}`}
+              className="font-semibold text-foreground hover:text-primary hover:underline"
+            >
+              @{product.shop.name}
+            </Link>
+          </span>
         </p>
 
         {product.colors.length > 0 && (
@@ -380,7 +392,7 @@ function ProductInner() {
                     "min-w-10 shrink-0 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold whitespace-nowrap",
                     selectedSize === s
                       ? "border-primary bg-primary text-white"
-                      : "border-white/10 bg-[#1c1c26]",
+                      : "border-border bg-surface-2",
                   )}
                 >
                   {s}
@@ -438,7 +450,7 @@ function ProductInner() {
       </div>
 
       <Sheet open={showTopUp} onOpenChange={setShowTopUp}>
-        <SheetContent side="bottom" className="rounded-t-3xl bg-[#13131a]">
+        <SheetContent side="bottom" className="rounded-t-3xl bg-surface">
           <SheetHeader>
             <SheetTitle className="font-heading">Solde insuffisant</SheetTitle>
           </SheetHeader>

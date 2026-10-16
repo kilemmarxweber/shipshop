@@ -167,7 +167,7 @@ function PublishInner() {
               "h-1 flex-1 rounded-full",
               s < step && "bg-trust",
               s === step && "bg-primary",
-              s > step && "bg-[#1c1c26]",
+              s > step && "bg-surface-2",
             )}
           />
         ))}
@@ -182,7 +182,7 @@ function PublishInner() {
           <div className="space-y-2">
             <Label>Boutique</Label>
             <Select value={shopId} onValueChange={(v) => v && setShopId(v)}>
-              <SelectTrigger className="bg-[#1c1c26]">
+              <SelectTrigger className="bg-surface-2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -206,7 +206,7 @@ function PublishInner() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="iPhone 15 Pro Max 256Go"
-              className="bg-[#1c1c26]"
+              className="bg-surface-2"
             />
           </div>
           <Button
@@ -230,7 +230,7 @@ function PublishInner() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Prix (USD)</Label>
-              <div className="flex items-center rounded-xl border border-white/10 bg-[#1c1c26] px-3">
+              <div className="flex items-center rounded-xl border border-border bg-surface-2 px-3">
                 <Input
                   type="number"
                   min="1"
@@ -249,7 +249,7 @@ function PublishInner() {
                 min="1"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                className="h-11 bg-[#1c1c26] font-heading text-lg font-bold"
+                className="h-11 bg-surface-2 font-heading text-lg font-bold"
               />
             </div>
           </div>
@@ -265,7 +265,7 @@ function PublishInner() {
                     "rounded-full border px-3 py-1.5 text-xs font-semibold whitespace-nowrap",
                     category === c.id
                       ? "border-primary bg-primary text-white"
-                      : "border-white/10 bg-[#1c1c26]",
+                      : "border-border bg-surface-2",
                   )}
                 >
                   {c.label}
@@ -287,7 +287,7 @@ function PublishInner() {
                     "flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold whitespace-nowrap",
                     colors.includes(c.name)
                       ? "border-primary bg-primary/15"
-                      : "border-white/10 bg-[#1c1c26]",
+                      : "border-border bg-surface-2",
                   )}
                 >
                   <span
@@ -312,7 +312,7 @@ function PublishInner() {
                     "rounded-xl border px-2.5 py-1.5 text-[11px] font-bold whitespace-nowrap",
                     sizes.includes(s)
                       ? "border-primary bg-primary text-white"
-                      : "border-white/10 bg-[#1c1c26]",
+                      : "border-border bg-surface-2",
                   )}
                 >
                   {s}
@@ -326,7 +326,7 @@ function PublishInner() {
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="min-h-24 bg-[#1c1c26]"
+              className="min-h-24 bg-surface-2"
             />
           </div>
           <div className="space-y-2">
@@ -354,7 +354,7 @@ function PublishInner() {
             Étape 3 sur 3
           </p>
           <h1 className="font-heading text-xl font-bold">Vérification</h1>
-          <div className="rounded-2xl border border-white/8 bg-[#13131a] p-4">
+          <div className="rounded-2xl border border-border bg-surface p-4">
             <p className="font-semibold">{title}</p>
             <p className="mt-1 font-heading text-2xl font-bold text-trust">
               {price}$ · stock {quantity}

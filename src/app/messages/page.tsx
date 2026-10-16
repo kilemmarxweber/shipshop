@@ -68,7 +68,7 @@ export default function MessagesPage() {
 
   return (
     <div className="pt-3">
-      <div className="border-b border-white/8 px-4 pb-3">
+      <div className="border-b border-border px-4 pb-3">
         <h1 className="font-heading text-lg font-bold">Messages</h1>
         <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
           <Shield className="size-3 text-trust" />
@@ -95,7 +95,7 @@ export default function MessagesPage() {
                 <Link
                   href={`/messages/${c.id}`}
                   className={cn(
-                    "flex gap-3 border-b border-white/5 px-4 py-3 transition hover:bg-white/3",
+                    "flex gap-3 border-b border-border px-4 py-3 transition hover:bg-muted/30",
                     urgent && "bg-amber-500/8",
                   )}
                 >

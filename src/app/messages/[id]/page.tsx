@@ -148,7 +148,7 @@ function ChatInner() {
 
   return (
     <div className="flex h-[calc(100dvh-8.5rem)] min-h-0 flex-col md:h-[calc(100%-0.5rem)] md:max-h-[calc(100dvh-7rem)]">
-      <div className="border-b border-white/8 px-4 pb-3 pt-0">
+      <div className="border-b border-border px-4 pb-3 pt-0">
         <div className="min-w-0">
           <p className="flex items-center gap-2 truncate font-heading text-sm font-bold">
             {title}
@@ -173,7 +173,7 @@ function ChatInner() {
       {!isBuyer && openIssues.length > 0 && (
         <div className="space-y-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-3">
           {openIssues.map((issue) => (
-            <div key={issue.id} className="rounded-xl border border-amber-500/40 bg-[#13131a] p-3">
+            <div key={issue.id} className="rounded-xl border border-amber-500/40 bg-surface p-3">
               <p className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
                 <AlertTriangle className="size-3.5" />
                 {ISSUE_TYPE_LABELS[issue.type] ?? issue.type}
@@ -237,7 +237,7 @@ function ChatInner() {
                     ? "rounded-bl-md border border-amber-500/50 bg-amber-500/15 text-amber-50"
                     : mine
                       ? "rounded-br-md bg-primary text-white"
-                      : "rounded-bl-md bg-[#1c1c26] text-white",
+                      : "rounded-bl-md bg-surface-2 text-white",
                 )}
               >
                 {urgent && (
@@ -270,7 +270,7 @@ function ChatInner() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex gap-2 border-t border-white/8 p-3">
+      <div className="flex gap-2 border-t border-border p-3">
         <Input
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -279,7 +279,7 @@ function ChatInner() {
               ? "Répondre pour acquitter l'urgence…"
               : "Écrire un message…"
           }
-          className="h-11 bg-[#1c1c26]"
+          className="h-11 bg-surface-2"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();

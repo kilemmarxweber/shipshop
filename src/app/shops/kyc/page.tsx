@@ -117,7 +117,7 @@ export default function ShopsKycPage() {
         {dossiers.map((d) => (
           <li
             key={d.id}
-            className="space-y-3 rounded-2xl border border-white/8 bg-[#13131a] p-3"
+            className="space-y-3 rounded-2xl border border-border bg-surface p-3"
           >
             <div>
               <p className="text-sm font-semibold">
@@ -142,7 +142,7 @@ export default function ShopsKycPage() {
                 setReasons((prev) => ({ ...prev, [d.id]: e.target.value }))
               }
               placeholder="Motif si refus…"
-              className="min-h-16 bg-[#1c1c26] text-sm"
+              className="min-h-16 bg-surface-2 text-sm"
             />
             <div className="flex gap-2">
               <Button
@@ -175,7 +175,7 @@ export default function ShopsKycPage() {
 
 function DocPreview({ label, url }: { label: string; url: string | null }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-white/8 bg-[#1c1c26]">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface-2">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt={label} className="aspect-[3/4] w-full object-cover" />

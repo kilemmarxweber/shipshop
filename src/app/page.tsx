@@ -9,6 +9,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { PageLoader } from "@/components/page-loader";
+import { FollowShopButton } from "@/components/follow-shop-button";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
 import { colorHex } from "@/lib/product-options";
@@ -25,21 +26,54 @@ type Product = {
   location: string | null;
   likesCount: number;
   likedByMe: boolean;
-  shop: { id: string; name: string; slug: string };
+  shop: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl?: string | null;
+    ownerUserId?: string | null;
+    followedByMe?: boolean;
+  };
 };
+
+type FeedTab = "foryou" | "following";
 
 export default function FeedPage() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<FeedTab>("foryou");
 
   useEffect(() => {
-    fetchJson<{ products?: Product[] }>("/api/products?status=ACTIVE")
+    if (tab === "following" && !session) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const url =
+      tab === "following"
+        ? "/api/products?status=ACTIVE&following=1"
+        : "/api/products?status=ACTIVE";
+    fetchJson<{ products?: Product[] }>(url)
       .then(({ data }) => setProducts(data?.products ?? []))
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [tab, session?.user?.id]);
+
+  function setShopFollowed(shopId: string, followed: boolean) {
+    setProducts((prev) => {
+      if (!followed && tab === "following") {
+        return prev.filter((p) => p.shop.id !== shopId);
+      }
+      return prev.map((p) =>
+        p.shop.id === shopId
+          ? { ...p, shop: { ...p.shop, followedByMe: followed } }
+          : p,
+      );
+    });
+  }
 
   async function toggleLike(product: Product) {
     if (!session) {
@@ -127,42 +161,120 @@ export default function FeedPage() {
     router.push(`/messages/${data.conversation.id}`);
   }
 
+  const tabs = (
+    <div className="flex shrink-0 justify-center gap-6 border-b border-border px-4 py-2 text-sm font-semibold">
+      <button
+        type="button"
+        onClick={() => setTab("following")}
+        className={cn(
+          "pb-1",
+          tab === "following"
+            ? "border-b-2 border-primary text-foreground"
+            : "text-muted-foreground",
+        )}
+      >
+        Abonnements
+      </button>
+      <button
+        type="button"
+        onClick={() => setTab("foryou")}
+        className={cn(
+          "pb-1",
+          tab === "foryou"
+            ? "border-b-2 border-primary text-foreground"
+            : "text-muted-foreground",
+        )}
+      >
+        Pour toi
+      </button>
+    </div>
+  );
+
   if (loading) {
-    return <PageLoader className="h-[70dvh]" />;
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        {tabs}
+        <PageLoader className="h-[70dvh]" />
+      </div>
+    );
+  }
+
+  if (tab === "following" && !session) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        {tabs}
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <p className="font-heading text-lg font-bold">
+            Connectez-vous pour voir vos abonnements
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Suivez des boutiques, aimez, achetez ou partagez : tout ça
+            apparaîtra ici.
+          </p>
+          <Link
+            href="/auth/login"
+            className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
+          >
+            Connexion
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (products.length === 0) {
     return (
-      <div className="flex h-[70dvh] flex-col items-center justify-center px-6 text-center">
-        <p className="font-heading text-lg font-bold">Aucune annonce encore</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Soyez le premier à publier sur Chip Shop
-        </p>
-        <Link
-          href="/publish"
-          className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
-        >
-          Publier
-        </Link>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        {tabs}
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          {tab === "following" ? (
+            <>
+              <p className="font-heading text-lg font-bold">
+                Rien dans Abonnements
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Ici : nouveautés des boutiques suivies, plus tes likes, achats,
+                commandes reçues et partages.
+              </p>
+              <button
+                type="button"
+                onClick={() => setTab("foryou")}
+                className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
+              >
+                Explorer Pour toi
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="font-heading text-lg font-bold">
+                Aucune annonce encore
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Soyez le premier à publier sur Chip Shop
+              </p>
+              <Link
+                href="/publish"
+                className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
+              >
+                Publier
+              </Link>
+            </>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 justify-center gap-6 border-b border-white/5 px-4 py-2 text-sm font-semibold">
-        <span className="text-muted-foreground">Abonnements</span>
-        <span className="border-b-2 border-primary pb-1 text-white">
-          Pour toi
-        </span>
-      </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden md:h-auto md:overflow-visible">
+      {tabs}
 
-      {/* Hauteur = zone visible au-dessus du menu bas (pb-24 du shell ≈ 6rem) */}
-      <div className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4">
+      {/* Hauteur = zone visible du feed (pas 100dvh) pour que la dernière card soit entière */}
+      <div className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4 md:pb-8">
         {products.map((p) => (
           <article
             key={p.id}
-            className="feed-snap-item relative flex h-[calc(100dvh-12.5rem)] max-h-[calc(100dvh-12.5rem)] flex-col justify-end overflow-hidden sm:h-[calc(100dvh-12rem)] sm:max-h-[calc(100dvh-12rem)] md:h-[min(520px,70dvh)] md:max-h-none md:rounded-2xl"
+            className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden md:h-[min(520px,70dvh)] md:min-h-0 md:rounded-2xl"
           >
             <ProductImageCarousel
               images={p.images}
@@ -176,7 +288,7 @@ export default function FeedPage() {
                 <ShieldCheck className="mr-1 inline size-3" />
                 Argent protégé
               </span>
-              <span className="w-fit rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[10px] font-semibold backdrop-blur">
+              <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
                 {p.category}
               </span>
             </div>
@@ -197,12 +309,12 @@ export default function FeedPage() {
                 >
                   <Heart
                     className={cn(
-                      "size-5",
+                      "size-5 text-white",
                       p.likedByMe && "fill-destructive text-destructive",
                     )}
                   />
                 </span>
-                <span className="text-[10px] font-semibold">
+                <span className="text-[10px] font-semibold text-white drop-shadow">
                   {p.likesCount || "Like"}
                 </span>
               </button>
@@ -212,40 +324,72 @@ export default function FeedPage() {
                 className="flex cursor-pointer flex-col items-center gap-1"
                 aria-label="Message au vendeur"
               >
-                <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
+                <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95">
                   <MessageCircle className="size-5" />
                 </span>
-                <span className="text-[10px] font-semibold">Msg</span>
+                <span className="text-[10px] font-semibold text-white drop-shadow">
+                  Msg
+                </span>
               </button>
               <ShareMenu
                 title={p.title}
+                productId={p.id}
                 text={`${p.title} — ${formatMoney(p.priceCents)} sur Chip Shop`}
                 url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
                 align="end"
                 side="left"
                 triggerClassName="flex cursor-pointer flex-col items-center gap-1 border-0 bg-transparent p-0"
               >
-                <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
+                <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95">
                   <Share2 className="size-5" />
                 </span>
-                <span className="text-[10px] font-semibold">Share</span>
+                <span className="text-[10px] font-semibold text-white drop-shadow">
+                  Share
+                </span>
               </ShareMenu>
             </div>
 
-            <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 sm:px-4 sm:pb-6 sm:pr-16">
+            <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
               <div className="mb-2 flex items-center gap-2">
-                <div className="grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-bold">
-                  {p.shop.name.slice(0, 1)}
+              <Link
+                href={`/shop/${p.shop.slug}`}
+                onClick={(e) => e.stopPropagation()}
+                className="flex min-w-0 flex-1 items-center gap-2"
+              >
+                <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-bold text-white ring-2 ring-white/20">
+                  {p.shop.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.shop.logoUrl}
+                      alt=""
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    p.shop.name.slice(0, 1)
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold">@{p.shop.name}</p>
-                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-white underline-offset-2 hover:underline">
+                    @{p.shop.name}
+                  </p>
+                  <p className="flex items-center gap-1 text-[10px] text-white/70">
                     <MapPin className="size-3 shrink-0" />
                     <span className="truncate">
                       {p.location ?? "Kinshasa"}
                     </span>
                   </p>
                 </div>
+              </Link>
+                <FollowShopButton
+                  slug={p.shop.slug}
+                  followedByMe={Boolean(p.shop.followedByMe)}
+                  isOwnShop={
+                    Boolean(session?.user?.id) &&
+                    p.shop.ownerUserId === session?.user?.id
+                  }
+                  compact
+                  onChange={(followed) => setShopFollowed(p.shop.id, followed)}
+                />
               </div>
               {(p.colors.length > 0 || p.sizes.length > 0) && (
                 <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -283,7 +427,9 @@ export default function FeedPage() {
                   }}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold">{p.title}</p>
+                  <p className="truncate text-xs font-semibold text-white">
+                    {p.title}
+                  </p>
                   <p className="font-heading text-sm font-bold text-trust">
                     {formatMoney(p.priceCents)}
                   </p>

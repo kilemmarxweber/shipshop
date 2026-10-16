@@ -36,7 +36,7 @@ export default function DiscoverPage() {
 
   return (
     <div className="px-4 pb-4 pt-3 md:px-8">
-      <div className="mb-4 flex items-center gap-2 rounded-2xl border border-white/8 bg-[#1c1c26] px-3">
+      <div className="mb-4 flex items-center gap-2 rounded-2xl border border-border bg-surface-2 px-3">
         <Search className="size-4 text-muted-foreground" />
         <Input
           value={q}

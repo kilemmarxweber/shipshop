@@ -164,7 +164,7 @@ function BarRow({
         <span className="font-semibold">{label}</span>
         <span className="text-muted-foreground">{formatMoney(value)}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/5">
+      <div className="h-2 overflow-hidden rounded-full bg-muted/40">
         <div
           className={cn("h-full rounded-full transition-all", accent)}
           style={{ width: `${pct}%` }}
@@ -251,7 +251,7 @@ export default function ReportsPage() {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value as Period)}
-            className="h-9 shrink-0 rounded-lg border border-white/10 bg-[#1c1c26] px-2 text-xs"
+            className="h-9 shrink-0 rounded-lg border border-border bg-surface-2 px-2 text-xs"
           >
             <option value="7d">7 jours</option>
             <option value="30d">30 jours</option>
@@ -262,7 +262,7 @@ export default function ReportsPage() {
             <select
               value={shopId}
               onChange={(e) => setShopId(e.target.value)}
-              className="h-9 max-w-[160px] rounded-lg border border-white/10 bg-[#1c1c26] px-2 text-xs"
+              className="h-9 max-w-[160px] rounded-lg border border-border bg-surface-2 px-2 text-xs"
             >
               <option value="">
                 {isOwner ? "Toutes boutiques" : "Toutes mes boutiques"}
@@ -334,7 +334,7 @@ export default function ReportsPage() {
             </div>
           )}
 
-          <div className="mb-4 flex gap-1 rounded-xl border border-white/8 bg-[#13131a] p-1">
+          <div className="mb-4 flex gap-1 rounded-xl border border-border bg-surface p-1">
             {(
               [
                 ["overview", "Vue"],
@@ -367,7 +367,7 @@ export default function ReportsPage() {
 
           {tab === "overview" && (
             <div className="space-y-4">
-              <section className="rounded-2xl border border-white/8 bg-[#13131a] p-4">
+              <section className="rounded-2xl border border-border bg-surface p-4">
                 <p className="mb-1 text-xs font-bold">Évolution du CA remis</p>
                 <p className="mb-2 text-[10px] text-muted-foreground">
                   {report.periodLabel}
@@ -375,7 +375,7 @@ export default function ReportsPage() {
                 <LineChart series={report.series} />
               </section>
 
-              <section className="rounded-2xl border border-white/8 bg-[#13131a] p-4">
+              <section className="rounded-2xl border border-border bg-surface p-4">
                 <p className="mb-3 text-xs font-bold">Par jour de la semaine</p>
                 <div className="space-y-2.5">
                   {report.weekdayHeat.map((d) => (
@@ -389,7 +389,7 @@ export default function ReportsPage() {
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-white/8 bg-[#13131a] p-4">
+              <section className="rounded-2xl border border-border bg-surface p-4">
                 <p className="mb-3 text-xs font-bold">Heures d&apos;achat</p>
                 <div className="grid grid-cols-8 gap-1 sm:grid-cols-12">
                   {hourBusy.map((h) => (
@@ -414,7 +414,7 @@ export default function ReportsPage() {
               </section>
 
               {report.vendors.length > 0 && (
-                <section className="rounded-2xl border border-white/8 bg-[#13131a] p-4">
+                <section className="rounded-2xl border border-border bg-surface p-4">
                   <p className="mb-3 text-xs font-bold">
                     {isOwner
                       ? "Vendeurs — gain, bénéfice & solde"
@@ -424,7 +424,7 @@ export default function ReportsPage() {
                     {report.vendors.map((v) => (
                       <li
                         key={v.shopId}
-                        className="flex items-center gap-3 rounded-xl border border-white/5 bg-[#0a0a0f]/60 px-3 py-2.5"
+                        className="flex items-center gap-3 rounded-xl border border-border bg-background/60 px-3 py-2.5"
                       >
                         <button
                           type="button"
@@ -471,11 +471,11 @@ export default function ReportsPage() {
                   return (
                     <div
                       key={p.id}
-                      className="rounded-2xl border border-white/8 bg-[#13131a] p-3"
+                      className="rounded-2xl border border-border bg-surface p-3"
                     >
                       <div className="flex gap-3">
                         <div
-                          className="size-11 shrink-0 rounded-xl bg-cover bg-center bg-white/5"
+                          className="size-11 shrink-0 rounded-xl bg-cover bg-center bg-muted/40"
                           style={
                             p.image
                               ? { backgroundImage: `url(${p.image})` }
@@ -490,7 +490,7 @@ export default function ReportsPage() {
                             {p.shopName} · {p.soldQty} vendus · {p.stockQty} en
                             stock
                           </p>
-                          <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-white/5">
+                          <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted/40">
                             <div
                               className="bg-trust"
                               style={{ width: `${soldPct}%` }}
@@ -605,7 +605,7 @@ function Kpi({
   hint: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/8 bg-[#13131a] p-3">
+    <div className="rounded-2xl border border-border bg-surface p-3">
       {icon}
       <p className="mt-1 font-heading text-base font-extrabold leading-tight">
         {value}
@@ -632,7 +632,7 @@ function AttentionBlock({
   count: number;
 }) {
   return (
-    <section className="rounded-2xl border border-white/8 bg-[#13131a] p-4">
+    <section className="rounded-2xl border border-border bg-surface p-4">
       <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
         {icon && <AlertTriangle className="size-3.5 text-amber-400" />}
         {title}
@@ -653,9 +653,9 @@ function AttentionBlock({
 
 function AttentionOrderRow({ order }: { order: AttentionOrder }) {
   return (
-    <li className="flex items-center gap-3 rounded-xl border border-white/5 px-3 py-2">
+    <li className="flex items-center gap-3 rounded-xl border border-border px-3 py-2">
       <div
-        className="size-9 shrink-0 rounded-lg bg-cover bg-center bg-white/5"
+        className="size-9 shrink-0 rounded-lg bg-cover bg-center bg-muted/40"
         style={
           order.product.images[0]
             ? { backgroundImage: `url(${order.product.images[0]})` }

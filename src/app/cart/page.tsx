@@ -231,7 +231,7 @@ export default function CartPage() {
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-2xl border border-white/8 bg-[#13131a] px-4 py-12 text-center">
+        <div className="rounded-2xl border border-border bg-surface px-4 py-12 text-center">
           <p className="text-sm text-muted-foreground">Votre panier est vide</p>
           <Link
             href="/discover"
@@ -246,7 +246,7 @@ export default function CartPage() {
             {items.map((item) => (
               <li
                 key={item.id}
-                className="flex items-center gap-3 rounded-2xl border border-white/8 bg-[#13131a] p-3"
+                className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3"
               >
                 <Link
                   href={`/product/${item.product.id}`}
@@ -259,9 +259,12 @@ export default function CartPage() {
                   <p className="truncate text-sm font-semibold">
                     {item.product.title}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <Link
+                    href={`/shop/${item.product.shop.slug}`}
+                    className="text-[11px] text-muted-foreground hover:text-primary hover:underline"
+                  >
                     @{item.product.shop.name}
-                  </p>
+                  </Link>
                   <p className="font-heading text-sm font-bold text-trust">
                     {formatMoney(item.product.priceCents)}
                   </p>
@@ -275,7 +278,7 @@ export default function CartPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => removeItem(item.productId)}
-                  className="grid size-9 place-items-center rounded-full border border-white/10 text-muted-foreground hover:text-destructive"
+                  className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground hover:text-destructive"
                   aria-label="Retirer du panier"
                 >
                   <Trash2 className="size-4" />
@@ -292,7 +295,7 @@ export default function CartPage() {
               value={fulfillment}
               onChange={setFulfillment}
             />
-            <div className="rounded-2xl border border-white/8 bg-[#13131a] p-4">
+            <div className="rounded-2xl border border-border bg-surface p-4">
             <Button
               disabled={busy}
               onClick={confirmPurchase}
@@ -314,7 +317,7 @@ export default function CartPage() {
       )}
 
       <Sheet open={showTopUp} onOpenChange={setShowTopUp}>
-        <SheetContent side="bottom" className="rounded-t-3xl bg-[#13131a]">
+        <SheetContent side="bottom" className="rounded-t-3xl bg-surface">
           <SheetHeader>
             <SheetTitle className="font-heading">Solde insuffisant</SheetTitle>
           </SheetHeader>

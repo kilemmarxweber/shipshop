@@ -225,7 +225,7 @@ export default function ShopsPage() {
               await authClient.organization.setActive({ organizationId: v });
             }}
           >
-            <SelectTrigger className="bg-[#1c1c26]">
+            <SelectTrigger className="bg-surface-2">
               <SelectValue placeholder="Choisir" />
             </SelectTrigger>
             <SelectContent>
@@ -245,7 +245,7 @@ export default function ShopsPage() {
           <DialogTrigger className="inline-flex h-7 items-center gap-1 rounded-lg bg-primary px-2.5 text-[0.8rem] font-medium text-primary-foreground">
             <Plus className="size-4" /> Shop
           </DialogTrigger>
-          <DialogContent className="bg-[#13131a]">
+          <DialogContent className="bg-surface">
             <DialogHeader>
               <DialogTitle>Nouvelle boutique</DialogTitle>
             </DialogHeader>
@@ -254,7 +254,7 @@ export default function ShopsPage() {
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
                 placeholder="Nom de la boutique"
-                className="bg-[#1c1c26]"
+                className="bg-surface-2"
               />
               <Button onClick={createShop} className="w-full">
                 Créer
@@ -268,7 +268,7 @@ export default function ShopsPage() {
         {shops.map((shop) => (
           <div
             key={shop.id}
-            className="rounded-2xl border border-white/8 bg-[#13131a] p-4"
+            className="rounded-2xl border border-border bg-surface p-4"
           >
             <div className="flex items-start gap-3">
               <div className="grid size-10 place-items-center rounded-xl bg-primary/15 text-primary">
@@ -312,11 +312,11 @@ export default function ShopsPage() {
             placeholder="email@exemple.com"
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}
-            className="bg-[#1c1c26]"
+            className="bg-surface-2"
           />
           {isOrgOwner ? (
             <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v)}>
-              <SelectTrigger className="w-full bg-[#1c1c26] sm:w-36">
+              <SelectTrigger className="w-full bg-surface-2 sm:w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -325,7 +325,7 @@ export default function ShopsPage() {
               </SelectContent>
             </Select>
           ) : (
-            <span className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-xs text-muted-foreground">
+            <span className="inline-flex h-9 items-center rounded-lg border border-border bg-surface-2 px-3 text-xs text-muted-foreground">
               Rôle : member
             </span>
           )}
@@ -340,7 +340,7 @@ export default function ShopsPage() {
           {members.map((m) => (
             <li
               key={m.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/8 bg-[#13131a] px-3 py-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm"
             >
               <span className="min-w-0">
                 {m.user?.name}{" "}
@@ -359,7 +359,7 @@ export default function ShopsPage() {
                   }}
                   disabled={roleSavingId === m.id}
                 >
-                  <SelectTrigger className="h-8 w-32 bg-[#1c1c26] text-xs">
+                  <SelectTrigger className="h-8 w-32 bg-surface-2 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -368,7 +368,7 @@ export default function ShopsPage() {
                   </SelectContent>
                 </Select>
               ) : (
-                <span className="rounded-md bg-white/5 px-2 py-0.5 text-xs capitalize">
+                <span className="rounded-md bg-muted/40 px-2 py-0.5 text-xs capitalize">
                   {m.role}
                 </span>
               )}

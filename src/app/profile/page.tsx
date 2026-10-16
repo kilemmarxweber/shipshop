@@ -279,7 +279,7 @@ export default function ProfilePage() {
             if (displayImage) setZoomOpen(true);
           }}
           className={cn(
-            "relative mx-auto mb-3 grid size-20 place-items-center overflow-hidden rounded-full border-2 border-white/10 bg-gradient-to-br from-primary to-violet-600 font-heading text-2xl font-bold transition",
+            "relative mx-auto mb-3 grid size-20 place-items-center overflow-hidden rounded-full border-2 border-border bg-gradient-to-br from-primary to-violet-600 font-heading text-2xl font-bold transition",
             displayImage
               ? "cursor-zoom-in hover:opacity-90"
               : "cursor-default",
@@ -327,7 +327,7 @@ export default function ProfilePage() {
                 setPhoneDraft(profile.phone ?? "");
               }
             }}
-            className="mt-0.5 grid size-8 cursor-pointer place-items-center rounded-full border border-white/10 bg-white/5 text-muted-foreground transition hover:bg-white/10 hover:text-white"
+            className="mt-0.5 grid size-8 cursor-pointer place-items-center rounded-full border border-border bg-muted/40 text-muted-foreground transition hover:bg-muted hover:text-foreground"
             aria-label="Modifier le profil"
           >
             <Pencil className="size-3.5" />
@@ -336,7 +336,7 @@ export default function ProfilePage() {
       </div>
 
       {editing && (
-        <div className="mt-4 space-y-2.5 rounded-2xl border border-white/8 bg-[#13131a] p-3 text-left">
+        <div className="mt-4 space-y-2.5 rounded-2xl border border-border bg-surface p-3 text-left">
           <p className="text-[11px] font-semibold text-muted-foreground">
             Modifier photo, nom, e-mail et contact
           </p>
@@ -347,7 +347,7 @@ export default function ProfilePage() {
             className="hidden"
             onChange={(e) => onAvatarPick(e.target.files?.[0])}
           />
-          <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-[#1c1c26] p-2.5">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-2 p-2.5">
             <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-violet-600 text-sm font-bold">
               {displayImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -382,20 +382,20 @@ export default function ProfilePage() {
             value={nameDraft}
             onChange={(e) => setNameDraft(e.target.value)}
             placeholder="Nom"
-            className="h-10 bg-[#1c1c26]"
+            className="h-10 bg-surface-2"
           />
           <Input
             type="email"
             value={emailDraft}
             onChange={(e) => setEmailDraft(e.target.value)}
             placeholder="E-mail"
-            className="h-10 bg-[#1c1c26]"
+            className="h-10 bg-surface-2"
           />
           <Input
             value={phoneDraft}
             onChange={(e) => setPhoneDraft(e.target.value)}
             placeholder="+243 8XX XXX XXX"
-            className="h-10 bg-[#1c1c26]"
+            className="h-10 bg-surface-2"
           />
           <div className="flex gap-2 pt-1">
             <Button
@@ -443,7 +443,7 @@ export default function ProfilePage() {
               ? "border-amber-500/30 bg-amber-500/10"
               : kycStatus === "REJECTED"
                 ? "border-destructive/30 bg-destructive/10"
-                : "border-white/8 bg-[#13131a]",
+                : "border-border bg-surface",
         )}
       >
         <div className="flex items-center gap-3">
@@ -505,7 +505,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-4 gap-1 rounded-2xl border border-white/8 bg-[#13131a] p-1">
+      <div className="mt-4 grid grid-cols-4 gap-1 rounded-2xl border border-border bg-surface p-1">
         {(
           [
             ["buyer", "Achats"],
@@ -531,7 +531,7 @@ export default function ProfilePage() {
       <div className="mt-4 grid grid-cols-3 gap-2">
         <Link
           href="/wallet"
-          className="rounded-2xl border border-white/8 bg-[#13131a] p-3"
+          className="rounded-2xl border border-border bg-surface p-3"
         >
           <Wallet className="mb-1 size-4 text-trust" />
           <p className="font-heading text-lg font-extrabold">
@@ -543,7 +543,7 @@ export default function ProfilePage() {
         </Link>
         <Link
           href="/cart"
-          className="rounded-2xl border border-white/8 bg-[#13131a] p-3"
+          className="rounded-2xl border border-border bg-surface p-3"
         >
           <ShoppingCart className="mb-1 size-4 text-primary" />
           <p className="font-heading text-lg font-extrabold">{cartCount}</p>
@@ -553,7 +553,7 @@ export default function ProfilePage() {
         </Link>
         <Link
           href={mode === "seller" ? "/shops/orders" : "/profile"}
-          className="rounded-2xl border border-white/8 bg-[#13131a] p-3"
+          className="rounded-2xl border border-border bg-surface p-3"
         >
           <Store className="mb-1 size-4 text-amber-400" />
           <p className="font-heading text-lg font-extrabold">
@@ -574,7 +574,7 @@ export default function ProfilePage() {
             </Link>
           </div>
 
-          <div className="mb-3 flex gap-1 rounded-xl border border-white/8 bg-[#13131a] p-1">
+          <div className="mb-3 flex gap-1 rounded-xl border border-border bg-surface p-1">
             {(
               [
                 ["active", "En cours"],
@@ -614,7 +614,7 @@ export default function ProfilePage() {
                   "rounded-lg px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap",
                   period === key
                     ? "bg-primary text-white"
-                    : "bg-white/5 text-muted-foreground",
+                    : "bg-muted/40 text-muted-foreground",
                 )}
               >
                 {label}
@@ -638,7 +638,7 @@ export default function ProfilePage() {
               return (
                 <li
                   key={o.id}
-                  className="flex items-center gap-3 rounded-2xl border border-white/8 bg-[#13131a] p-3"
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3"
                 >
                   <Link href={`/orders/${o.id}`} className="contents">
                     <div
@@ -681,9 +681,9 @@ export default function ProfilePage() {
                         o.status === "FAILED" &&
                           "bg-destructive/15 text-destructive",
                         o.status === "REFUNDED" &&
-                          "bg-white/5 text-muted-foreground",
+                          "bg-muted/40 text-muted-foreground",
                         o.status === "CANCELLED" &&
-                          "bg-white/5 text-muted-foreground",
+                          "bg-muted/40 text-muted-foreground",
                       )}
                     >
                       {o.status}

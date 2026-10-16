@@ -106,7 +106,7 @@ export default function WalletPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-6 pt-0">
-      <div className="rounded-3xl border border-white/8 bg-gradient-to-br from-[#13131a] to-[#1c1c26] p-6">
+      <div className="rounded-3xl border border-border bg-gradient-to-br from-[#13131a] to-[#1c1c26] p-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Wallet className="size-4" />
           Mon portefeuille
@@ -144,7 +144,7 @@ export default function WalletPage() {
             <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="h-11 bg-[#1c1c26] pl-10"
+              className="h-11 bg-surface-2 pl-10"
               placeholder="+243 8XX XXX XXX"
             />
           </div>
@@ -156,7 +156,7 @@ export default function WalletPage() {
             min="1"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="h-11 bg-[#1c1c26] font-heading text-lg font-bold"
+            className="h-11 bg-surface-2 font-heading text-lg font-bold"
           />
         </div>
 
@@ -190,7 +190,7 @@ export default function WalletPage() {
           {txns.map((t) => (
             <li
               key={t.id}
-              className="flex items-center justify-between rounded-xl border border-white/8 bg-[#13131a] px-3 py-3 text-sm"
+              className="flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-3 text-sm"
             >
               <div>
                 <p className="font-medium">

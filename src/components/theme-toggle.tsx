@@ -29,7 +29,7 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon"
-      className="relative size-9 shrink-0 rounded-full border border-border bg-muted/40"
+      className="relative size-9 shrink-0 rounded-full border border-border bg-muted/40 text-foreground"
       onClick={() => {
         if (resolvedTheme !== "dark" && resolvedTheme !== "light") return;
         apply(resolvedTheme === "dark" ? "light" : "dark");

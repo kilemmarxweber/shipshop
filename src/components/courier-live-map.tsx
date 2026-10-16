@@ -122,7 +122,7 @@ export default function CourierLiveMap({
     return (
       <div
         className={cn(
-          "grid h-[260px] place-items-center rounded-2xl border border-white/10 bg-[#1c1c26] text-sm text-muted-foreground",
+          "grid h-[260px] place-items-center rounded-2xl border border-border bg-surface-2 text-sm text-muted-foreground",
           className,
         )}
       >
@@ -132,7 +132,7 @@ export default function CourierLiveMap({
   }
 
   return (
-    <div className={cn("relative overflow-hidden rounded-2xl border border-white/10", className)}>
+    <div className={cn("relative overflow-hidden rounded-2xl border border-border", className)}>
       <div className="h-[280px]">
         <MapContainer
           center={[center.lat, center.lng]}

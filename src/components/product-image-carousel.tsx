@@ -144,7 +144,7 @@ export function ProductImageCarousel({
     <div
       ref={rootRef}
       className={cn(
-        "relative touch-pan-y overflow-hidden bg-[#1c1c26] select-none",
+        "relative touch-pan-y overflow-hidden bg-surface-2 select-none",
         className,
       )}
       onPointerDown={onPointerDown}

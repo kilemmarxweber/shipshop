@@ -68,7 +68,7 @@ export default function OnboardingPage() {
             value={shopName}
             onChange={(e) => setShopName(e.target.value)}
             placeholder="TechKinshasa Store"
-            className="h-11 bg-[#1c1c26]"
+            className="h-11 bg-surface-2"
           />
         </div>
         <div className="space-y-2">
@@ -77,7 +77,7 @@ export default function OnboardingPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Électronique vérifiée à Gombe"
-            className="min-h-24 bg-[#1c1c26]"
+            className="min-h-24 bg-surface-2"
           />
         </div>
         <Button

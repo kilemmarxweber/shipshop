@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 const CourierLiveMap = dynamic(() => import("@/components/courier-live-map"), {
   ssr: false,
   loading: () => (
-    <div className="grid h-[280px] place-items-center rounded-2xl border border-white/10 bg-[#1c1c26]">
+    <div className="grid h-[280px] place-items-center rounded-2xl border border-border bg-surface-2">
       <Loader2 className="size-6 animate-spin text-primary" />
     </div>
   ),
@@ -266,7 +266,7 @@ function OrderInner() {
         <p className="text-[11px] text-muted-foreground">{order.status}</p>
       </div>
 
-      <div className="rounded-2xl border border-white/8 bg-[#13131a] p-4">
+      <div className="rounded-2xl border border-border bg-surface p-4">
         <div className="flex gap-3">
           <div
             className="size-14 rounded-xl bg-cover bg-center"
@@ -463,7 +463,7 @@ function OrderInner() {
                         ? "animate-pulse bg-trust"
                         : isLast
                           ? "bg-primary"
-                          : "bg-white/30",
+                          : "bg-muted/300",
                     )}
                   />
                   {(i < order.deliveryEvents.length - 1 ||
@@ -530,7 +530,7 @@ function OrderInner() {
               Signaler un souci (taille / erreur)
             </Button>
           ) : (
-            <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-[#13131a] p-4">
+            <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-surface p-4">
               <p className="text-xs text-muted-foreground">
                 Le vendeur reçoit un message urgent. Il reste non lu jusqu&apos;à
                 sa réponse ou confirmation du changement (délai 48 h après
@@ -539,7 +539,7 @@ function OrderInner() {
               <select
                 value={issueType}
                 onChange={(e) => setIssueType(e.target.value)}
-                className="h-10 w-full rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-sm"
+                className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm"
               >
                 {Object.entries(ISSUE_TYPE_LABELS).map(([k, label]) => (
                   <option key={k} value={k}>
@@ -551,7 +551,7 @@ function OrderInner() {
                 value={issueDesc}
                 onChange={(e) => setIssueDesc(e.target.value)}
                 placeholder="Ex. taille M trop petite, je veux du L…"
-                className="min-h-24 bg-[#1c1c26]"
+                className="min-h-24 bg-surface-2"
               />
               <div className="flex gap-2">
                 <Button

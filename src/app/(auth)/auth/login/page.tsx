@@ -38,8 +38,13 @@ export default function LoginPage() {
       <BackButton />
       <AuthPrefsBar />
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-[#ff5722] to-[#ff7a45] font-heading text-xl font-bold shadow-[0_8px_24px_rgba(255,87,34,0.35)]">
-          CS
+        <div className="mx-auto mb-4 grid size-14 place-items-center overflow-hidden rounded-2xl">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/shipshop-logo.png"
+            alt="Shipshop"
+            className="size-14 object-contain"
+          />
         </div>
         <h1 className="font-heading text-2xl font-bold">{t("auth.loginTitle")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t("auth.loginHint")}</p>

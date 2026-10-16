@@ -250,7 +250,7 @@ export default function VendorOrdersPage() {
             value={scanInput}
             onChange={(e) => setScanInput(e.target.value)}
             placeholder='Collez le JSON QR ou saisissez le code (ex. "AB12CD")'
-            className="bg-[#1c1c26] text-xs"
+            className="bg-surface-2 text-xs"
           />
           <div className="flex shrink-0 gap-2">
             <Button
@@ -282,7 +282,7 @@ export default function VendorOrdersPage() {
         <select
           value={shopId}
           onChange={(e) => setShopId(e.target.value)}
-          className="mb-4 h-10 w-full max-w-sm rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-sm"
+          className="mb-4 h-10 w-full max-w-sm rounded-lg border border-border bg-surface-2 px-3 text-sm"
         >
           {shops.map((s) => (
             <option key={s.id} value={s.id}>
@@ -294,7 +294,7 @@ export default function VendorOrdersPage() {
 
       {cancelOrderId && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#13131a] p-5 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-xl">
             <p className="font-heading text-sm font-bold">
               Annuler la commande
             </p>
@@ -307,7 +307,7 @@ export default function VendorOrdersPage() {
               onChange={(e) =>
                 setCancelReason(e.target.value as CancelReasonCode)
               }
-              className="mt-3 h-10 w-full rounded-lg border border-white/10 bg-[#1c1c26] px-3 text-sm"
+              className="mt-3 h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm"
             >
               {(
                 Object.entries(CANCEL_REASONS) as [
@@ -324,7 +324,7 @@ export default function VendorOrdersPage() {
               value={cancelNote}
               onChange={(e) => setCancelNote(e.target.value)}
               placeholder="Précision optionnelle (ex. rupture fournisseur…)"
-              className="mt-2 min-h-20 bg-[#1c1c26] text-sm"
+              className="mt-2 min-h-20 bg-surface-2 text-sm"
             />
             <div className="mt-4 flex gap-2">
               <Button
@@ -371,7 +371,7 @@ export default function VendorOrdersPage() {
           return (
             <li
               key={o.id}
-              className="rounded-2xl border border-white/8 bg-[#13131a] p-4"
+              className="rounded-2xl border border-border bg-surface p-4"
             >
               <div className="flex gap-3">
                 <div
@@ -419,7 +419,7 @@ export default function VendorOrdersPage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link
                   href={`/orders/${o.id}`}
-                  className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-semibold"
+                  className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold"
                 >
                   Suivi
                 </Link>
@@ -435,7 +435,7 @@ export default function VendorOrdersPage() {
                       Auto-livreur
                     </Button>
                     <select
-                      className="h-8 rounded-lg border border-white/10 bg-[#1c1c26] px-2 text-[11px]"
+                      className="h-8 rounded-lg border border-border bg-surface-2 px-2 text-[11px]"
                       defaultValue=""
                       onChange={(e) => {
                         if (e.target.value) assignCourier(o.id, e.target.value);
@@ -488,7 +488,7 @@ export default function VendorOrdersPage() {
                           [o.id]: e.target.value,
                         }))
                       }
-                      className="h-8 max-w-[180px] bg-[#1c1c26] text-xs"
+                      className="h-8 max-w-[180px] bg-surface-2 text-xs"
                     />
                     <Button
                       size="sm"

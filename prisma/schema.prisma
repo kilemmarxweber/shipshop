@@ -37,6 +37,8 @@ model User {
   sellerKyc         SellerKyc?
   kycReviews        SellerKyc[]     @relation("KycReviewer")
   ownedShops        Shop[]          @relation("ShopOwner")
+  shopFollows       ShopFollow[]
+  productShares     ProductShare[]
 
   @@unique([email])
   @@map("user")
@@ -163,6 +165,7 @@ model Shop {
   products      Product[]
   orders        Order[]
   conversations Conversation[]
+  followers     ShopFollow[]
 
   @@unique([organizationId, slug])
   /// Deux boutiques ne peuvent pas porter le même nom (plateforme)
@@ -170,6 +173,19 @@ model Shop {
   @@index([organizationId])
   @@index([ownerUserId])
   @@map("shop")
+}
+
+model ShopFollow {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, shopId])
+  @@index([shopId])
+  @@map("shop_follow")
 }
 
 enum ProductStatus {
@@ -203,6 +219,7 @@ model Product {
   cartItems     CartItem[]
   likes         ProductLike[]
   conversations Conversation[]
+  shares        ProductShare[]
 
   @@index([category, status])
   @@index([shopId, status])
@@ -220,6 +237,19 @@ model ProductLike {
   @@unique([userId, productId])
   @@index([productId])
   @@map("product_like")
+}
+
+model ProductShare {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@map("product_share")
 }
 
 model Conversation {

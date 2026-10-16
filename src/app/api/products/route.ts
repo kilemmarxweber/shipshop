@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { collectFollowingProductIds } from "@/lib/following-feed";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -25,6 +26,7 @@ export async function GET(req: Request) {
     const q = searchParams.get("q");
     const shopId = searchParams.get("shopId");
     const mine = searchParams.get("mine") === "1";
+    const following = searchParams.get("following") === "1";
     const status = searchParams.get("status");
 
     if (mine) {
@@ -79,21 +81,58 @@ export async function GET(req: Request) {
       });
     }
 
-    const products = await withDbRetry(() =>
+    let followingWhere: object | null = null;
+    let recency = new Map<string, number>();
+    let followedShopIds: string[] = [];
+    if (following) {
+      if (!session) {
+        return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+      }
+      const collected = await collectFollowingProductIds(session.user.id);
+      recency = collected.recency;
+      followedShopIds = collected.shopIds;
+      if (collected.shopIds.length === 0 && collected.productIds.length === 0) {
+        return NextResponse.json({ products: [] });
+      }
+      const or: object[] = [];
+      if (collected.shopIds.length) {
+        or.push({ shopId: { in: collected.shopIds }, status: "ACTIVE" });
+      }
+      if (collected.productIds.length) {
+        or.push({
+          id: { in: collected.productIds },
+          status: { in: ["ACTIVE", "SOLD"] },
+        });
+      }
+      followingWhere = { OR: or };
+    }
+
+    const and: Record<string, unknown>[] = [];
+    if (followingWhere) {
+      and.push(followingWhere as Record<string, unknown>);
+    } else {
+      and.push({
+        status: (status ?? "ACTIVE") as
+          | "ACTIVE"
+          | "DRAFT"
+          | "SOLD"
+          | "HIDDEN",
+      });
+    }
+    if (category) and.push({ category });
+    if (shopId && !following) and.push({ shopId });
+    if (q) {
+      and.push({
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    let products = await withDbRetry(() =>
       prisma.product.findMany({
-        where: {
-          status: (status ?? "ACTIVE") as "ACTIVE" | "DRAFT" | "SOLD" | "HIDDEN",
-          ...(category ? { category } : {}),
-          ...(shopId ? { shopId } : {}),
-          ...(q
-            ? {
-                OR: [
-                  { title: { contains: q, mode: "insensitive" } },
-                  { description: { contains: q, mode: "insensitive" } },
-                ],
-              }
-            : {}),
-        },
+        where: (and.length === 1 ? and[0] : { AND: and }) as never,
         include: {
           shop: {
             select: {
@@ -101,27 +140,57 @@ export async function GET(req: Request) {
               name: true,
               slug: true,
               logoUrl: true,
+              ownerUserId: true,
             },
           },
           _count: { select: { likes: true } },
         },
         orderBy: { createdAt: "desc" },
-        take: 60,
+        take: 80,
       }),
     );
 
+    if (following) {
+      const followed = new Set(followedShopIds);
+      products = [...products].sort((a, b) => {
+        const aNew = followed.has(a.shopId) && a.status === "ACTIVE";
+        const bNew = followed.has(b.shopId) && b.status === "ACTIVE";
+        if (aNew !== bNew) return aNew ? -1 : 1;
+        if (aNew && bNew) {
+          return b.createdAt.getTime() - a.createdAt.getTime();
+        }
+        const ra = recency.get(a.id) ?? a.createdAt.getTime();
+        const rb = recency.get(b.id) ?? b.createdAt.getTime();
+        return rb - ra;
+      });
+    }
+
     let likedIds = new Set<string>();
+    let followedIds = new Set<string>();
     if (session && products.length) {
-      const likes = await withDbRetry(() =>
-        prisma.productLike.findMany({
-          where: {
-            userId: session.user.id,
-            productId: { in: products.map((p) => p.id) },
-          },
-          select: { productId: true },
-        }),
-      );
+      const shopIds = [...new Set(products.map((p) => p.shopId))];
+      const [likes, follows] = await Promise.all([
+        withDbRetry(() =>
+          prisma.productLike.findMany({
+            where: {
+              userId: session.user.id,
+              productId: { in: products.map((p) => p.id) },
+            },
+            select: { productId: true },
+          }),
+        ),
+        withDbRetry(() =>
+          prisma.shopFollow.findMany({
+            where: {
+              userId: session.user.id,
+              shopId: { in: shopIds },
+            },
+            select: { shopId: true },
+          }),
+        ),
+      ]);
       likedIds = new Set(likes.map((l) => l.productId));
+      followedIds = new Set(follows.map((f) => f.shopId));
     }
 
     const mapped = products.map((p) => {
@@ -130,6 +199,10 @@ export async function GET(req: Request) {
         ...rest,
         likesCount: _count.likes,
         likedByMe: likedIds.has(p.id),
+        shop: {
+          ...p.shop,
+          followedByMe: followedIds.has(p.shop.id),
+        },
       };
     });
 

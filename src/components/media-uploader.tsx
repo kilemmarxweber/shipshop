@@ -80,7 +80,7 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
         disabled={uploading || urls.length >= max}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-[#1c1c26] text-sm font-semibold",
+          "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-surface-2 text-sm font-semibold",
           (uploading || urls.length >= max) && "opacity-50",
         )}
       >
@@ -101,7 +101,7 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
           {urls.map((src) => (
             <div
               key={src}
-              className="relative aspect-square overflow-hidden rounded-xl bg-[#1c1c26]"
+              className="relative aspect-square overflow-hidden rounded-xl bg-surface-2"
             >
               {isVideoUrl(src) ? (
                 <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground">

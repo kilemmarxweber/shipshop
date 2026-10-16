@@ -157,7 +157,7 @@ export function QrScanCamera({ onClose, onScan }: Props) {
         <canvas ref={canvasRef} className="hidden" />
         {ready ? (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
-            <div className="aspect-square w-[68%] rounded-2xl border-2 border-white/80 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]" />
+            <div className="aspect-square w-[68%] rounded-2xl border-2 border-border0 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]" />
           </div>
         ) : null}
       </div>

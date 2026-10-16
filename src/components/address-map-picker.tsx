@@ -66,7 +66,7 @@ export default function AddressMapPicker({
   return (
     <div
       className={cn(
-        "h-[240px] overflow-hidden rounded-2xl border border-white/10",
+        "h-[240px] overflow-hidden rounded-2xl border border-border",
         className,
       )}
     >
