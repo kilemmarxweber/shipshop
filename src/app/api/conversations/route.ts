@@ -17,9 +17,10 @@ export async function GET() {
   }
 
   try {
+    const inboxWhere = await conversationInboxWhere(session.user.id);
     const conversations = await withDbRetry(() =>
       prisma.conversation.findMany({
-        where: conversationInboxWhere(session.user.id),
+        where: inboxWhere,
         include: {
           shop: { select: { id: true, name: true, slug: true, logoUrl: true } },
           product: { select: { id: true, title: true, images: true } },

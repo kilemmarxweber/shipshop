@@ -705,43 +705,27 @@ export default function ProfilePage() {
         <div className="mt-6 flex flex-col gap-2">
           {(
             [
-              ["/shops/products", "Mes produits (prix, stock…)", "primary"],
-              ["/shops/orders", "Commandes & livreurs", "secondary"],
-              ["/shops/reports", "Rapports & statistiques", "secondary"],
-              ["/shops/messaging", "Messages (admin)", "secondary"],
+              ["/shops/products", "Mes produits (prix, stock…)"],
+              ["/shops/orders", "Commandes & livreurs"],
+              ["/shops/reports", "Rapports & statistiques"],
+              ["/shops/messaging", "Messages (admin)"],
               ...(isOwner
                 ? ([
-                    [
-                      "/shops/admin/products",
-                      "Modération produits (tout)",
-                      "primary",
-                    ],
-                    ["/shops/admin/vendors", "Tous les vendeurs", "primary"],
-                    ["/shops/kyc", "Revue KYC", "secondary"],
-                    [
-                      "/shops/admin/moderation",
-                      "Modération NSFW",
-                      "secondary",
-                    ],
+                    ["/shops/admin/products", "Modération produits (tout)"],
+                    ["/shops/admin/vendors", "Tous les vendeurs"],
+                    ["/shops/kyc", "Revue KYC"],
+                    ["/shops/admin/moderation", "Modération NSFW"],
                   ] as const)
                 : []),
-              ["/shops", "Mes boutiques", "secondary"],
-              ["/publish", "Publier un produit", "secondary"],
-              ["/onboarding", "Créer une boutique", "outline"],
+              ["/shops", "Mes boutiques"],
+              ["/publish", "Publier un produit"],
+              ["/onboarding", "Créer une boutique"],
             ] as const
-          ).map(([href, label, tone]) => (
+          ).map(([href, label]) => (
             <Link
               key={href}
               href={href}
-              className={cn(
-                "inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium transition-none",
-                tone === "primary" &&
-                  "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-                tone === "secondary" &&
-                  "bg-secondary text-secondary-foreground hover:bg-secondary hover:text-secondary-foreground",
-                tone === "outline" &&
-                  "border border-border bg-transparent hover:bg-transparent hover:text-foreground",
-              )}
+              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-none hover:bg-surface hover:text-foreground active:bg-surface"
             >
               {label}
             </Link>
