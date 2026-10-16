@@ -51,14 +51,16 @@ Chaîne :
 DATABASE_URL="postgresql://chipshop:MOT_DE_PASSE@127.0.0.1:5432/chipshop?schema=public"
 ```
 
-Migrations **prod** :
+Migrations **prod** (avant tout seed) :
 
 ```bash
 pnpm prisma migrate deploy
 ```
 
+Le seed lit `user.phone` et `delivery_zone` : sans `migrate deploy`, tu auras `P2022` (colonne / table absente).
+
 Ne pas lancer `prisma migrate dev`.  
-Ne pas lancer `pnpm db:seed` en prod (compte démo).
+Ne pas lancer `pnpm db:seed` en prod (compte démo), sauf premier fill volontaire.
 
 Si une migration est **en échec** (`P3018`) :
 
