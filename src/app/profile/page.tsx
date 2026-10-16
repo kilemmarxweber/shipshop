@@ -712,7 +712,7 @@ export default function ProfilePage() {
               ...(isOwner
                 ? ([
                     ["/shops/admin/products", "Modération produits (tout)"],
-                    ["/shops/admin/vendors", "Tous les vendeurs"],
+                    ["/shops/admin/vendors", "Vendeurs & clients"],
                     ["/shops/kyc", "Revue KYC"],
                     ["/shops/admin/moderation", "Modération NSFW"],
                   ] as const)
@@ -725,7 +725,7 @@ export default function ProfilePage() {
             <Link
               key={href}
               href={href}
-              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-none hover:bg-surface hover:text-foreground active:bg-surface"
+              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-colors duration-150 hover:border-primary/40 hover:bg-muted/60 hover:text-foreground active:bg-muted"
             >
               {label}
             </Link>

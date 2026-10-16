@@ -4,7 +4,11 @@ import { assertChipShopOwner, kycPublic } from "@/lib/kyc";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
-/** Liste de tous les vendeurs (boutiques + KYC + stats). */
+/**
+ * Liste plateforme :
+ * - vendors = boutiques (+ proprio)
+ * - clients = members sans aucune boutique (pas vendeurs)
+ */
 export async function GET() {
   const session = await getSession();
   if (!session) {
@@ -20,42 +24,77 @@ export async function GET() {
   }
 
   try {
-    const shops = await withDbRetry(() =>
-      prisma.shop.findMany({
-        where: { organizationId: org.id },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          isActive: true,
-          description: true,
-          logoUrl: true,
-          createdAt: true,
-          ownerUserId: true,
-          owner: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phone: true,
-              image: true,
-              createdAt: true,
-              sellerKyc: true,
-              wallet: { select: { balanceCents: true } },
+    const [shops, members] = await Promise.all([
+      withDbRetry(() =>
+        prisma.shop.findMany({
+          where: { organizationId: org.id },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            description: true,
+            logoUrl: true,
+            createdAt: true,
+            ownerUserId: true,
+            owner: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                image: true,
+                createdAt: true,
+                sellerKyc: true,
+                wallet: { select: { balanceCents: true } },
+              },
+            },
+            _count: {
+              select: {
+                products: true,
+                orders: true,
+              },
+            },
+            products: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+                priceCents: true,
+              },
+              orderBy: { updatedAt: "desc" },
             },
           },
-          _count: {
-            select: {
-              products: true,
-              orders: true,
+          orderBy: { createdAt: "desc" },
+        }),
+      ),
+      withDbRetry(() =>
+        prisma.member.findMany({
+          where: { organizationId: org.id },
+          orderBy: { createdAt: "desc" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                image: true,
+                createdAt: true,
+                sellerKyc: true,
+                wallet: { select: { balanceCents: true } },
+                _count: { select: { orders: true } },
+              },
             },
           },
-          products: {
-            select: { status: true },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      }),
+        }),
+      ),
+    ]);
+
+    const sellerUserIds = new Set(
+      shops
+        .map((s) => s.ownerUserId)
+        .filter((id): id is string => Boolean(id)),
     );
 
     const vendors = shops.map((shop) => {
@@ -63,12 +102,13 @@ export async function GET() {
       for (const p of shop.products) {
         byStatus[p.status] = (byStatus[p.status] ?? 0) + 1;
       }
-      const { products: _p, _count, owner, ...rest } = shop;
+      const { products, _count, owner, ...rest } = shop;
       return {
         ...rest,
         productsCount: _count.products,
         ordersCount: _count.orders,
         productsByStatus: byStatus,
+        products,
         owner: owner
           ? {
               id: owner.id,
@@ -84,7 +124,30 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ vendors });
+    const clients = members
+      .filter((m) => !sellerUserIds.has(m.userId))
+      .map((m) => ({
+        id: m.user.id,
+        memberId: m.id,
+        role: m.role,
+        name: m.user.name,
+        email: m.user.email,
+        phone: m.user.phone,
+        image: m.user.image,
+        createdAt: m.user.createdAt,
+        ordersCount: m.user._count.orders,
+        walletBalanceCents: m.user.wallet?.balanceCents ?? 0,
+        kyc: m.user.sellerKyc ? kycPublic(m.user.sellerKyc) : null,
+      }));
+
+    return NextResponse.json({
+      vendors,
+      clients,
+      counts: {
+        vendors: vendors.length,
+        clients: clients.length,
+      },
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Erreur vendeurs admin";
@@ -100,6 +163,8 @@ const patchSchema = z.object({
     "hide_products",
     "activate_products",
   ]),
+  /** 1 à N produits ciblés (obligatoire pour hide/activate_products) */
+  productIds: z.array(z.string().min(1)).min(1).max(200).optional(),
 });
 
 /** Actions owner sur une boutique / ses produits. */
@@ -151,27 +216,41 @@ export async function PATCH(req: Request) {
           });
         }),
       );
-      return NextResponse.json({ ok: true, isActive: false, productsHidden: true });
+      return NextResponse.json({
+        ok: true,
+        isActive: false,
+        productsHidden: true,
+      });
     }
 
-    if (body.action === "hide_products") {
-      const result = await withDbRetry(() =>
-        prisma.product.updateMany({
-          where: { shopId: shop.id, status: "ACTIVE" },
-          data: { status: "HIDDEN" },
-        }),
-      );
-      return NextResponse.json({ ok: true, updated: result.count });
-    }
+    if (body.action === "hide_products" || body.action === "activate_products") {
+      const ids = body.productIds ?? [];
+      if (ids.length === 0) {
+        return NextResponse.json(
+          { error: "Sélectionnez au moins un produit" },
+          { status: 400 },
+        );
+      }
+      const nextStatus =
+        body.action === "hide_products" ? "HIDDEN" : "ACTIVE";
+      const fromStatus =
+        body.action === "hide_products" ? "ACTIVE" : "HIDDEN";
 
-    if (body.action === "activate_products") {
       const result = await withDbRetry(() =>
         prisma.product.updateMany({
-          where: { shopId: shop.id, status: "HIDDEN" },
-          data: { status: "ACTIVE" },
+          where: {
+            shopId: shop.id,
+            id: { in: ids },
+            status: fromStatus,
+          },
+          data: { status: nextStatus },
         }),
       );
-      return NextResponse.json({ ok: true, updated: result.count });
+      return NextResponse.json({
+        ok: true,
+        updated: result.count,
+        requested: ids.length,
+      });
     }
 
     return NextResponse.json({ error: "Action inconnue" }, { status: 400 });

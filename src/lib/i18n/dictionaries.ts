@@ -128,6 +128,20 @@ export type Messages = {
     insufficientTitle: string;
     topUpCta: string;
     onShipShop: string;
+    manageOwn: string;
+    edit: string;
+    archive: string;
+    republish: string;
+    delete: string;
+    editTitle: string;
+    save: string;
+    cancel: string;
+    archived: string;
+    republished: string;
+    deleted: string;
+    updated: string;
+    deleteConfirm: string;
+    deleteBlocked: string;
   };
   cart: {
     title: string;
@@ -316,6 +330,20 @@ const fr: Messages = {
     insufficientTitle: "Solde insuffisant",
     topUpCta: "Recharger mon compte",
     onShipShop: "sur ShipShop",
+    manageOwn: "Votre produit",
+    edit: "Modifier",
+    archive: "Archiver",
+    republish: "Republier",
+    delete: "Supprimer",
+    editTitle: "Modifier le produit",
+    save: "Enregistrer",
+    cancel: "Annuler",
+    archived: "Produit archivé",
+    republished: "Produit republié",
+    deleted: "Produit supprimé",
+    updated: "Produit mis à jour",
+    deleteConfirm: "Supprimer définitivement ce produit ?",
+    deleteBlocked: "Lié à un paiement — archivez-le plutôt",
   },
   cart: {
     title: "Panier",
@@ -504,6 +532,20 @@ const en: Messages = {
     insufficientTitle: "Insufficient balance",
     topUpCta: "Top up my wallet",
     onShipShop: "on ShipShop",
+    manageOwn: "Your product",
+    edit: "Edit",
+    archive: "Archive",
+    republish: "Republish",
+    delete: "Delete",
+    editTitle: "Edit product",
+    save: "Save",
+    cancel: "Cancel",
+    archived: "Product archived",
+    republished: "Product republished",
+    deleted: "Product deleted",
+    updated: "Product updated",
+    deleteConfirm: "Permanently delete this product?",
+    deleteBlocked: "Linked to a payment — archive it instead",
   },
   cart: {
     title: "Cart",

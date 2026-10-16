@@ -250,7 +250,7 @@ export default function ShopsPage() {
                 href="/shops/admin/vendors"
                 className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
               >
-                Vendeurs
+                Vendeurs & clients
               </Link>
               <Link
                 href="/shops/kyc"

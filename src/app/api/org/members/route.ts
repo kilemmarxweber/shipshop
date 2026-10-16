@@ -45,12 +45,12 @@ export async function GET() {
     }),
   );
 
+  // Toute boutique (active ou non) = vendeur ; sinon = client / acheteur
   const shopCounts = await withDbRetry(() =>
     prisma.shop.groupBy({
       by: ["ownerUserId"],
       where: {
         organizationId: org.id,
-        isActive: true,
         ownerUserId: { not: null },
       },
       _count: { _all: true },
