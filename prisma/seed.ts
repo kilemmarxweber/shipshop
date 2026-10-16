@@ -49,9 +49,12 @@ const COORDS: Record<string, { lat: number; lng: number }> = {
   Maluku: { lat: -4.2, lng: 15.55 },
 };
 
+const SEED_EMAIL = process.env.SEED_EMAIL?.trim() || "demo@chipshop.cd";
+const SEED_PASSWORD = process.env.SEED_PASSWORD?.trim() || "demo12345";
+
 async function main() {
-  const email = "kilem@chipshop.cd";
-  const password = await hashPassword("Kilem123456@");
+  const email = SEED_EMAIL;
+  const password = await hashPassword(SEED_PASSWORD);
 
   let user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
@@ -356,8 +359,12 @@ async function main() {
   // seed skips encrypted keys (configurés dans /shops/messaging).
 
   console.log("Seed OK");
-  console.log("  email: demo@chipshop.cd");
-  console.log("  password: demo12345");
+  console.log(`  email: ${email}`);
+  console.log(
+    process.env.SEED_PASSWORD?.trim()
+      ? "  password: (SEED_PASSWORD)"
+      : "  password: demo12345",
+  );
   console.log("  org: chipshop (système)");
   console.log(`  communes: ${KINSHASA_COMMUNES.length}`);
   console.log("  wallet: $500");

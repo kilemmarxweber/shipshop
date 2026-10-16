@@ -48,7 +48,7 @@ CREATE DATABASE chipshop OWNER chipshop;
 Chaîne :
 
 ```
-DATABASE_URL="postgresql://chipshop:MOT_DE_PASSE@127.0.0.1:5432/shipshop?schema=public"
+DATABASE_URL="postgresql://chipshop:MOT_DE_PASSE@127.0.0.1:5432/chipshop?schema=public"
 ```
 
 Migrations **prod** :
