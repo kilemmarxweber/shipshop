@@ -59,7 +59,7 @@ function SlideMedia({
         muted
         loop
         playsInline
-        preload={active ? "metadata" : "none"}
+        preload={active ? "auto" : "metadata"}
         className={mediaClass(fit)}
         style={{ objectPosition: "center center" }}
       />

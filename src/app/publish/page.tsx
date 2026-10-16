@@ -116,6 +116,7 @@ function PublishInner() {
   }
 
   async function saveProduct(as: "DRAFT" | "ACTIVE") {
+    if (loading) return;
     const qty = Math.max(1, parseInt(quantity || "1", 10) || 1);
     setLoading(true);
     const priceCents = Math.round(parseFloat(price || "0") * 100);
@@ -124,37 +125,67 @@ function PublishInner() {
       toast.error("Prix minimum 1$");
       return;
     }
+    if (!title.trim()) {
+      setLoading(false);
+      toast.error("Indiquez un titre");
+      return;
+    }
+    if (!shopId) {
+      setLoading(false);
+      toast.error("Choisissez une boutique");
+      return;
+    }
+    if (images.length === 0) {
+      setLoading(false);
+      toast.error("Ajoutez au moins une image");
+      return;
+    }
     const location = composeAddress(address);
-    const res = await fetch("/api/products", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shopId,
-        title,
-        description,
-        priceCents,
-        quantity: qty,
-        category,
-        images,
-        colors,
-        sizes,
-        location,
-        status: as,
-      }),
-    });
-    const json = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      toast.error(json.error ?? "Enregistrement échoué");
-      return;
+    const publishedTitle = title.trim();
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopId,
+          title: publishedTitle,
+          description,
+          priceCents,
+          quantity: qty,
+          category,
+          images,
+          colors,
+          sizes,
+          location,
+          status: as,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Enregistrement échoué");
+        return;
+      }
+      if (as === "DRAFT") {
+        toast.success("Brouillon enregistré", {
+          description:
+            "Votre annonce est sauvegardée. Publiez-la quand vous voulez depuis Mes produits.",
+          duration: 5000,
+        });
+        router.replace("/shops/products");
+        router.refresh();
+        return;
+      }
+      toast.success("Publication réussie", {
+        description: `« ${publishedTitle} » est maintenant visible pour les acheteurs sur ShipShop.`,
+        duration: 6000,
+      });
+      router.replace("/shops/products");
+      router.refresh();
+    } catch {
+      toast.error("Publication impossible — réessayez");
+    } finally {
+      setLoading(false);
     }
-    if (as === "DRAFT") {
-      toast.success("Brouillon enregistré — publiez-le plus tard");
-      router.push("/shops/products");
-      return;
-    }
-    toast.success("Annonce publiée");
-    router.push(`/product/${json.product.id}`);
   }
 
   return (

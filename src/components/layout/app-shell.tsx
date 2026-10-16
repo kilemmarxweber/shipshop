@@ -210,6 +210,17 @@ export function AppShell({
                     <Link
                       key={item.href}
                       href={item.href}
+                      prefetch={item.href === "/publish" ? false : undefined}
+                      scroll={false}
+                      onClick={(e) => {
+                        // Évite de remonter / vider le formulaire si déjà sur Publier
+                        if (
+                          item.href === "/publish" &&
+                          pathname.startsWith("/publish")
+                        ) {
+                          e.preventDefault();
+                        }
+                      }}
                       className={cn(
                         "flex flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition",
                         active ? "text-primary" : "text-muted-foreground",

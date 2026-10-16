@@ -9,7 +9,6 @@ import {
   SOURCE_MAX_BYTES,
   STORED_MAX_BYTES,
   VIDEO_MAX_DURATION_SEC,
-  VIDEO_MAX_EDGE,
   type CompressVariant,
   type MediaKind,
 } from "@/lib/media";

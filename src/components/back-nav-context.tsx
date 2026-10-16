@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -51,16 +52,21 @@ export function usePageBack(options?: {
   fallbackHref?: string;
 }) {
   const ctx = useBackNav();
+  const setOnBack = ctx?.setOnBack;
+  const setFallbackHref = ctx?.setFallbackHref;
   const onBack = options?.onBack;
-  const fallbackHref = options?.fallbackHref;
+  const fallbackHref = options?.fallbackHref ?? "/";
+  const hasCustomBack = Boolean(onBack);
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
 
   useEffect(() => {
-    if (!ctx) return;
-    ctx.setOnBack(onBack ?? null);
-    ctx.setFallbackHref(fallbackHref ?? "/");
+    if (!setOnBack || !setFallbackHref) return;
+    setOnBack(hasCustomBack ? () => onBackRef.current?.() : null);
+    setFallbackHref(fallbackHref);
     return () => {
-      ctx.setOnBack(null);
-      ctx.setFallbackHref("/");
+      setOnBack(null);
+      setFallbackHref("/");
     };
-  }, [ctx, onBack, fallbackHref]);
+  }, [setOnBack, setFallbackHref, hasCustomBack, fallbackHref]);
 }

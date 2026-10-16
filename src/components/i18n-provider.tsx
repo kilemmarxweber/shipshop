@@ -21,6 +21,7 @@ import {
 export type MessagePath =
   | `nav.${keyof Messages["nav"]}`
   | `auth.${keyof Messages["auth"]}`
+  | `media.${keyof Messages["media"]}`
   | `settings.${keyof Messages["settings"]}`
   | `common.${keyof Messages["common"]}`
   | `feed.${keyof Messages["feed"]}`
