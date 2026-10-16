@@ -4,7 +4,7 @@ import {
   DOCUMENT_MAX_EDGE,
   IMAGE_MAX_HEIGHT,
   IMAGE_MAX_WIDTH,
-  STORED_MAX_BYTES,
+  IMAGE_STORED_MAX_BYTES,
   type CompressVariant,
 } from "@/lib/media";
 
@@ -35,18 +35,18 @@ export async function compressImageBuffer(
 
   let quality = 80;
   let buffer = await base.clone().webp({ quality, effort: 4 }).toBuffer();
-  while (buffer.length > STORED_MAX_BYTES && quality > 45) {
+  while (buffer.length > IMAGE_STORED_MAX_BYTES && quality > 45) {
     quality -= 15;
     buffer = await base.clone().webp({ quality, effort: 4 }).toBuffer();
   }
 
-  if (buffer.length > STORED_MAX_BYTES) {
+  if (buffer.length > IMAGE_STORED_MAX_BYTES) {
     buffer = await base
       .clone()
       .jpeg({ quality: 55, mozjpeg: true })
       .toBuffer();
-    if (buffer.length > STORED_MAX_BYTES) {
-      throw new Error("Image trop lourde même après compression (< 5 Mo)");
+    if (buffer.length > IMAGE_STORED_MAX_BYTES) {
+      throw new Error("Impossible d'envoyer ce fichier");
     }
     return { buffer, ext: "jpg" };
   }

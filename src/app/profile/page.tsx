@@ -354,7 +354,7 @@ export default function ProfilePage() {
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold">Photo de profil</p>
               <p className="text-[10px] text-muted-foreground">
-                JPG, PNG, WebP — max 5 Mo
+                JPG, PNG, WebP
               </p>
             </div>
             <Button

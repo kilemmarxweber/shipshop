@@ -59,8 +59,14 @@ export async function GET() {
               select: {
                 id: true,
                 title: true,
+                description: true,
                 status: true,
                 priceCents: true,
+                quantity: true,
+                category: true,
+                images: true,
+                location: true,
+                _count: { select: { orders: true } },
               },
               orderBy: { updatedAt: "desc" },
             },
@@ -81,6 +87,8 @@ export async function GET() {
                 phone: true,
                 image: true,
                 createdAt: true,
+                disabledAt: true,
+                disabledReason: true,
                 sellerKyc: true,
                 wallet: { select: { balanceCents: true } },
                 _count: { select: { orders: true } },
@@ -108,7 +116,11 @@ export async function GET() {
         productsCount: _count.products,
         ordersCount: _count.orders,
         productsByStatus: byStatus,
-        products,
+        products: products.map(({ _count: pc, ...p }) => ({
+          ...p,
+          ordersCount: pc.orders,
+          canDelete: pc.orders === 0,
+        })),
         owner: owner
           ? {
               id: owner.id,
@@ -135,8 +147,11 @@ export async function GET() {
         phone: m.user.phone,
         image: m.user.image,
         createdAt: m.user.createdAt,
+        disabledAt: m.user.disabledAt,
+        disabledReason: m.user.disabledReason,
         ordersCount: m.user._count.orders,
         walletBalanceCents: m.user.wallet?.balanceCents ?? 0,
+        canDelete: m.user._count.orders === 0,
         kyc: m.user.sellerKyc ? kycPublic(m.user.sellerKyc) : null,
       }));
 
@@ -231,19 +246,22 @@ export async function PATCH(req: Request) {
           { status: 400 },
         );
       }
-      const nextStatus =
-        body.action === "hide_products" ? "HIDDEN" : "ACTIVE";
-      const fromStatus =
-        body.action === "hide_products" ? "ACTIVE" : "HIDDEN";
 
+      // Archiver : ACTIVE → HIDDEN. Republier : les ids choisis → ACTIVE
+      // (tous les produits de la boutique peuvent être sélectionnés).
       const result = await withDbRetry(() =>
         prisma.product.updateMany({
           where: {
             shopId: shop.id,
             id: { in: ids },
-            status: fromStatus,
+            ...(body.action === "hide_products"
+              ? { status: "ACTIVE" as const }
+              : {}),
           },
-          data: { status: nextStatus },
+          data: {
+            status:
+              body.action === "hide_products" ? "HIDDEN" : "ACTIVE",
+          },
         }),
       );
       return NextResponse.json({

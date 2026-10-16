@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { compressImageBuffer } from "@/lib/compress-image.server";
-import { STORED_MAX_BYTES } from "@/lib/media";
+import { IMAGE_STORED_MAX_BYTES, VIDEO_STORED_MAX_BYTES } from "@/lib/media";
 import { enforceCatalogModeration } from "@/lib/moderation.server";
 import {
   MEDIA_MAX_BYTES,
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     }
     if (file.size > MEDIA_MAX_BYTES) {
       return NextResponse.json(
-        { error: "Fichier trop lourd (max 5 Mo après compression)" },
+        { error: "Impossible d'envoyer ce fichier" },
         { status: 400 },
       );
     }
@@ -55,9 +55,15 @@ export async function POST(req: Request) {
       const compressed = await compressImageBuffer(raw, variant);
       stored = Buffer.from(compressed.buffer);
       ext = compressed.ext;
-    } else if (stored.length > STORED_MAX_BYTES) {
+      if (stored.length > IMAGE_STORED_MAX_BYTES) {
+        return NextResponse.json(
+          { error: "Impossible d'envoyer ce fichier" },
+          { status: 400 },
+        );
+      }
+    } else if (stored.length > VIDEO_STORED_MAX_BYTES) {
       return NextResponse.json(
-        { error: "Vidéo trop lourde (max 5 Mo)" },
+        { error: "Impossible d'envoyer ce fichier" },
         { status: 400 },
       );
     }

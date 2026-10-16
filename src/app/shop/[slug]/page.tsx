@@ -4,14 +4,17 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import {
+  Archive,
   Heart,
   Link2,
   MapPin,
   MessageCircle,
+  Pencil,
   Phone,
   Search,
   Share2,
   Store,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -58,7 +61,13 @@ type Product = {
   location: string | null;
   likesCount: number;
   likedByMe: boolean;
-  shop: { id: string; name: string; slug: string };
+  canDelete?: boolean;
+  shop: {
+    id: string;
+    name: string;
+    slug: string;
+    ownerUserId?: string | null;
+  };
 };
 
 function ShopInner() {
@@ -72,6 +81,9 @@ function ShopInner() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [showAddress, setShowAddress] = useState(false);
+  const [manageBusyId, setManageBusyId] = useState<string | null>(null);
+
+  const isOwnShop = shop?.owner?.id === session?.user?.id;
 
   const shopUrl =
     typeof window !== "undefined"
@@ -158,6 +170,51 @@ function ShopInner() {
       );
       toast.error(t("feed.likeFailed"));
     }
+  }
+
+  async function archiveProduct(product: Product) {
+    setManageBusyId(product.id);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      `/api/products/${product.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "HIDDEN" }),
+      },
+    );
+    setManageBusyId(null);
+    if (!res.ok) {
+      toast.error(data?.error ?? t("product.unavailable"));
+      return;
+    }
+    toast.success(t("product.archived"));
+    setProducts((prev) => prev.filter((p) => p.id !== product.id));
+    setShop((prev) =>
+      prev
+        ? { ...prev, productsCount: Math.max(0, prev.productsCount - 1) }
+        : prev,
+    );
+  }
+
+  async function deleteProduct(product: Product) {
+    if (!confirm(t("product.deleteConfirm"))) return;
+    setManageBusyId(product.id);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      `/api/products/${product.id}`,
+      { method: "DELETE" },
+    );
+    setManageBusyId(null);
+    if (!res.ok) {
+      toast.error(data?.error ?? t("product.deleteBlocked"));
+      return;
+    }
+    toast.success(t("product.deleted"));
+    setProducts((prev) => prev.filter((p) => p.id !== product.id));
+    setShop((prev) =>
+      prev
+        ? { ...prev, productsCount: Math.max(0, prev.productsCount - 1) }
+        : prev,
+    );
   }
 
   async function messageSeller() {
@@ -253,7 +310,7 @@ function ShopInner() {
           <FollowShopButton
             slug={shop.slug}
             followedByMe={Boolean(shop.followedByMe)}
-            isOwnShop={shop.owner?.id === session?.user?.id}
+            isOwnShop={isOwnShop}
             onChange={(followed) =>
               setShop((prev) =>
                 prev
@@ -421,6 +478,50 @@ function ShopInner() {
               </div>
 
               <div className="absolute right-2.5 bottom-[7.5rem] z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:bottom-36 sm:gap-4 md:bottom-28">
+                {isOwnShop && (
+                  <>
+                    <Link
+                      href={`/product/${p.id}`}
+                      className="flex cursor-pointer flex-col items-center gap-1"
+                      title={t("product.edit")}
+                    >
+                      <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
+                        <Pencil className="size-5 text-white" />
+                      </span>
+                      <span className="text-[10px] font-semibold text-white drop-shadow">
+                        {t("product.edit")}
+                      </span>
+                    </Link>
+                    <button
+                      type="button"
+                      disabled={manageBusyId === p.id}
+                      onClick={() => archiveProduct(p)}
+                      className="flex cursor-pointer flex-col items-center gap-1 disabled:opacity-50"
+                      title={t("product.archive")}
+                    >
+                      <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
+                        <Archive className="size-5 text-white" />
+                      </span>
+                      <span className="text-[10px] font-semibold text-white drop-shadow">
+                        {t("product.archive")}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={manageBusyId === p.id}
+                      onClick={() => deleteProduct(p)}
+                      className="flex cursor-pointer flex-col items-center gap-1 disabled:opacity-50"
+                      title={t("product.delete")}
+                    >
+                      <span className="grid size-10 place-items-center rounded-full border border-destructive/40 bg-destructive/25 backdrop-blur transition hover:scale-105 active:scale-95">
+                        <Trash2 className="size-5 text-white" />
+                      </span>
+                      <span className="text-[10px] font-semibold text-white drop-shadow">
+                        {t("product.delete")}
+                      </span>
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => toggleLike(p)}

@@ -9,9 +9,9 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {
-    proxyClientMaxBodySize: "8mb",
+    proxyClientMaxBodySize: "12mb",
     serverActions: {
-      bodySizeLimit: "8mb",
+      bodySizeLimit: "12mb",
     },
   },
   async rewrites() {

@@ -4,12 +4,15 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import {
+  Archive,
   Heart,
   MapPin,
   MessageCircle,
+  Pencil,
   Share2,
   ShieldCheck,
   ShoppingCart,
+  Trash2,
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,8 +24,12 @@ import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { FulfillmentForm } from "@/components/fulfillment-form";
+import { MediaUploader } from "@/components/media-uploader";
 import { ShareMenu } from "@/components/share-menu";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -35,6 +42,7 @@ type Product = {
   title: string;
   description: string | null;
   priceCents: number;
+  quantity: number;
   category: string;
   images: string[];
   colors: string[];
@@ -43,7 +51,13 @@ type Product = {
   status: string;
   likesCount: number;
   likedByMe: boolean;
-  shop: { id: string; name: string; slug: string };
+  canDelete?: boolean;
+  shop: {
+    id: string;
+    name: string;
+    slug: string;
+    ownerUserId?: string | null;
+  };
 };
 
 function ProductInner() {
@@ -53,6 +67,8 @@ function ProductInner() {
   const { data: session } = authClient.useSession();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState<"cart" | "buy" | null>(null);
+  const [manageBusy, setManageBusy] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
   const [showTopUp, setShowTopUp] = useState(false);
   const [needed, setNeeded] = useState(0);
   const [balance, setBalance] = useState(0);
@@ -176,6 +192,105 @@ function ProductInner() {
       return;
     }
     router.push(`/messages/${data.conversation.id}`);
+  }
+
+  const isOwner =
+    Boolean(session?.user?.id) &&
+    product?.shop.ownerUserId === session?.user?.id;
+
+  async function setStatus(status: "ACTIVE" | "HIDDEN") {
+    if (!product) return;
+    setManageBusy(true);
+    const { res, data } = await fetchJson<{
+      product?: Product;
+      error?: string;
+    }>(`/api/products/${product.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    setManageBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? t("product.unavailable"));
+      return;
+    }
+    toast.success(
+      status === "HIDDEN" ? t("product.archived") : t("product.republished"),
+    );
+    if (data?.product) {
+      setProduct((prev) =>
+        prev ? { ...prev, ...data.product, shop: prev.shop } : prev,
+      );
+    } else {
+      setProduct((prev) => (prev ? { ...prev, status } : prev));
+    }
+  }
+
+  async function removeProduct() {
+    if (!product) return;
+    if (!product.canDelete) {
+      toast.error(t("product.deleteBlocked"));
+      return;
+    }
+    if (!confirm(t("product.deleteConfirm"))) return;
+    setManageBusy(true);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      `/api/products/${product.id}`,
+      { method: "DELETE" },
+    );
+    setManageBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? t("product.unavailable"));
+      return;
+    }
+    toast.success(t("product.deleted"));
+    router.replace(`/shop/${product.shop.slug}`);
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    setManageBusy(true);
+    const { res, data } = await fetchJson<{
+      product?: Product;
+      error?: string;
+    }>(`/api/products/${editing.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: editing.title,
+        description: editing.description,
+        priceCents: editing.priceCents,
+        quantity: editing.quantity,
+        category: editing.category,
+        images: editing.images,
+        location: editing.location,
+        status: editing.status,
+      }),
+    });
+    setManageBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? t("product.unavailable"));
+      return;
+    }
+    toast.success(t("product.updated"));
+    setEditing(null);
+    setProduct((prev) => {
+      if (!prev) return prev;
+      const next = data?.product;
+      if (!next) return { ...editing, shop: prev.shop };
+      return {
+        ...prev,
+        ...next,
+        shop: {
+          ...prev.shop,
+          ...next.shop,
+          ownerUserId: prev.shop.ownerUserId,
+        },
+        canDelete: next.canDelete ?? prev.canDelete,
+        likesCount: prev.likesCount,
+        likedByMe: prev.likedByMe,
+      };
+    });
   }
 
   async function addToCart() {
@@ -338,6 +453,63 @@ function ProductInner() {
           )}
         </div>
 
+        {isOwner && (
+          <div className="mb-4 rounded-2xl border border-border bg-surface p-3">
+            <p className="mb-2 text-[11px] font-semibold text-muted-foreground">
+              {t("product.manageOwn")}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="gap-1"
+                disabled={manageBusy}
+                onClick={() => setEditing({ ...product })}
+              >
+                <Pencil className="size-3" />
+                {t("product.edit")}
+              </Button>
+              {product.status === "ACTIVE" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  disabled={manageBusy}
+                  onClick={() => setStatus("HIDDEN")}
+                >
+                  <Archive className="size-3" />
+                  {t("product.archive")}
+                </Button>
+              )}
+              {(product.status === "HIDDEN" || product.status === "DRAFT") && (
+                <Button
+                  size="sm"
+                  className="gap-1"
+                  disabled={manageBusy}
+                  onClick={() => setStatus("ACTIVE")}
+                >
+                  {t("product.republish")}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className={cn(
+                  "gap-1",
+                  product.canDelete
+                    ? "border-destructive/40 text-destructive"
+                    : "opacity-50",
+                )}
+                disabled={manageBusy || !product.canDelete}
+                onClick={removeProduct}
+              >
+                <Trash2 className="size-3" />
+                {t("product.delete")}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <h1 className="font-heading text-2xl font-bold">{product.title}</h1>
         <p className="mt-1 font-heading text-3xl font-extrabold text-trust">
           {formatMoney(product.priceCents)}
@@ -454,6 +626,109 @@ function ProductInner() {
           </div>
         )}
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-4">
+            <h2 className="mb-3 font-heading text-lg font-bold">
+              {t("product.editTitle")}
+            </h2>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>Titre</Label>
+                <Input
+                  value={editing.title}
+                  onChange={(e) =>
+                    setEditing({ ...editing, title: e.target.value })
+                  }
+                  className="bg-surface-2"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label>Prix ($)</Label>
+                  <Input
+                    type="number"
+                    value={(editing.priceCents / 100).toString()}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        priceCents: Math.round(
+                          parseFloat(e.target.value || "0") * 100,
+                        ),
+                      })
+                    }
+                    className="bg-surface-2"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Stock</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={editing.quantity}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        quantity: parseInt(e.target.value || "0", 10) || 0,
+                      })
+                    }
+                    className="bg-surface-2"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Statut</Label>
+                <select
+                  value={editing.status}
+                  onChange={(e) =>
+                    setEditing({ ...editing, status: e.target.value })
+                  }
+                  className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm"
+                >
+                  <option value="DRAFT">Brouillon</option>
+                  <option value="ACTIVE">Publié</option>
+                  <option value="HIDDEN">Archivé</option>
+                  <option value="SOLD">Épuisé</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Description</Label>
+                <Textarea
+                  value={editing.description ?? ""}
+                  onChange={(e) =>
+                    setEditing({ ...editing, description: e.target.value })
+                  }
+                  className="min-h-20 bg-surface-2"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Médias</Label>
+                <MediaUploader
+                  urls={editing.images}
+                  onChange={(images) => setEditing({ ...editing, images })}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setEditing(null)}
+              >
+                {t("product.cancel")}
+              </Button>
+              <Button
+                className="flex-[2]"
+                disabled={manageBusy}
+                onClick={saveEdit}
+              >
+                {manageBusy ? "…" : t("product.save")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Sheet open={showTopUp} onOpenChange={setShowTopUp}>
         <SheetContent side="bottom" className="rounded-t-3xl bg-surface">

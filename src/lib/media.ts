@@ -4,17 +4,15 @@ export const IMAGE_MAX_HEIGHT = 1000;
 export const AVATAR_MAX_EDGE = 800;
 export const DOCUMENT_MAX_EDGE = 1600;
 
-/** Cible fichiers image après compression (largement sous 5 Mo). */
+/** Cible visuelle images (seed 800×1000). */
 export const IMAGE_TARGET_BYTES = 400 * 1024;
 
-/** Plafond stocké / servi (images et vidéos). */
-export const STORED_MAX_BYTES = 5 * 1024 * 1024;
-
-/** Taille source acceptée avant compression locale. */
-export const SOURCE_MAX_BYTES = 80 * 1024 * 1024;
+/** Plafond interne après compression — pas affiché à l’utilisateur. */
+export const IMAGE_STORED_MAX_BYTES = 5 * 1024 * 1024;
+export const VIDEO_STORED_MAX_BYTES = 10 * 1024 * 1024;
+export const STORED_MAX_BYTES = IMAGE_STORED_MAX_BYTES;
 
 export const VIDEO_MAX_EDGE = 720;
-export const VIDEO_MAX_DURATION_SEC = 25;
 
 export type MediaKind = "image" | "video";
 export type CompressVariant = "product" | "avatar" | "document";

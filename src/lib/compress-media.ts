@@ -5,10 +5,9 @@ import {
   DOCUMENT_MAX_EDGE,
   IMAGE_MAX_HEIGHT,
   IMAGE_MAX_WIDTH,
+  IMAGE_STORED_MAX_BYTES,
   IMAGE_TARGET_BYTES,
-  SOURCE_MAX_BYTES,
-  STORED_MAX_BYTES,
-  VIDEO_MAX_DURATION_SEC,
+  VIDEO_STORED_MAX_BYTES,
   type CompressVariant,
   type MediaKind,
 } from "@/lib/media";
@@ -90,12 +89,12 @@ async function compressImageFile(file: File, variant: CompressVariant) {
       quality -= 0.12;
       blob = await canvasToBlob(canvas, type, quality);
     }
-    if (blob.size > STORED_MAX_BYTES) {
+    if (blob.size > IMAGE_STORED_MAX_BYTES) {
       type = "image/jpeg";
       blob = await canvasToBlob(canvas, type, 0.55);
     }
-    if (blob.size > STORED_MAX_BYTES) {
-      throw new Error("Image trop lourde même après compression (< 5 Mo)");
+    if (blob.size > IMAGE_STORED_MAX_BYTES) {
+      throw new Error("Impossible d'envoyer ce fichier");
     }
     return blobToFile(blob, file.name, type);
   } finally {
@@ -134,16 +133,15 @@ function captureVideoStream(video: HTMLVideoElement): MediaStream | null {
 }
 
 async function compressVideoFile(file: File): Promise<File> {
-  /** Ne pas ré-encoder : le canvas/MediaRecorder produisait des WebM illisibles. */
-  if (file.size <= STORED_MAX_BYTES) {
+  if (file.size <= VIDEO_STORED_MAX_BYTES) {
     return file;
   }
   if (typeof MediaRecorder === "undefined") {
-    throw new Error("Vidéo trop lourde (max 5 Mo)");
+    throw new Error("Impossible d'envoyer ce fichier");
   }
   const mime = pickRecorderMime();
   if (!mime) {
-    throw new Error("Vidéo trop lourde (max 5 Mo)");
+    throw new Error("Impossible d'envoyer ce fichier");
   }
 
   const objectUrl = URL.createObjectURL(file);
@@ -163,22 +161,19 @@ async function compressVideoFile(file: File): Promise<File> {
     });
 
     const duration = Number.isFinite(video.duration) ? video.duration : NaN;
-    if (Number.isFinite(duration) && duration > VIDEO_MAX_DURATION_SEC + 0.4) {
-      throw new Error(`Vidéo trop longue (max ${VIDEO_MAX_DURATION_SEC} s)`);
-    }
 
     const stream = captureVideoStream(video);
     if (!stream) {
-      throw new Error("Vidéo trop lourde (max 5 Mo)");
+      throw new Error("Impossible d'envoyer ce fichier");
     }
 
     const rec = new MediaRecorder(stream, {
       mimeType: mime,
       videoBitsPerSecond: Math.min(
-        1_200_000,
+        1_800_000,
         Math.floor(
-          (STORED_MAX_BYTES * 8 * 0.7) /
-            Math.max(Number.isFinite(duration) ? duration : 12, 1),
+          (VIDEO_STORED_MAX_BYTES * 8 * 0.75) /
+            Math.max(Number.isFinite(duration) ? duration : 20, 1),
         ),
       ),
     });
@@ -205,8 +200,8 @@ async function compressVideoFile(file: File): Promise<File> {
     if (rec.state !== "inactive") rec.stop();
     const blob = await recorded;
     for (const track of stream.getTracks()) track.stop();
-    if (blob.size < 2048 || blob.size > STORED_MAX_BYTES) {
-      throw new Error("Vidéo trop lourde même après compression (< 5 Mo)");
+    if (blob.size < 2048 || blob.size > VIDEO_STORED_MAX_BYTES) {
+      throw new Error("Impossible d'envoyer ce fichier");
     }
     return blobToFile(blob, file.name, blob.type || "video/webm");
   } finally {
@@ -222,17 +217,14 @@ export async function compressMediaFile(
   variant: CompressVariant = "product",
 ): Promise<File> {
   if (file.size <= 0) throw new Error("Fichier vide");
-  if (file.size > SOURCE_MAX_BYTES) {
-    throw new Error("Fichier trop volumineux (max 80 Mo avant compression)");
-  }
   if (file.type.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/i.test(file.name)) {
     try {
       return await compressImageFile(file, variant);
     } catch (error) {
-      if (file.size <= STORED_MAX_BYTES && file.type.startsWith("image/")) {
+      if (file.size <= IMAGE_STORED_MAX_BYTES && file.type.startsWith("image/")) {
         return file;
       }
-      throw error instanceof Error ? error : new Error("Compression image impossible");
+      throw error instanceof Error ? error : new Error("Impossible d'envoyer ce fichier");
     }
   }
   if (file.type.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(file.name)) {

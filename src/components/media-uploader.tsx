@@ -8,7 +8,7 @@ import {
   uploadCompressedMedia,
 } from "@/lib/compress-media";
 import { useI18n } from "@/components/i18n-provider";
-import { SOURCE_MAX_BYTES, isVideoUrl } from "@/lib/media";
+import { isVideoUrl } from "@/lib/media";
 import { cn } from "@/lib/utils";
 
 const ACCEPT = "image/*,video/mp4,video/webm,video/quicktime";
@@ -37,10 +37,6 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
     const next = [...urls];
 
     for (const file of list) {
-      if (file.size > SOURCE_MAX_BYTES) {
-        toast.error(`${file.name} dépasse 80 Mo`);
-        continue;
-      }
       if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
         toast.error(`${file.name} : image ou vidéo uniquement`);
         continue;
@@ -88,7 +84,6 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
       </button>
 
       <p className="text-[11px] text-muted-foreground">
-        Toute taille acceptée · compressé auto en 800×1000 (&lt; 5 Mo) ·{" "}
         {urls.length}/{max}
       </p>
 
