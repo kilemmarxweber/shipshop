@@ -108,7 +108,7 @@ function ShopInner() {
 
   const categoryChips = useMemo(() => {
     if (!shop) return [];
-    const known = new Set(CATEGORIES.map((c) => c.id));
+    const known = new Set<string>(CATEGORIES.map((c) => c.id));
     return shop.categories.map((c) => ({
       id: c.id,
       count: c.count,
