@@ -708,6 +708,7 @@ export default function ProfilePage() {
               ["/shops/products", "Mes produits (prix, stock…)"],
               ["/shops/orders", "Commandes & livreurs"],
               ["/shops/reports", "Rapports & statistiques"],
+              ["/shops/contacts", "Contacts (acheteurs, abonnés, invités)"],
               ...(isOwner
                 ? ([
                     ["/shops/messaging", "Messages (admin)"],

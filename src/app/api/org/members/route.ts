@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { assertChipShopOwner } from "@/lib/kyc";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import {
@@ -27,8 +28,11 @@ export async function GET() {
 
   const { org, member } = await requireOrgMember(session.user.id);
   await backfillSystemMemberships();
+  const { isOwner: isPlatformOwner } = await assertChipShopOwner(
+    session.user.id,
+  );
 
-  const members = await withDbRetry(() =>
+  let members = await withDbRetry(() =>
     prisma.member.findMany({
       where: { organizationId: org.id },
       orderBy: { createdAt: "asc" },
@@ -39,11 +43,47 @@ export async function GET() {
             name: true,
             email: true,
             image: true,
+            phone: true,
           },
         },
       },
     }),
   );
+
+  // Vendeur : soi-même + personnes qu'il a invitées uniquement.
+  // Owner / admin plateforme : toute la liste.
+  let pendingInvites: {
+    id: string;
+    email: string;
+    role: string | null;
+    status: string;
+    createdAt: Date;
+  }[] = [];
+
+  if (!isPlatformOwner) {
+    const invites = await withDbRetry(() =>
+      prisma.invitation.findMany({
+        where: { inviterId: session.user.id },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          status: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    );
+    pendingInvites = invites.filter((i) => i.status === "pending");
+    const invitedEmails = new Set(
+      invites.map((i) => i.email.trim().toLowerCase()),
+    );
+    members = members.filter(
+      (m) =>
+        m.userId === session.user.id ||
+        invitedEmails.has(m.user.email.trim().toLowerCase()),
+    );
+  }
 
   // Toute boutique (active ou non) = vendeur ; sinon = client / acheteur
   const shopCounts = await withDbRetry(() =>
@@ -63,7 +103,10 @@ export async function GET() {
   return NextResponse.json({
     organizationId: org.id,
     myRole: member.role,
-    isOwner: member.role === "owner",
+    isOwner: member.role === "owner" || isPlatformOwner,
+    isPlatformOwner,
+    scope: isPlatformOwner ? "all" : "self_and_invites",
+    pendingInvites,
     members: members.map((m) => {
       const shops = shopsByUser.get(m.userId) ?? 0;
       return {
@@ -73,6 +116,7 @@ export async function GET() {
         user: m.user,
         shopCount: shops,
         kind: shops > 0 ? "vendor" : "buyer",
+        isMe: m.userId === session.user.id,
       };
     }),
   });

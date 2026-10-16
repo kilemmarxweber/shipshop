@@ -41,7 +41,8 @@ type OrgMember = {
   userId: string;
   shopCount: number;
   kind: "vendor" | "buyer";
-  user: { id: string; name: string; email: string };
+  isMe?: boolean;
+  user: { id: string; name: string; email: string; phone?: string | null };
 };
 
 export default function ShopsPage() {
@@ -232,6 +233,12 @@ export default function ShopsPage() {
           >
             Rapports
           </Link>
+          <Link
+            href="/shops/contacts"
+            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
+          >
+            Contacts
+          </Link>
           {isOwner ? (
             <>
               <Link
@@ -363,8 +370,9 @@ export default function ShopsPage() {
           <h2 className="font-heading text-sm font-semibold">Utilisateurs</h2>
         </div>
         <p className="mb-3 text-[11px] text-muted-foreground">
-          Filtrez vendeurs (ont une boutique) et acheteurs (members sans
-          boutique).
+          {isOwner
+            ? "Owner : tous les membres. Vendeurs = ont une boutique · acheteurs = sans boutique."
+            : "Vous voyez uniquement votre compte et les personnes que vous avez invitées. Acheteurs / abonnés → Contacts."}
         </p>
         <div className="mb-4 flex flex-wrap gap-1.5">
           {(
@@ -439,6 +447,9 @@ export default function ShopsPage() {
             >
               <span className="min-w-0">
                 {m.user?.name}{" "}
+                {m.isMe && (
+                  <span className="text-[10px] font-bold text-primary">(vous)</span>
+                )}{" "}
                 <span className="text-muted-foreground">({m.user?.email})</span>
                 <span
                   className={cn(
