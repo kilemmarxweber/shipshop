@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Eye, Pencil, Trash2 } from "lucide-react";
+import { Archive, CheckCircle2, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
@@ -12,6 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MediaUploader } from "@/components/media-uploader";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Product = {
   id: string;
@@ -43,6 +51,8 @@ export default function SellerProductsPage() {
   const [tab, setTab] = useState<Tab>("all");
   const [editing, setEditing] = useState<Product | null>(null);
   const [busy, setBusy] = useState(false);
+  const [republishOpen, setRepublishOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   async function load() {
     const { data } = await fetchJson<{ products?: Product[] }>(
@@ -139,6 +149,62 @@ export default function SellerProductsPage() {
     load();
   }
 
+  function openRepublish() {
+    if (products.length === 0) {
+      toast.message("Aucun produit à republier");
+      return;
+    }
+    setSelectedIds(new Set());
+    setRepublishOpen(true);
+  }
+
+  function toggleRepublishProduct(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllRepublish() {
+    setSelectedIds((prev) => {
+      if (prev.size === products.length) return new Set();
+      return new Set(products.map((p) => p.id));
+    });
+  }
+
+  async function confirmRepublish() {
+    if (selectedIds.size === 0) {
+      toast.error("Sélectionnez au moins un produit");
+      return;
+    }
+    setBusy(true);
+    const { res, data } = await fetchJson<{
+      error?: string;
+      updated?: number;
+    }>("/api/products", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "activate_products",
+        productIds: Array.from(selectedIds),
+      }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Republication impossible");
+      return;
+    }
+    toast.success(
+      data?.updated != null
+        ? `${data.updated} produit(s) republié(s)`
+        : "Produits republiés",
+    );
+    setRepublishOpen(false);
+    load();
+  }
+
   if (!session) {
     return (
       <div className="px-5 py-16 text-center">
@@ -158,12 +224,24 @@ export default function SellerProductsPage() {
             Modifier · publier · archiver · supprimer
           </p>
         </div>
-        <Link
-          href="/publish"
-          className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white"
-        >
-          + Créer
-        </Link>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            disabled={busy || products.length === 0}
+            onClick={openRepublish}
+          >
+            <CheckCircle2 className="size-3" />
+            Republier
+          </Button>
+          <Link
+            href="/publish"
+            className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white"
+          >
+            + Créer
+          </Link>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-1.5">
@@ -420,6 +498,81 @@ export default function SellerProductsPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={republishOpen} onOpenChange={setRepublishOpen}>
+        <DialogContent className="bg-surface max-h-[85vh] overflow-hidden sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Republier des produits</DialogTitle>
+            <DialogDescription>
+              Tous vos produits — cochez 1 ou plusieurs à republier
+            </DialogDescription>
+          </DialogHeader>
+
+          {products.length > 0 ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline"
+                onClick={toggleAllRepublish}
+              >
+                {selectedIds.size === products.length
+                  ? "Tout désélectionner"
+                  : "Tout sélectionner"}
+              </button>
+              <ul className="max-h-[45vh] space-y-1 overflow-y-auto pr-1">
+                {products.map((p) => {
+                  const checked = selectedIds.has(p.id);
+                  return (
+                    <li key={p.id}>
+                      <label
+                        className={cn(
+                          "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                          checked
+                            ? "border-primary/50 bg-primary/5"
+                            : "border-border hover:bg-muted/40",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 size-4 shrink-0 accent-primary"
+                          checked={checked}
+                          onChange={() => toggleRepublishProduct(p.id)}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">
+                            {p.title}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {formatMoney(p.priceCents)} ·{" "}
+                            {STATUS_LABEL[p.status] ?? p.status}
+                            {p.shop?.name ? ` · @${p.shop.name}` : ""}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setRepublishOpen(false)}
+              disabled={busy}
+            >
+              Annuler
+            </Button>
+            <Button
+              disabled={busy || selectedIds.size === 0}
+              onClick={confirmRepublish}
+            >
+              Republier ({selectedIds.size})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -270,3 +270,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+
+const bulkSchema = z.object({
+  action: z.enum(["activate_products", "hide_products"]),
+  productIds: z.array(z.string().min(1)).min(1).max(200),
+});
+
+/** Vendeur : republier / archiver 1..N de ses produits. */
+export async function PATCH(req: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  try {
+    const body = bulkSchema.parse(await req.json());
+    const nextStatus =
+      body.action === "hide_products" ? "HIDDEN" : "ACTIVE";
+
+    const result = await withDbRetry(() =>
+      prisma.product.updateMany({
+        where: {
+          id: { in: body.productIds },
+          shop: { ownerUserId: session.user.id },
+          ...(body.action === "hide_products"
+            ? { status: "ACTIVE" as const }
+            : {}),
+        },
+        data: { status: nextStatus },
+      }),
+    );
+
+    return NextResponse.json({
+      ok: true,
+      updated: result.count,
+      requested: body.productIds.length,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Action impossible";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
