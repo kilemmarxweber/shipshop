@@ -273,11 +273,6 @@ function ShopInner() {
               Contact non publié
             </span>
           )}
-          {shop.contactName && (
-            <span className="text-xs text-muted-foreground">
-              · {shop.contactName}
-            </span>
-          )}
           <Button
             type="button"
             variant="outline"

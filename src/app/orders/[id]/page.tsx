@@ -463,7 +463,7 @@ function OrderInner() {
                         ? "animate-pulse bg-trust"
                         : isLast
                           ? "bg-primary"
-                          : "bg-muted/300",
+                          : "bg-muted/30",
                     )}
                   />
                   {(i < order.deliveryEvents.length - 1 ||
