@@ -130,15 +130,12 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
     popStatePending.current = false;
 
     if (fromPopState) {
-      // Retour/avance navigateur : recaler la pile (1 ou N étapes)
+      // Retour/avance navigateur uniquement — ne pas inferer un popstate manqué
       stack =
         earlierIdx >= 0 ? stack.slice(0, earlierIdx + 1) : [pathname];
-    } else if (earlierIdx >= 0 && earlierIdx < stack.length - 2) {
-      // Multi-étapes si popstate a été manqué — pas un re-visit A→B→A
-      // (re-visit : earlierIdx === length-2 → push ci-dessous)
-      stack = stack.slice(0, earlierIdx + 1);
     } else {
-      // Navigation avant (y compris re-visit d’une page déjà dans la pile)
+      // Navigation avant (lien, search, router.push) : toujours empiler,
+      // même si le chemin existe plus tôt (A→B→C→A via résultat de recherche)
       stack = [...stack, pathname];
     }
 

@@ -1,0 +1,16 @@
+# pnpm 10+ n’exécute plus les scripts de build des dépendances sans allowlist.
+# pnpm 11 ne lit plus package.json#pnpm — tout passe ici.
+# Sans ça : ERR_PNPM_IGNORED_BUILDS (@prisma/engines, prisma, esbuild, unrs-resolver).
+onlyBuiltDependencies:
+  - "@prisma/engines"
+  - esbuild
+  - prisma
+  - sharp
+  - unrs-resolver
+
+allowBuilds:
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true

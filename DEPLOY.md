@@ -216,6 +216,15 @@ pnpm build
 pm2 restart shipshop
 ```
 
+Si `pnpm install` affiche `ERR_PNPM_IGNORED_BUILDS` (`@prisma/engines`, `prisma`, `esbuild`, `unrs-resolver`) : le VPS tourne en pnpm 10/11, qui **bloque** ces scripts tant qu’ils ne sont pas dans `pnpm-workspace.yaml`. Vérifier que ce fichier est bien déployé, puis :
+
+```bash
+pnpm install
+pnpm rebuild @prisma/engines prisma esbuild unrs-resolver sharp
+```
+
+Ne pas mettre `ignore-scripts=true` dans un `.npmrc` global du VPS (`pnpm config list`).
+
 PM2 charge le `.env` du dossier via Next (`cwd` = `/var/www/shop/shipshop`).  
 Si le process démarre sans les variables : `pm2 restart shipshop --update-env`.
 
@@ -239,6 +248,7 @@ Si le process démarre sans les variables : `pm2 restart shipshop --update-env`.
 
 | Sujet | Pourquoi |
 |---|---|
+| `pnpm-workspace.yaml` (`allowBuilds`) | pnpm 10/11 ignore sinon prisma/esbuild → `ERR_PNPM_IGNORED_BUILDS` |
 | HTTPS + URL canonique | Auth Better Auth et liens d’invitation |
 | `ENCRYPTION_SECRET` | Sinon fallback dangereux / clés illisibles plus tard |
 | Uploads persistants | Hors Git, hors `.next` |
