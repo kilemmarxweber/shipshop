@@ -225,6 +225,10 @@ export type Messages = {
     alreadyInShop: string;
     guestHint: string;
     overBudget: string;
+    addProduct: string;
+    removeProduct: string;
+    productN: string;
+    publishMany: string;
   };
 };
 
@@ -455,6 +459,10 @@ const fr: Messages = {
     alreadyInShop: "Déjà en magasin",
     guestHint: "Connectez-vous pour publier une demande",
     overBudget: "Au-dessus du budget",
+    addProduct: "Ajouter un autre produit",
+    removeProduct: "Retirer",
+    productN: "Produit",
+    publishMany: "Publier les demandes",
   },
 };
 
@@ -685,6 +693,10 @@ const en: Messages = {
     alreadyInShop: "Already in shops",
     guestHint: "Sign in to post a request",
     overBudget: "Over budget",
+    addProduct: "Add another product",
+    removeProduct: "Remove",
+    productN: "Product",
+    publishMany: "Publish requests",
   },
 };
 
@@ -915,6 +927,10 @@ const pt: Messages = {
     alreadyInShop: "Já nas lojas",
     guestHint: "Entre para publicar um pedido",
     overBudget: "Acima do orçamento",
+    addProduct: "Adicionar outro produto",
+    removeProduct: "Remover",
+    productN: "Produto",
+    publishMany: "Publicar os pedidos",
   },
 };
 

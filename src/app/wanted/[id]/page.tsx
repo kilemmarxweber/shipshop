@@ -6,7 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { Phone } from "lucide-react";
 import { formatMoney, cn } from "@/lib/utils";
+import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
+import { PhoneField } from "@/components/phone-field";
 import { useI18n } from "@/components/i18n-provider";
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
@@ -40,6 +43,7 @@ type Offer = {
   sellerCommune: string | null;
   sellerQuartier: string | null;
   sellerAddress: string | null;
+  sellerPhone: string | null;
   mine: boolean;
   seller: { id: string; name: string };
   shop: {
@@ -87,6 +91,7 @@ export default function WantedDetailPage() {
   >([]);
   const [shopId, setShopId] = useState("");
   const [price, setPrice] = useState("");
+  const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [address, setAddress] = useState<AddressState>({
@@ -140,6 +145,14 @@ export default function WantedDetailPage() {
       toast.error("Prix minimum 1$");
       return;
     }
+    const contactPhone = (() => {
+      const parts = splitPhone(phone);
+      return composePhone(parts.dial, parts.national);
+    })();
+    if (!isValidContactPhone(contactPhone)) {
+      toast.error("Indiquez un téléphone de contact avec l’indicatif pays");
+      return;
+    }
     setBusy(true);
     const { res, data } = await fetchJson<{ error?: string; code?: string }>(
       `/api/wanted/${id}/offers`,
@@ -148,6 +161,7 @@ export default function WantedDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           priceCents,
+          phone: contactPhone,
           message: message.trim() || null,
           images,
           shopId: request?.condition === "NEW_SHOP" ? shopId : null,
@@ -296,6 +310,15 @@ export default function WantedDetailPage() {
                       {o.shop.isOccasionStall ? " · occasion" : ""}
                       {o.sellerCommune ? ` · ${o.sellerCommune}` : ""}
                     </p>
+                    {o.sellerPhone && (
+                      <a
+                        href={`tel:${o.sellerPhone}`}
+                        className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-primary"
+                      >
+                        <Phone className="size-3.5" />
+                        {o.sellerPhone}
+                      </a>
+                    )}
                   </div>
                   <p
                     className={cn(
@@ -384,6 +407,12 @@ export default function WantedDetailPage() {
               className="bg-surface-2"
             />
           </div>
+          <PhoneField
+            id="wanted-offer-phone"
+            label="Téléphone de contact"
+            value={phone}
+            onChange={setPhone}
+          />
           <MediaUploader urls={images} onChange={setImages} max={6} />
           <Textarea
             value={message}

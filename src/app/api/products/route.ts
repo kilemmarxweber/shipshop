@@ -106,6 +106,7 @@ export async function GET(req: Request) {
         or.push({
           id: { in: collected.productIds },
           status: { in: ["ACTIVE", "SOLD"] },
+          wantedRequestId: null,
         });
       }
       followingWhere = { OR: or };

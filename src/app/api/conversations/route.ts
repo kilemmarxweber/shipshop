@@ -142,7 +142,7 @@ export async function POST(req: Request) {
             ...(body.productId && !conversation!.productId
               ? { productId: body.productId }
               : {}),
-            ...(body.wantedRequestId
+            ...(body.wantedRequestId && !conversation!.wantedRequestId
               ? { wantedRequestId: body.wantedRequestId }
               : {}),
           },

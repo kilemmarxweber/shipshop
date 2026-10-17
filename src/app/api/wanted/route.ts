@@ -3,11 +3,15 @@ import { z } from "zod";
 import { CATEGORIES } from "@/lib/categories";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { WANTED_OPEN_LIMIT, wantedExpiresAt } from "@/lib/wanted";
+import {
+  WANTED_BATCH_MAX,
+  WANTED_OPEN_LIMIT,
+  wantedExpiresAt,
+} from "@/lib/wanted";
 
 const categoryIds = CATEGORIES.map((c) => c.id) as [string, ...string[]];
 
-const createSchema = z.object({
+const itemSchema = z.object({
   title: z.string().trim().min(2).max(120),
   description: z.string().trim().max(2000).optional().nullable(),
   images: z.array(z.string().min(1)).max(12).default([]),
@@ -15,10 +19,19 @@ const createSchema = z.object({
   budgetCents: z.number().int().min(100),
   currency: z.string().min(3).max(8).default("USD"),
   condition: z.enum(["NEW_SHOP", "USED"]),
+});
+
+const placeSchema = z.object({
   city: z.string().trim().max(80).optional(),
   commune: z.string().trim().max(80).optional().nullable(),
   quartier: z.string().trim().max(80).optional().nullable(),
   avenue: z.string().trim().max(80).optional().nullable(),
+});
+
+const createSchema = itemSchema.merge(placeSchema);
+
+const createManySchema = placeSchema.extend({
+  items: z.array(itemSchema).min(1).max(WANTED_BATCH_MAX),
 });
 
 const listSelect = {
@@ -109,8 +122,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "JSON invalide" }, { status: 400 });
   }
 
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) {
+  const many = createManySchema.safeParse(body);
+  const single = createSchema.safeParse(body);
+  const items = many.success
+    ? many.data.items
+    : single.success
+      ? [single.data]
+      : null;
+  const place = many.success ? many.data : single.success ? single.data : null;
+  if (!items || !place) {
     return NextResponse.json({ error: "Données invalides" }, { status: 400 });
   }
 
@@ -120,37 +140,50 @@ export async function POST(req: Request) {
         where: { buyerId: session.user.id, status: "OPEN" },
       }),
     );
-    if (openCount >= WANTED_OPEN_LIMIT) {
+    if (openCount + items.length > WANTED_OPEN_LIMIT) {
       return NextResponse.json(
         {
-          error: `Maximum ${WANTED_OPEN_LIMIT} demandes ouvertes — clôturez-en une d’abord`,
+          error: `Maximum ${WANTED_OPEN_LIMIT} demandes ouvertes — clôturez-en avant d’en ajouter ${items.length}`,
         },
         { status: 400 },
       );
     }
 
-    const request = await withDbRetry(() =>
-      prisma.wantedRequest.create({
-        data: {
-          buyerId: session.user.id,
-          title: parsed.data.title,
-          description: parsed.data.description?.trim() || null,
-          images: parsed.data.images,
-          category: parsed.data.category,
-          budgetCents: parsed.data.budgetCents,
-          currency: parsed.data.currency,
-          condition: parsed.data.condition,
-          city: parsed.data.city?.trim() || "Kinshasa",
-          commune: parsed.data.commune?.trim() || null,
-          quartier: parsed.data.quartier?.trim() || null,
-          avenue: parsed.data.avenue?.trim() || null,
-          expiresAt: wantedExpiresAt(),
-        },
-        select: listSelect,
-      }),
+    const expiresAt = wantedExpiresAt();
+    const city = place.city?.trim() || "Kinshasa";
+    const commune = place.commune?.trim() || null;
+    const quartier = place.quartier?.trim() || null;
+    const avenue = place.avenue?.trim() || null;
+
+    const requests = await withDbRetry(() =>
+      prisma.$transaction(
+        items.map((item) =>
+          prisma.wantedRequest.create({
+            data: {
+              buyerId: session.user.id,
+              title: item.title,
+              description: item.description?.trim() || null,
+              images: item.images,
+              category: item.category,
+              budgetCents: item.budgetCents,
+              currency: item.currency,
+              condition: item.condition,
+              city,
+              commune,
+              quartier,
+              avenue,
+              expiresAt,
+            },
+            select: listSelect,
+          }),
+        ),
+      ),
     );
 
-    return NextResponse.json({ request }, { status: 201 });
+    return NextResponse.json(
+      { request: requests[0], requests },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("[wanted POST]", error);
     return NextResponse.json(

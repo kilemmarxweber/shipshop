@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { composeAddress } from "@/lib/address";
+import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import {
   assertKycApproved,
   resolveOfferShop,
@@ -19,6 +20,7 @@ const offerSchema = z.object({
   parcelle: z.string().trim().max(40).optional().nullable(),
   lat: z.number().finite().optional().nullable(),
   lng: z.number().finite().optional().nullable(),
+  phone: z.string().min(10).max(24),
 });
 
 export async function POST(
@@ -73,6 +75,15 @@ export async function POST(
     throw error;
   }
 
+  const phoneParts = splitPhone(parsed.data.phone);
+  const sellerPhone = composePhone(phoneParts.dial, phoneParts.national);
+  if (!isValidContactPhone(sellerPhone)) {
+    return NextResponse.json(
+      { error: "Indiquez un téléphone de contact avec l’indicatif pays" },
+      { status: 400 },
+    );
+  }
+
   try {
     const shop = await resolveOfferShop({
       userId: session.user.id,
@@ -114,6 +125,7 @@ export async function POST(
           priceCents: parsed.data.priceCents,
           images: parsed.data.images,
           condition: request.condition,
+          sellerPhone,
           sellerAddress,
           sellerCommune: parsed.data.commune?.trim() || null,
           sellerQuartier: parsed.data.quartier?.trim() || null,
@@ -126,6 +138,7 @@ export async function POST(
           message: parsed.data.message?.trim() || null,
           priceCents: parsed.data.priceCents,
           images: parsed.data.images,
+          sellerPhone,
           sellerAddress,
           sellerCommune: parsed.data.commune?.trim() || null,
           sellerQuartier: parsed.data.quartier?.trim() || null,

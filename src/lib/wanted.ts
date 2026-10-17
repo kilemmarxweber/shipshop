@@ -1,6 +1,7 @@
 import type { WantedCondition } from "@/generated/prisma/client";
 
-export const WANTED_OPEN_LIMIT = 3;
+export const WANTED_OPEN_LIMIT = 12;
+export const WANTED_BATCH_MAX = 8;
 export const WANTED_TTL_DAYS = 14;
 
 export function wantedExpiresAt(from = new Date()) {

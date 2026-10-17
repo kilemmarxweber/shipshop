@@ -354,6 +354,7 @@ model WantedOffer {
   priceCents    Int
   images        String[]
   condition     WantedCondition
+  sellerPhone   String?
   sellerAddress String?
   sellerCommune String?
   sellerQuartier String?

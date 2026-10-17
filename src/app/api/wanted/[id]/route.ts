@@ -56,6 +56,7 @@ export async function GET(
       seller: o.seller,
       shop: o.shop,
       overBudget: o.priceCents > request.budgetCents,
+      sellerPhone: o.sellerPhone,
       sellerCommune: o.sellerCommune,
       sellerQuartier: o.sellerQuartier,
       sellerAddress:
