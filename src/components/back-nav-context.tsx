@@ -133,15 +133,12 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
       // Retour/avance navigateur : recaler la pile (1 ou N étapes)
       stack =
         earlierIdx >= 0 ? stack.slice(0, earlierIdx + 1) : [pathname];
-    } else if (stack[stack.length - 2] === pathname) {
-      // Un seul cran en arrière
-      stack = stack.slice(0, -1);
     } else if (earlierIdx >= 0 && earlierIdx < stack.length - 2) {
-      // Multi-étapes sans popstate (ex. sync Next) — pas un simple re-visit
-      // (re-visit A→B→A serait earlierIdx === length-2 et tombe dans le push)
+      // Multi-étapes si popstate a été manqué — pas un re-visit A→B→A
+      // (re-visit : earlierIdx === length-2 → push ci-dessous)
       stack = stack.slice(0, earlierIdx + 1);
     } else {
-      // Navigation avant
+      // Navigation avant (y compris re-visit d’une page déjà dans la pile)
       stack = [...stack, pathname];
     }
 
