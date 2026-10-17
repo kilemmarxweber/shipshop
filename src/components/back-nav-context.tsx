@@ -67,6 +67,7 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
   const [canGoBack, setCanGoBack] = useState(false);
   const bootstrapped = useRef(false);
   const lastPath = useRef<string | null>(null);
+  const popStatePending = useRef(false);
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
   const fallbackRef = useRef(fallbackHref);
@@ -78,6 +79,15 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
 
   const setFallbackHref = useCallback((href: string | null) => {
     setFallbackHrefState(href);
+  }, []);
+
+  // Browser back/forward (y compris multi-étapes) — avant le sync pathname
+  useEffect(() => {
+    const onPopState = () => {
+      popStatePending.current = true;
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   // Historique in-app (session) — ne pas faire confiance à history.length
@@ -98,6 +108,7 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
 
       writeStack(stack);
       lastPath.current = pathname;
+      popStatePending.current = false;
       setCanGoBack(stack.length > 1);
       return;
     }
@@ -109,14 +120,28 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
     // Déjà synchronisé (ex. goBack a pop + push)
     if (stack[stack.length - 1] === pathname) {
       lastPath.current = pathname;
+      popStatePending.current = false;
       setCanGoBack(stack.length > 1);
       return;
     }
 
-    const prev = stack[stack.length - 2];
-    if (prev === pathname) {
+    const earlierIdx = stack.lastIndexOf(pathname);
+    const fromPopState = popStatePending.current;
+    popStatePending.current = false;
+
+    if (fromPopState) {
+      // Retour/avance navigateur : recaler la pile (1 ou N étapes)
+      stack =
+        earlierIdx >= 0 ? stack.slice(0, earlierIdx + 1) : [pathname];
+    } else if (stack[stack.length - 2] === pathname) {
+      // Un seul cran en arrière
       stack = stack.slice(0, -1);
+    } else if (earlierIdx >= 0 && earlierIdx < stack.length - 2) {
+      // Multi-étapes sans popstate (ex. sync Next) — pas un simple re-visit
+      // (re-visit A→B→A serait earlierIdx === length-2 et tombe dans le push)
+      stack = stack.slice(0, earlierIdx + 1);
     } else {
+      // Navigation avant
       stack = [...stack, pathname];
     }
 

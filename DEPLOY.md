@@ -123,8 +123,8 @@ AWS_ACCESS_KEY_ID="..."
 AWS_SECRET_ACCESS_KEY="..."
 # Sans ces clés, aucun scan NSFW (upload direct).
 # ffmpeg sur le VPS : compression vidéo rapide (upload) + scan frames
-# sudo apt install -y ffmpeg
-# FFMPEG_PATH=/usr/bin/ffmpeg
+# sudo apt install -y ffmpeg && which ffmpeg
+FFMPEG_PATH=/usr/bin/ffmpeg
 ```
 
 Notes :

@@ -4,6 +4,7 @@ import type { OrderStatus } from "@/generated/prisma/client";
 import {
   findBestCourier,
   formatCourierAssignNote,
+  type CourierProposal,
 } from "@/lib/courier-match";
 import { notifyOrderEvent } from "@/lib/messaging/notify";
 import type { DeliveryEventKey } from "@/lib/messaging/templates";
@@ -80,7 +81,7 @@ export async function POST(
       !body.courierId &&
       ["ASSIGNED", "FULFILLING", "OUT_FOR_DELIVERY"].includes(body.status);
 
-    let autoCourier: Awaited<ReturnType<typeof findBestCourier>> = null;
+    let autoCourier: CourierProposal | null = null;
     if (needsCourier) {
       if (order.deliveryLat == null || order.deliveryLng == null) {
         return NextResponse.json(
