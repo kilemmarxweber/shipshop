@@ -22,6 +22,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { fetchJson } from "@/lib/fetch-json";
 import { colorHex } from "@/lib/product-options";
 import { formatMoney, cn } from "@/lib/utils";
+import { usePageBack } from "@/components/back-nav-context";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { FollowShopButton } from "@/components/follow-shop-button";
 import { PageLoader } from "@/components/page-loader";
@@ -82,6 +83,7 @@ function ShopInner() {
   const router = useRouter();
   const { t } = useI18n();
   const { data: session } = authClient.useSession();
+  usePageBack({ fallbackHref: "/" });
   const [shop, setShop] = useState<ShopProfile | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);

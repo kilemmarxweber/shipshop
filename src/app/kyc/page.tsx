@@ -6,6 +6,7 @@ import { BadgeCheck, Camera, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { usePageBack } from "@/components/back-nav-context";
 import { KycCamera } from "@/components/kyc-camera";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ const IMAGE_TYPES = new Set([
 
 export default function KycPage() {
   const { data: session } = authClient.useSession();
+  usePageBack({ fallbackHref: "/profile" });
   const [kyc, setKyc] = useState<Kyc | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);

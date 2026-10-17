@@ -48,7 +48,7 @@ function AcceptInviteInner() {
 
   return (
     <div className="mx-auto flex min-h-[70dvh] max-w-md flex-col justify-center px-5 text-center">
-      <BackButton />
+      <BackButton fallbackHref="/" />
       <h1 className="font-heading text-2xl font-bold">Invitation</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Vous avez été invité à rejoindre une organisation Chip Shop.

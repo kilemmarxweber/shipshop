@@ -42,7 +42,7 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto flex min-h-[80dvh] max-w-md flex-col justify-center px-5 py-10">
-      <BackButton />
+      <BackButton fallbackHref="/" />
       <AuthPrefsBar />
       <div className="mb-8 text-center">
         <div className="mx-auto mb-4 grid size-14 place-items-center overflow-hidden rounded-2xl">

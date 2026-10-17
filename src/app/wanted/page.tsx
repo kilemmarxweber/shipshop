@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/fetch-json";
+import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { WantedCard, type WantedListItem } from "@/components/wanted-card";
 
 export default function WantedListPage() {
   const { t } = useI18n();
+  usePageBack({ fallbackHref: "/" });
   const [items, setItems] = useState<WantedListItem[]>([]);
   const [loading, setLoading] = useState(true);
 

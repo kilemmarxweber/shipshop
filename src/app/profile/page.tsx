@@ -24,6 +24,7 @@ import { formatMoney, cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppearanceSettings } from "@/components/appearance-settings";
+import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 
 type Order = {
@@ -64,6 +65,7 @@ const IMAGE_TYPES = new Set([
 export default function ProfilePage() {
   const { data: session } = authClient.useSession();
   const { t } = useI18n();
+  usePageBack({ fallbackHref: "/" });
   const userId = session?.user?.id;
   const fileRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"buyer" | "seller">("buyer");

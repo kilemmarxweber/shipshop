@@ -1,10 +1,11 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useBackNav } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
+import { defaultBackFallback } from "@/lib/back-fallback";
 
 type Props = {
   fallbackHref?: string;
@@ -15,9 +16,9 @@ type Props = {
 };
 
 /**
- * Retour in-app.
- * Ne pas utiliser `history.length > 1` : en prod (PWA, deep link, onglet)
- * c’est souvent vrai et `router.back()` sort de l’app → reload / page externe.
+ * Retour in-app partout.
+ * - Pas de `history.length` / `router.back()` bruts (prod: sortie d’app → reload).
+ * - Utilise la pile session + `router.push` via BackNavProvider.
  */
 export function BackButton({
   fallbackHref,
@@ -26,24 +27,21 @@ export function BackButton({
   inline = false,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const nav = useBackNav();
   const { t } = useI18n();
 
   function goBack() {
-    const custom = onBack ?? nav?.onBack ?? null;
-    if (custom) {
-      custom();
+    if (onBack) {
+      onBack();
       return;
     }
-
-    const fallback = fallbackHref ?? nav?.fallbackHref ?? "/";
-
-    if (nav?.canGoBack) {
-      router.back();
+    if (nav?.goBack) {
+      nav.goBack(fallbackHref);
       return;
     }
-
-    router.push(fallback);
+    // Hors provider (edge) : fallback route, jamais history.back()
+    router.push(fallbackHref ?? defaultBackFallback(pathname || "/"));
   }
 
   return (

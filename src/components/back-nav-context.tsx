@@ -10,17 +10,20 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { defaultBackFallback } from "@/lib/back-fallback";
 
 const STACK_KEY = "chipshop.navStack";
 
 type BackNavContextValue = {
   onBack: (() => void) | null;
   setOnBack: (fn: (() => void) | null) => void;
-  fallbackHref: string;
-  setFallbackHref: (href: string) => void;
-  /** true seulement s’il y a une page précédente *dans* l’app (pas l’historique navigateur externe) */
+  fallbackHref: string | null;
+  setFallbackHref: (href: string | null) => void;
+  /** true seulement s’il y a une page précédente *dans* l’app */
   canGoBack: boolean;
+  /** Retour sûr : push in-app (évite reload / sortie d’app de router.back) */
+  goBack: (overrideFallback?: string) => void;
 };
 
 const BackNavContext = createContext<BackNavContextValue | null>(null);
@@ -58,21 +61,26 @@ function navigationType(): PerformanceNavigationTiming["type"] | "navigate" {
 
 export function BackNavProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [onBack, setOnBackState] = useState<(() => void) | null>(null);
-  const [fallbackHref, setFallbackHrefState] = useState("/");
+  const [fallbackHref, setFallbackHrefState] = useState<string | null>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const bootstrapped = useRef(false);
   const lastPath = useRef<string | null>(null);
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+  const fallbackRef = useRef(fallbackHref);
+  fallbackRef.current = fallbackHref;
 
   const setOnBack = useCallback((fn: (() => void) | null) => {
     setOnBackState(() => fn);
   }, []);
 
-  const setFallbackHref = useCallback((href: string) => {
+  const setFallbackHref = useCallback((href: string | null) => {
     setFallbackHrefState(href);
   }, []);
 
-  // Historique in-app : ignore history.length (souvent > 1 même à l’entrée prod / PWA)
+  // Historique in-app (session) — ne pas faire confiance à history.length
   useEffect(() => {
     if (!pathname) return;
 
@@ -82,10 +90,8 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
       let stack = readStack();
 
       if (type === "reload" || type === "navigate") {
-        // Chargement document (lien direct, refresh, deep link) → pas de retour SPA fiable
         stack = [pathname];
       } else {
-        // back_forward / prerender : resync sur le chemin courant
         const idx = stack.lastIndexOf(pathname);
         stack = idx >= 0 ? stack.slice(0, idx + 1) : [pathname];
       }
@@ -99,12 +105,18 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
     if (lastPath.current === pathname) return;
 
     let stack = readStack();
-    const prev = stack[stack.length - 2];
 
+    // Déjà synchronisé (ex. goBack a pop + push)
+    if (stack[stack.length - 1] === pathname) {
+      lastPath.current = pathname;
+      setCanGoBack(stack.length > 1);
+      return;
+    }
+
+    const prev = stack[stack.length - 2];
     if (prev === pathname) {
-      // Retour navigateur / bouton retour
       stack = stack.slice(0, -1);
-    } else if (stack[stack.length - 1] !== pathname) {
+    } else {
       stack = [...stack, pathname];
     }
 
@@ -113,9 +125,45 @@ export function BackNavProvider({ children }: { children: ReactNode }) {
     setCanGoBack(stack.length > 1);
   }, [pathname]);
 
+  const goBack = useCallback(
+    (overrideFallback?: string) => {
+      const custom = onBackRef.current;
+      if (custom) {
+        custom();
+        return;
+      }
+
+      const stack = readStack();
+      if (stack.length > 1) {
+        const prev = stack[stack.length - 2]!;
+        const nextStack = stack.slice(0, -1);
+        writeStack(nextStack);
+        setCanGoBack(nextStack.length > 1);
+        lastPath.current = prev;
+        // push in-app : pas de sortie d’app / reload comme router.back()
+        router.push(prev);
+        return;
+      }
+
+      const fallback =
+        overrideFallback ??
+        fallbackRef.current ??
+        defaultBackFallback(pathname || "/");
+      router.push(fallback);
+    },
+    [router, pathname],
+  );
+
   const value = useMemo(
-    () => ({ onBack, setOnBack, fallbackHref, setFallbackHref, canGoBack }),
-    [onBack, setOnBack, fallbackHref, setFallbackHref, canGoBack],
+    () => ({
+      onBack,
+      setOnBack,
+      fallbackHref,
+      setFallbackHref,
+      canGoBack,
+      goBack,
+    }),
+    [onBack, setOnBack, fallbackHref, setFallbackHref, canGoBack, goBack],
   );
 
   return (
@@ -136,7 +184,7 @@ export function usePageBack(options?: {
   const setOnBack = ctx?.setOnBack;
   const setFallbackHref = ctx?.setFallbackHref;
   const onBack = options?.onBack;
-  const fallbackHref = options?.fallbackHref ?? "/";
+  const fallbackHref = options?.fallbackHref ?? null;
   const hasCustomBack = Boolean(onBack);
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
@@ -147,7 +195,7 @@ export function usePageBack(options?: {
     setFallbackHref(fallbackHref);
     return () => {
       setOnBack(null);
-      setFallbackHref("/");
+      setFallbackHref(null);
     };
   }, [setOnBack, setFallbackHref, hasCustomBack, fallbackHref]);
 }

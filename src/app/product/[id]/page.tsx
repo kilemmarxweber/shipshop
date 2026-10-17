@@ -21,6 +21,7 @@ import { fetchJson } from "@/lib/fetch-json";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney, cn } from "@/lib/utils";
 import { colorHex } from "@/lib/product-options";
+import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
@@ -66,6 +67,7 @@ function ProductInner() {
   const router = useRouter();
   const { t } = useI18n();
   const { data: session } = authClient.useSession();
+  usePageBack({ fallbackHref: "/" });
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState<"cart" | "buy" | null>(null);
   const [manageBusy, setManageBusy] = useState(false);

@@ -86,6 +86,7 @@ export function AppShell({
 
   const hideChrome =
     pathname.startsWith("/auth") || pathname.startsWith("/onboarding");
+  // Racines onglets : pas de bouton retour (le bas nav suffit)
   const hideBackOn = new Set([
     "/",
     "/discover",
@@ -93,10 +94,7 @@ export function AppShell({
     "/messages",
     "/cart",
   ]);
-  const showBack =
-    !hideChrome &&
-    !hideBackOn.has(pathname) &&
-    !pathname.startsWith("/shop/");
+  const showBack = !hideChrome && !hideBackOn.has(pathname);
 
   const { urgentCount, unreadMessages } = inbox;
 

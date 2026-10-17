@@ -13,6 +13,7 @@ import {
   splitPhone,
 } from "@/lib/phone";
 import { formatMoney, cn } from "@/lib/utils";
+import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 import { PhoneField } from "@/components/phone-field";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ export default function WalletPage() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
   const { t } = useI18n();
+  usePageBack({ fallbackHref: "/profile" });
   const [balance, setBalance] = useState(0);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [provider, setProvider] = useState<"MPESA" | "ORANGE" | "AIRTEL">("MPESA");

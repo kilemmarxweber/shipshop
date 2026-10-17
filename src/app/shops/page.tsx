@@ -7,6 +7,7 @@ import { KeyRound, Plus, Store, Users } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { cn } from "@/lib/utils";
+import { usePageBack } from "@/components/back-nav-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,7 @@ type OrgMember = {
 
 export default function ShopsPage() {
   const { data: session } = authClient.useSession();
+  usePageBack({ fallbackHref: "/profile" });
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string>("");
   const [shops, setShops] = useState<Shop[]>([]);
