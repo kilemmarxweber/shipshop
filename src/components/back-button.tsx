@@ -14,7 +14,11 @@ type Props = {
   inline?: boolean;
 };
 
-/** Bouton retour seul à gauche, animé vers la gauche, un pas en arrière. */
+/**
+ * Retour in-app.
+ * Ne pas utiliser `history.length > 1` : en prod (PWA, deep link, onglet)
+ * c’est souvent vrai et `router.back()` sort de l’app → reload / page externe.
+ */
 export function BackButton({
   fallbackHref,
   className,
@@ -31,11 +35,15 @@ export function BackButton({
       custom();
       return;
     }
-    if (typeof window !== "undefined" && window.history.length > 1) {
+
+    const fallback = fallbackHref ?? nav?.fallbackHref ?? "/";
+
+    if (nav?.canGoBack) {
       router.back();
       return;
     }
-    router.push(fallbackHref ?? nav?.fallbackHref ?? "/");
+
+    router.push(fallback);
   }
 
   return (
