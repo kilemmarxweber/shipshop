@@ -29,13 +29,17 @@ import {
 } from "@/components/kinshasa-address-form";
 import { composeAddress } from "@/lib/address";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n-provider";
+import { PackagePlus, Search } from "lucide-react";
 
 type Shop = { id: string; name: string };
 
 function PublishInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
+  const mode = searchParams.get("mode");
   const [step, setStep] = useState(1);
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopId, setShopId] = useState(searchParams.get("shopId") ?? "");
@@ -95,6 +99,55 @@ function PublishInner() {
         >
           Connexion
         </Link>
+      </div>
+    );
+  }
+
+  if (mode !== "sell") {
+    return (
+      <div className="mx-auto max-w-lg px-4 pb-8 pt-4">
+        <h1 className="font-heading text-xl font-bold">
+          {t("wanted.publishChooser")}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Vendez un article, ou demandez ce que vous cherchez — tout le monde
+          voit les demandes.
+        </p>
+        <div className="mt-6 grid gap-3">
+          <Link
+            href="/publish?mode=sell"
+            className="flex items-start gap-3 rounded-2xl border border-border bg-surface-2 p-4 transition hover:border-primary"
+          >
+            <span className="grid size-11 place-items-center rounded-xl bg-primary/15 text-primary">
+              <PackagePlus className="size-5" />
+            </span>
+            <span>
+              <span className="block font-heading font-bold">
+                {t("wanted.publishSell")}
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Annonce magasin — catalogue, prix, livraison
+              </span>
+            </span>
+          </Link>
+          <Link
+            href="/wanted/new"
+            className="flex items-start gap-3 rounded-2xl border border-border bg-surface-2 p-4 transition hover:border-primary"
+          >
+            <span className="grid size-11 place-items-center rounded-xl bg-trust/15 text-trust">
+              <Search className="size-5" />
+            </span>
+            <span>
+              <span className="block font-heading font-bold">
+                {t("wanted.publishWanted")}
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Budget, neuf ou occasion — les vendeurs et clients vous
+                répondent
+              </span>
+            </span>
+          </Link>
+        </div>
       </div>
     );
   }

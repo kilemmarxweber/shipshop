@@ -48,6 +48,21 @@ export default function DiscoverPage() {
         />
       </div>
 
+      <Link
+        href="/wanted"
+        className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-surface-2 px-4 py-3"
+      >
+        <span>
+          <span className="block font-heading text-sm font-bold">
+            {t("wanted.title")}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            Demandes d’achat — neuf ou occasion
+          </span>
+        </span>
+        <span className="text-xs font-semibold text-primary">Voir</span>
+      </Link>
+
       <h2 className="mb-3 font-heading text-sm font-bold">
         {t("discover.categoriesHeading")}
       </h2>

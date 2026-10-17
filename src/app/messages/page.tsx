@@ -17,6 +17,7 @@ type Conversation = {
   unreadCount?: number;
   shop: { id: string; name: string };
   product: { id: string; title: string; images: string[] } | null;
+  wantedRequest?: { id: string; title: string } | null;
   buyer: { id: string; name: string };
   messages: {
     body: string;
@@ -147,6 +148,11 @@ export default function MessagesPage() {
                         )}
                       </div>
                     </div>
+                    {c.wantedRequest && (
+                      <p className="truncate text-[10px] text-primary">
+                        Je cherche · {c.wantedRequest.title}
+                      </p>
+                    )}
                     {c.product && (
                       <p className="truncate text-[10px] text-primary">
                         {c.product.title}

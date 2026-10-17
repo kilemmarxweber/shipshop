@@ -7,6 +7,7 @@ import { getSession } from "@/lib/session";
 const startSchema = z.object({
   shopId: z.string().min(1),
   productId: z.string().optional(),
+  wantedRequestId: z.string().optional(),
   message: z.string().max(1000).optional(),
 });
 
@@ -24,6 +25,9 @@ export async function GET() {
         include: {
           shop: { select: { id: true, name: true, slug: true, logoUrl: true } },
           product: { select: { id: true, title: true, images: true } },
+          wantedRequest: {
+            select: { id: true, title: true, condition: true, budgetCents: true },
+          },
           buyer: { select: { id: true, name: true, image: true } },
           messages: {
             orderBy: { createdAt: "desc" },
@@ -86,11 +90,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Boutique introuvable" }, { status: 404 });
     }
 
+    let buyerId = session.user.id;
+    if (body.wantedRequestId) {
+      const wanted = await withDbRetry(() =>
+        prisma.wantedRequest.findUnique({
+          where: { id: body.wantedRequestId },
+          select: { buyerId: true },
+        }),
+      );
+      if (!wanted) {
+        return NextResponse.json({ error: "Demande introuvable" }, { status: 404 });
+      }
+      const isShopStaff =
+        shop.ownerUserId === session.user.id || wanted.buyerId === session.user.id;
+      if (!isShopStaff) {
+        return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+      }
+      buyerId = wanted.buyerId;
+    }
+
     let conversation = await withDbRetry(() =>
       prisma.conversation.findUnique({
         where: {
           buyerId_shopId: {
-            buyerId: session.user.id,
+            buyerId,
             shopId: body.shopId,
           },
         },
@@ -101,17 +124,28 @@ export async function POST(req: Request) {
       conversation = await withDbRetry(() =>
         prisma.conversation.create({
           data: {
-            buyerId: session.user.id,
+            buyerId,
             shopId: body.shopId,
             productId: body.productId,
+            wantedRequestId: body.wantedRequestId,
           },
         }),
       );
-    } else if (body.productId && !conversation.productId) {
+    } else if (
+      (body.productId && !conversation.productId) ||
+      (body.wantedRequestId && !conversation.wantedRequestId)
+    ) {
       conversation = await withDbRetry(() =>
         prisma.conversation.update({
           where: { id: conversation!.id },
-          data: { productId: body.productId },
+          data: {
+            ...(body.productId && !conversation!.productId
+              ? { productId: body.productId }
+              : {}),
+            ...(body.wantedRequestId
+              ? { wantedRequestId: body.wantedRequestId }
+              : {}),
+          },
         }),
       );
     }

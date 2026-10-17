@@ -1,7 +1,6 @@
--- CreateEnum
-CREATE TYPE "WantedCondition" AS ENUM ('NEW_SHOP', 'USED');
-CREATE TYPE "WantedRequestStatus" AS ENUM ('OPEN', 'MATCHED', 'EXPIRED', 'CANCELLED');
-CREATE TYPE "WantedOfferStatus" AS ENUM ('PENDING', 'ACCEPTED', 'DECLINED');
+DO $$ BEGIN CREATE TYPE "WantedCondition" AS ENUM ('NEW_SHOP', 'USED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "WantedRequestStatus" AS ENUM ('OPEN', 'MATCHED', 'EXPIRED', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "WantedOfferStatus" AS ENUM ('PENDING', 'ACCEPTED', 'DECLINED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AlterTable
 ALTER TABLE "shop" ADD COLUMN IF NOT EXISTS "isOccasionStall" BOOLEAN NOT NULL DEFAULT false;
@@ -10,7 +9,7 @@ ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "wantedRequestId" TEXT;
 ALTER TABLE "conversation" ADD COLUMN IF NOT EXISTS "wantedRequestId" TEXT;
 
 -- CreateTable
-CREATE TABLE "wanted_request" (
+CREATE TABLE IF NOT EXISTS "wanted_request" (
     "id" TEXT NOT NULL,
     "buyerId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -33,7 +32,7 @@ CREATE TABLE "wanted_request" (
     CONSTRAINT "wanted_request_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "wanted_offer" (
+CREATE TABLE IF NOT EXISTS "wanted_offer" (
     "id" TEXT NOT NULL,
     "requestId" TEXT NOT NULL,
     "sellerUserId" TEXT NOT NULL,
@@ -56,24 +55,24 @@ CREATE TABLE "wanted_offer" (
     CONSTRAINT "wanted_offer_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "wanted_request_acceptedOfferId_key" ON "wanted_request"("acceptedOfferId");
-CREATE INDEX "wanted_request_status_createdAt_idx" ON "wanted_request"("status", "createdAt");
-CREATE INDEX "wanted_request_buyerId_status_idx" ON "wanted_request"("buyerId", "status");
-CREATE INDEX "wanted_request_category_status_idx" ON "wanted_request"("category", "status");
+CREATE UNIQUE INDEX IF NOT EXISTS "wanted_request_acceptedOfferId_key" ON "wanted_request"("acceptedOfferId");
+CREATE INDEX IF NOT EXISTS "wanted_request_status_createdAt_idx" ON "wanted_request"("status", "createdAt");
+CREATE INDEX IF NOT EXISTS "wanted_request_buyerId_status_idx" ON "wanted_request"("buyerId", "status");
+CREATE INDEX IF NOT EXISTS "wanted_request_category_status_idx" ON "wanted_request"("category", "status");
 
-CREATE UNIQUE INDEX "wanted_offer_productId_key" ON "wanted_offer"("productId");
-CREATE UNIQUE INDEX "wanted_offer_requestId_sellerUserId_key" ON "wanted_offer"("requestId", "sellerUserId");
-CREATE INDEX "wanted_offer_requestId_status_idx" ON "wanted_offer"("requestId", "status");
-CREATE INDEX "wanted_offer_sellerUserId_idx" ON "wanted_offer"("sellerUserId");
+CREATE UNIQUE INDEX IF NOT EXISTS "wanted_offer_productId_key" ON "wanted_offer"("productId");
+CREATE UNIQUE INDEX IF NOT EXISTS "wanted_offer_requestId_sellerUserId_key" ON "wanted_offer"("requestId", "sellerUserId");
+CREATE INDEX IF NOT EXISTS "wanted_offer_requestId_status_idx" ON "wanted_offer"("requestId", "status");
+CREATE INDEX IF NOT EXISTS "wanted_offer_sellerUserId_idx" ON "wanted_offer"("sellerUserId");
 
-CREATE UNIQUE INDEX "product_wantedRequestId_key" ON "product"("wantedRequestId");
-CREATE INDEX "conversation_wantedRequestId_idx" ON "conversation"("wantedRequestId");
+CREATE UNIQUE INDEX IF NOT EXISTS "product_wantedRequestId_key" ON "product"("wantedRequestId");
+CREATE INDEX IF NOT EXISTS "conversation_wantedRequestId_idx" ON "conversation"("wantedRequestId");
 
-ALTER TABLE "wanted_request" ADD CONSTRAINT "wanted_request_buyerId_fkey" FOREIGN KEY ("buyerId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "wanted_offer" ADD CONSTRAINT "wanted_offer_requestId_fkey" FOREIGN KEY ("requestId") REFERENCES "wanted_request"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "wanted_offer" ADD CONSTRAINT "wanted_offer_sellerUserId_fkey" FOREIGN KEY ("sellerUserId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "wanted_offer" ADD CONSTRAINT "wanted_offer_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "wanted_offer" ADD CONSTRAINT "wanted_offer_productId_fkey" FOREIGN KEY ("productId") REFERENCES "product"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "wanted_request" ADD CONSTRAINT "wanted_request_acceptedOfferId_fkey" FOREIGN KEY ("acceptedOfferId") REFERENCES "wanted_offer"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "product" ADD CONSTRAINT "product_wantedRequestId_fkey" FOREIGN KEY ("wantedRequestId") REFERENCES "wanted_request"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "conversation" ADD CONSTRAINT "conversation_wantedRequestId_fkey" FOREIGN KEY ("wantedRequestId") REFERENCES "wanted_request"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN ALTER TABLE "wanted_request" ADD CONSTRAINT "wanted_request_buyerId_fkey" FOREIGN KEY ("buyerId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "wanted_offer" ADD CONSTRAINT "wanted_offer_requestId_fkey" FOREIGN KEY ("requestId") REFERENCES "wanted_request"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "wanted_offer" ADD CONSTRAINT "wanted_offer_sellerUserId_fkey" FOREIGN KEY ("sellerUserId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "wanted_offer" ADD CONSTRAINT "wanted_offer_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "wanted_offer" ADD CONSTRAINT "wanted_offer_productId_fkey" FOREIGN KEY ("productId") REFERENCES "product"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "wanted_request" ADD CONSTRAINT "wanted_request_acceptedOfferId_fkey" FOREIGN KEY ("acceptedOfferId") REFERENCES "wanted_offer"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "product" ADD CONSTRAINT "product_wantedRequestId_fkey" FOREIGN KEY ("wantedRequestId") REFERENCES "wanted_request"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "conversation" ADD CONSTRAINT "conversation_wantedRequestId_fkey" FOREIGN KEY ("wantedRequestId") REFERENCES "wanted_request"("id") ON DELETE SET NULL ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

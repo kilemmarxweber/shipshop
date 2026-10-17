@@ -40,6 +40,12 @@ type Conversation = {
   id: string;
   shop: { id: string; name: string };
   product: { id: string; title: string; images: string[] } | null;
+  wantedRequest?: {
+    id: string;
+    title: string;
+    condition: string;
+    budgetCents: number;
+  } | null;
   buyer: { id: string; name: string };
 };
 
@@ -161,6 +167,14 @@ function ChatInner() {
               </span>
             )}
           </p>
+          {conversation?.wantedRequest && (
+            <Link
+              href={`/wanted/${conversation.wantedRequest.id}`}
+              className="truncate text-[11px] text-primary"
+            >
+              Je cherche · {conversation.wantedRequest.title}
+            </Link>
+          )}
           {conversation?.product && (
             <Link
               href={`/product/${conversation.product.id}`}

@@ -96,7 +96,11 @@ export async function GET(req: Request) {
       }
       const or: object[] = [];
       if (collected.shopIds.length) {
-        or.push({ shopId: { in: collected.shopIds }, status: "ACTIVE" });
+        or.push({
+          shopId: { in: collected.shopIds },
+          status: "ACTIVE",
+          wantedRequestId: null,
+        });
       }
       if (collected.productIds.length) {
         or.push({
@@ -117,6 +121,7 @@ export async function GET(req: Request) {
           | "DRAFT"
           | "SOLD"
           | "HIDDEN",
+        wantedRequestId: null,
       });
     }
     if (category) and.push({ category });

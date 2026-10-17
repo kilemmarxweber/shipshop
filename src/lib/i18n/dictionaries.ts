@@ -65,6 +65,7 @@ export type Messages = {
   feed: {
     tabFollowing: string;
     tabForYou: string;
+    tabWanted: string;
     loginToFollowTitle: string;
     loginToFollowHint: string;
     emptyFollowingTitle: string;
@@ -206,6 +207,25 @@ export type Messages = {
     followerOne: string;
     followerOther: string;
   };
+  wanted: {
+    tab: string;
+    title: string;
+    empty: string;
+    budget: string;
+    newShop: string;
+    used: string;
+    publishWanted: string;
+    publishSell: string;
+    publishChooser: string;
+    iHaveIt: string;
+    accept: string;
+    accepted: string;
+    contact: string;
+    myRequests: string;
+    alreadyInShop: string;
+    guestHint: string;
+    overBudget: string;
+  };
 };
 
 const fr: Messages = {
@@ -273,6 +293,7 @@ const fr: Messages = {
   feed: {
     tabFollowing: "Abonnements",
     tabForYou: "Pour toi",
+    tabWanted: "Je cherche",
     loginToFollowTitle: "Connectez-vous pour voir vos abonnements",
     loginToFollowHint:
       "Suivez des boutiques, aimez, achetez ou partagez : tout ça apparaîtra ici.",
@@ -416,6 +437,25 @@ const fr: Messages = {
     followerOne: "abonné",
     followerOther: "abonnés",
   },
+  wanted: {
+    tab: "Je cherche",
+    title: "Je cherche",
+    empty: "Aucune demande ouverte. Publiez ce que vous cherchez.",
+    budget: "Budget max",
+    newShop: "Neuf / magasin",
+    used: "Occasion",
+    publishWanted: "Je cherche",
+    publishSell: "Vendre",
+    publishChooser: "Que voulez-vous faire ?",
+    iHaveIt: "J’ai ça",
+    accept: "Accepter et mettre au panier",
+    accepted: "Offre acceptée — ouvrez le panier pour payer",
+    contact: "Écrire",
+    myRequests: "Mes demandes",
+    alreadyInShop: "Déjà en magasin",
+    guestHint: "Connectez-vous pour publier une demande",
+    overBudget: "Au-dessus du budget",
+  },
 };
 
 const en: Messages = {
@@ -483,6 +523,7 @@ const en: Messages = {
   feed: {
     tabFollowing: "Following",
     tabForYou: "For you",
+    tabWanted: "Wanted",
     loginToFollowTitle: "Sign in to see who you follow",
     loginToFollowHint:
       "Follow shops, like, buy or share — it all shows up here.",
@@ -626,6 +667,25 @@ const en: Messages = {
     followerOne: "follower",
     followerOther: "followers",
   },
+  wanted: {
+    tab: "Wanted",
+    title: "Looking for",
+    empty: "No open requests. Post what you need.",
+    budget: "Max budget",
+    newShop: "New / shop",
+    used: "Used",
+    publishWanted: "I’m looking",
+    publishSell: "Sell",
+    publishChooser: "What do you want to do?",
+    iHaveIt: "I have this",
+    accept: "Accept and add to cart",
+    accepted: "Offer accepted — open the cart to pay",
+    contact: "Message",
+    myRequests: "My requests",
+    alreadyInShop: "Already in shops",
+    guestHint: "Sign in to post a request",
+    overBudget: "Over budget",
+  },
 };
 
 const pt: Messages = {
@@ -693,6 +753,7 @@ const pt: Messages = {
   feed: {
     tabFollowing: "A seguir",
     tabForYou: "Para ti",
+    tabWanted: "Procuro",
     loginToFollowTitle: "Entre para ver quem segue",
     loginToFollowHint:
       "Siga lojas, goste, compre ou partilhe — tudo aparece aqui.",
@@ -835,6 +896,25 @@ const pt: Messages = {
   shopExtra: {
     followerOne: "seguidor",
     followerOther: "seguidores",
+  },
+  wanted: {
+    tab: "Procuro",
+    title: "Procuro",
+    empty: "Nenhum pedido aberto. Publique o que procura.",
+    budget: "Orçamento máx.",
+    newShop: "Novo / loja",
+    used: "Usado",
+    publishWanted: "Procuro",
+    publishSell: "Vender",
+    publishChooser: "O que quer fazer?",
+    iHaveIt: "Tenho isto",
+    accept: "Aceitar e pôr no carrinho",
+    accepted: "Oferta aceite — abra o carrinho para pagar",
+    contact: "Escrever",
+    myRequests: "Os meus pedidos",
+    alreadyInShop: "Já nas lojas",
+    guestHint: "Entre para publicar um pedido",
+    overBudget: "Acima do orçamento",
   },
 };
 

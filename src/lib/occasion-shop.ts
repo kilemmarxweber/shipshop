@@ -46,6 +46,7 @@ export async function resolveOfferShop(opts: {
           id: opts.shopId!,
           ownerUserId: opts.userId,
           isActive: true,
+          isOccasionStall: false,
         },
       }),
     );

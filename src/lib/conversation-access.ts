@@ -57,6 +57,15 @@ export async function canAccessConversation(
         product: {
           select: { id: true, title: true, images: true, priceCents: true },
         },
+        wantedRequest: {
+          select: {
+            id: true,
+            title: true,
+            condition: true,
+            budgetCents: true,
+            images: true,
+          },
+        },
         buyer: { select: { id: true, name: true, image: true } },
       },
     }),

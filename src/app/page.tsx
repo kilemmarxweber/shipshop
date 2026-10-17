@@ -22,6 +22,7 @@ import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { colorHex } from "@/lib/product-options";
 import { MediaThumb } from "@/components/media-thumb";
 import type { MessagePath } from "@/components/i18n-provider";
+import { WantedCard, type WantedListItem } from "@/components/wanted-card";
 
 type Product = {
   id: string;
@@ -45,7 +46,7 @@ type Product = {
   };
 };
 
-type FeedTab = "foryou" | "following";
+type FeedTab = "foryou" | "following" | "wanted";
 
 function categoryLabel(
   t: (path: MessagePath) => string,
@@ -61,6 +62,7 @@ export default function FeedPage() {
   const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const [products, setProducts] = useState<Product[]>([]);
+  const [wanted, setWanted] = useState<WantedListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<FeedTab>("foryou");
   const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
@@ -74,10 +76,18 @@ export default function FeedPage() {
   useEffect(() => {
     if (tab === "following" && !session) {
       setProducts([]);
+      setWanted([]);
       setLoading(false);
       return;
     }
     setLoading(true);
+    if (tab === "wanted") {
+      fetchJson<{ requests?: WantedListItem[] }>("/api/wanted")
+        .then(({ data }) => setWanted(data?.requests ?? []))
+        .catch(() => setWanted([]))
+        .finally(() => setLoading(false));
+      return;
+    }
     const url =
       tab === "following"
         ? "/api/products?status=ACTIVE&following=1"
@@ -213,6 +223,18 @@ export default function FeedPage() {
       >
         {t("feed.tabForYou")}
       </button>
+      <button
+        type="button"
+        onClick={() => setTab("wanted")}
+        className={cn(
+          "cursor-pointer pb-1",
+          tab === "wanted"
+            ? "border-b-2 border-primary text-foreground"
+            : "text-muted-foreground",
+        )}
+      >
+        {t("feed.tabWanted")}
+      </button>
     </div>
   );
 
@@ -242,6 +264,27 @@ export default function FeedPage() {
           >
             {t("auth.login")}
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (tab === "wanted") {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        {tabs}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {wanted.length === 0 ? (
+            <p className="py-16 text-center text-sm text-muted-foreground">
+              {t("wanted.empty")}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {wanted.map((item) => (
+                <WantedCard key={item.id} item={item} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
