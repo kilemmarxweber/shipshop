@@ -51,7 +51,7 @@ export default function DiscoverPage() {
       <h2 className="mb-3 font-heading text-sm font-bold">
         {t("discover.categoriesHeading")}
       </h2>
-      <div className="h-scroll h-scroll-fade mb-6 gap-2.5 pb-2">
+      <div className="h-scroll h-scroll-fade mb-5 gap-2.5">
         {CATEGORIES.map((c) => (
           <button
             key={c.id}
@@ -62,8 +62,7 @@ export default function DiscoverPage() {
             className={cn(
               "relative size-[4.5rem] shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br p-2 sm:size-20",
               c.gradient,
-              category === c.id &&
-                "ring-2 ring-primary ring-offset-2 ring-offset-background",
+              category === c.id && "ring-2 ring-primary ring-offset-2 ring-offset-background",
             )}
           >
             <span className="absolute inset-x-0 bottom-1 text-center text-[9px] font-bold">

@@ -1,4 +1,4 @@
-export const DEFAULT_APP_NAME = "Chip Shop";
+export const DEFAULT_APP_NAME = "ShipShop";
 
 export function getAppName() {
   const name =

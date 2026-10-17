@@ -187,6 +187,14 @@ export type Messages = {
     ackPlaceholder: string;
     guestHint: string;
   };
+  notifications: {
+    title: string;
+    empty: string;
+    refresh: string;
+    seeAll: string;
+    hint: string;
+    noPreview: string;
+  };
   wallet: {
     title: string;
     guestHint: string;
@@ -388,6 +396,14 @@ const fr: Messages = {
     writePlaceholder: "Écrire un message…",
     ackPlaceholder: "Répondre pour acquitter l'urgence…",
     guestHint: "Connectez-vous pour voir vos messages",
+  },
+  notifications: {
+    title: "Notifications",
+    empty: "Aucun message pour le moment",
+    refresh: "Actualiser",
+    seeAll: "Voir tous les messages",
+    hint: "Nouveaux messages — actualisation auto toutes les 25 s",
+    noPreview: "Nouvelle conversation",
   },
   wallet: {
     title: "Mon portefeuille",
@@ -591,6 +607,14 @@ const en: Messages = {
     ackPlaceholder: "Reply to acknowledge the urgent alert…",
     guestHint: "Sign in to see your messages",
   },
+  notifications: {
+    title: "Notifications",
+    empty: "No messages yet",
+    refresh: "Refresh",
+    seeAll: "See all messages",
+    hint: "New messages — auto-refresh every 25s",
+    noPreview: "New conversation",
+  },
   wallet: {
     title: "My wallet",
     guestHint: "Sign in to manage your balance",
@@ -792,6 +816,14 @@ const pt: Messages = {
     writePlaceholder: "Escrever uma mensagem…",
     ackPlaceholder: "Responder para acusar a urgência…",
     guestHint: "Entre para ver as suas mensagens",
+  },
+  notifications: {
+    title: "Notificações",
+    empty: "Sem mensagens por agora",
+    refresh: "Atualizar",
+    seeAll: "Ver todas as mensagens",
+    hint: "Novas mensagens — atualização automática a cada 25 s",
+    noPreview: "Nova conversa",
   },
   wallet: {
     title: "A minha carteira",

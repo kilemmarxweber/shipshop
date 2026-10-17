@@ -20,7 +20,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Chip Shop — Marketplace de confiance RDC",
+  title: "ShipShop — Marketplace de confiance RDC",
   description:
     "Achetez et vendez en sécurité avec portefeuille Mobile Money prépayé.",
   icons: {

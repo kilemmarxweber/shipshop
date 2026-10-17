@@ -27,6 +27,13 @@ import { FollowShopButton } from "@/components/follow-shop-button";
 import { PageLoader } from "@/components/page-loader";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
+import {
+  DEFAULT_VIDEO_SOUND,
+  VideoSoundButton,
+  type VideoSoundState,
+} from "@/components/video-sound-button";
+import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+import { MediaThumb } from "@/components/media-thumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -82,8 +89,15 @@ function ShopInner() {
   const [category, setCategory] = useState<string | null>(null);
   const [showAddress, setShowAddress] = useState(false);
   const [manageBusyId, setManageBusyId] = useState<string | null>(null);
+  const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
+    {},
+  );
 
   const isOwnShop = shop?.owner?.id === session?.user?.id;
+
+  function soundFor(id: string): VideoSoundState {
+    return soundById[id] ?? DEFAULT_VIDEO_SOUND;
+  }
 
   const shopUrl =
     typeof window !== "undefined"
@@ -469,6 +483,8 @@ function ShopInner() {
                 overlay
                 fit="cover"
                 className="absolute inset-0"
+                muted={soundFor(p.id).muted}
+                volume={soundFor(p.id).volume}
               />
 
               <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
@@ -482,42 +498,36 @@ function ShopInner() {
                   <>
                     <Link
                       href={`/product/${p.id}`}
-                      className="flex cursor-pointer flex-col items-center gap-1"
+                      className="grid cursor-pointer place-items-center"
                       title={t("product.edit")}
+                      aria-label={t("product.edit")}
                     >
                       <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
                         <Pencil className="size-5 text-white" />
-                      </span>
-                      <span className="text-[10px] font-semibold text-white drop-shadow">
-                        {t("product.edit")}
                       </span>
                     </Link>
                     <button
                       type="button"
                       disabled={manageBusyId === p.id}
                       onClick={() => archiveProduct(p)}
-                      className="flex cursor-pointer flex-col items-center gap-1 disabled:opacity-50"
+                      className="grid cursor-pointer place-items-center disabled:opacity-50"
                       title={t("product.archive")}
+                      aria-label={t("product.archive")}
                     >
                       <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
                         <Archive className="size-5 text-white" />
-                      </span>
-                      <span className="text-[10px] font-semibold text-white drop-shadow">
-                        {t("product.archive")}
                       </span>
                     </button>
                     <button
                       type="button"
                       disabled={manageBusyId === p.id}
                       onClick={() => deleteProduct(p)}
-                      className="flex cursor-pointer flex-col items-center gap-1 disabled:opacity-50"
+                      className="grid cursor-pointer place-items-center disabled:opacity-50"
                       title={t("product.delete")}
+                      aria-label={t("product.delete")}
                     >
                       <span className="grid size-10 place-items-center rounded-full border border-destructive/40 bg-destructive/25 backdrop-blur transition hover:scale-105 active:scale-95">
                         <Trash2 className="size-5 text-white" />
-                      </span>
-                      <span className="text-[10px] font-semibold text-white drop-shadow">
-                        {t("product.delete")}
                       </span>
                     </button>
                   </>
@@ -525,7 +535,12 @@ function ShopInner() {
                 <button
                   type="button"
                   onClick={() => toggleLike(p)}
-                  className="flex cursor-pointer flex-col items-center gap-1"
+                  className="grid cursor-pointer place-items-center"
+                  aria-label={
+                    p.likesCount
+                      ? `${t("feed.like")} (${p.likesCount})`
+                      : t("feed.like")
+                  }
                 >
                   <span
                     className={cn(
@@ -542,9 +557,6 @@ function ShopInner() {
                       )}
                     />
                   </span>
-                  <span className="text-[10px] font-semibold text-white drop-shadow">
-                    {p.likesCount || t("feed.like")}
-                  </span>
                 </button>
                 <ShareMenu
                   title={p.title}
@@ -553,15 +565,24 @@ function ShopInner() {
                   url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
                   align="end"
                   side="left"
-                  triggerClassName="flex cursor-pointer flex-col items-center gap-1 border-0 bg-transparent p-0 text-white"
+                  triggerClassName="grid cursor-pointer place-items-center border-0 bg-transparent p-0 text-white"
                 >
-                  <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
+                  <span
+                    className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95"
+                    aria-label={t("feed.share")}
+                  >
                     <Share2 className="size-5" />
                   </span>
-                  <span className="text-[10px] font-semibold drop-shadow">
-                    {t("feed.share")}
-                  </span>
                 </ShareMenu>
+                <VideoSoundButton
+                  images={p.images}
+                  sound={soundFor(p.id)}
+                  onChange={(next) =>
+                    setSoundById((prev) =>
+                      applyExclusiveVideoSound(prev, p.id, next),
+                    )
+                  }
+                />
               </div>
 
               <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
@@ -600,9 +621,9 @@ function ShopInner() {
                   href={`/product/${p.id}`}
                   className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-black/55 sm:gap-3 sm:p-2.5"
                 >
-                  <div
-                    className="size-11 shrink-0 rounded-xl bg-cover bg-center ring-1 ring-white/10 sm:size-12"
-                    style={{ backgroundImage: `url(${p.images[0]})` }}
+                  <MediaThumb
+                    images={p.images}
+                    className="size-11 shrink-0 rounded-xl ring-1 ring-white/10 sm:size-12"
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-semibold text-white">

@@ -19,7 +19,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 type Shop = { id: string; name: string };
-type Courier = { id: string; name: string; phone: string; isAvailable: boolean };
+type Courier = {
+  id: string;
+  name: string;
+  phone: string;
+  address?: string | null;
+  isAvailable: boolean;
+};
 type Order = {
   id: string;
   status: string;
@@ -32,7 +38,12 @@ type Order = {
   contactPhone: string | null;
   product: { title: string; images: string[] };
   buyer: { name: string; phone: string | null };
-  courier: { id: string; name: string } | null;
+  courier: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    address?: string | null;
+  } | null;
   pickupReceipt: {
     code: string;
     redeemedAt: string | null;
@@ -204,6 +215,9 @@ export default function VendorOrdersPage() {
     const { res, data } = await fetchJson<{
       error?: string;
       eta?: { etaText: string; distanceKm: number };
+      order?: {
+        courier?: { name: string; address?: string | null } | null;
+      };
     }>(`/api/orders/${orderId}/assign-courier`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -213,10 +227,14 @@ export default function VendorOrdersPage() {
       toast.error(data?.error ?? "Assignation impossible");
       return;
     }
+    const c = data?.order?.courier;
+    const who = c
+      ? `${c.name}${c.address ? ` · ${c.address}` : ""}`
+      : "Livreur";
     toast.success(
       data?.eta
-        ? `Livreur assigné · ${data.eta.distanceKm} km · ETA ${data.eta.etaText}`
-        : "Livreur assigné",
+        ? `${who} · ${data.eta.distanceKm} km · ETA ${data.eta.etaText}`
+        : `${who} assigné`,
     );
     loadOrders(shopId);
   }
@@ -409,9 +427,17 @@ export default function VendorOrdersPage() {
                     </p>
                   )}
                   {o.courier && (
-                    <p className="text-[11px] text-trust">
-                      Livreur: {o.courier.name}
-                    </p>
+                    <div className="mt-0.5 space-y-0.5 text-[11px] text-trust">
+                      <p>
+                        Livreur: {o.courier.name}
+                        {o.courier.phone ? ` · ${o.courier.phone}` : ""}
+                      </p>
+                      {o.courier.address && (
+                        <p className="text-muted-foreground">
+                          Base: {o.courier.address}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -447,6 +473,7 @@ export default function VendorOrdersPage() {
                         .map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}
+                            {c.address ? ` — ${c.address}` : ""}
                           </option>
                         ))}
                     </select>

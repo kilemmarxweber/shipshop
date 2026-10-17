@@ -9,9 +9,10 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {
-    proxyClientMaxBodySize: "12mb",
+    // Aligné sur VIDEO_INPUT_MAX_BYTES (100 Mo) — compression vidéo côté serveur
+    proxyClientMaxBodySize: "100mb",
     serverActions: {
-      bodySizeLimit: "12mb",
+      bodySizeLimit: "100mb",
     },
   },
   async rewrites() {

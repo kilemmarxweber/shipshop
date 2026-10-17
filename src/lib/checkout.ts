@@ -1,6 +1,9 @@
 import type { Prisma, FulfillmentType } from "@/generated/prisma/client";
 import { composeAddress } from "@/lib/address";
-import { findBestCourier } from "@/lib/courier-match";
+import {
+  findBestCourier,
+  formatCourierAssignNote,
+} from "@/lib/courier-match";
 import { buildHandoverQrPayload } from "@/lib/handover";
 import {
   buildVendorCancelMessage,
@@ -79,6 +82,7 @@ export async function purchaseProduct(
   let deliveryQuartier = fulfillment.deliveryQuartier?.trim() || null;
   let deliveryAvenue = fulfillment.deliveryAvenue?.trim() || null;
   let deliveryParcelle = fulfillment.deliveryParcelle?.trim() || null;
+  let autoCourierNote: string | null = null;
 
   if (fulfillment.fulfillmentType === "DELIVERY") {
     if (!deliveryCity) {
@@ -107,11 +111,14 @@ export async function purchaseProduct(
       deliveryCommune = quote.commune;
     }
 
+    // Auto-livreur : plus proche + disponible (boutique / plateforme)
     const proposal = await findBestCourier({
       destLat: deliveryLat,
       destLng: deliveryLng,
       commune: deliveryCommune,
       remoteZone: quote.kind === "REMOTE",
+      shopId: product.shopId,
+      zoneId: quote.zoneId,
     });
     if (proposal) {
       courierId = proposal.courier.id;
@@ -119,6 +126,11 @@ export async function purchaseProduct(
       etaMinutes = proposal.eta.etaMinutes;
       etaAt = proposal.eta.etaAt;
       initialStatus = "ASSIGNED";
+      autoCourierNote = formatCourierAssignNote(
+        proposal.courier,
+        proposal.eta,
+        proposal.reason,
+      );
     }
   } else {
     initialStatus = "READY_FOR_PICKUP";
@@ -209,8 +221,8 @@ export async function purchaseProduct(
       note:
         fulfillment.fulfillmentType === "PICKUP"
           ? "Paiement reçu — prêt pour retrait boutique"
-          : courierId
-            ? `Livreur auto-assigné · ${courierDistanceKm} km · ETA ~${etaMinutes} min (trafic inclus)`
+          : autoCourierNote
+            ? autoCourierNote
             : "Paiement reçu — en attente d'un livreur",
       actorUserId: buyerId,
     },

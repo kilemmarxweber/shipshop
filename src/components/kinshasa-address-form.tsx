@@ -50,18 +50,36 @@ type Props = {
 
 const KINSHASA_DEFAULT = { lat: -4.325, lng: 15.322 };
 
-function matchCommune(name: string, communes: Commune[]) {
-  const n = name
+function fold(s: string) {
+  return s
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  return communes.find((c) => {
-    const cn = c.name
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-    return cn === n || cn.includes(n) || n.includes(cn);
-  });
+    .toLowerCase()
+    .trim();
+}
+
+function placeKey(s: string) {
+  return fold(s)
+    .replace(/^(la|le|les)\s+/, "")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchCommune(name: string, communes: Commune[]) {
+  const n = placeKey(name);
+  if (!n) return undefined;
+  return communes.find((c) => placeKey(c.name) === n);
+}
+
+function matchInList(needle: string, list: string[]) {
+  const n = fold(needle);
+  if (!n) return "";
+  return (
+    list.find((item) => fold(item) === n) ??
+    list.find((item) => fold(item).includes(n) || n.includes(fold(item))) ??
+    needle
+  );
 }
 
 export function KinshasaAddressForm({
@@ -88,9 +106,75 @@ export function KinshasaAddressForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function inCatalog(list: string[], name: string) {
+    const n = fold(name);
+    return Boolean(n) && list.some((item) => fold(item) === n);
+  }
+
+  async function saveIfNew(next: AddressState, notify = false) {
+    const commune = next.commune.trim();
+    if (commune.length < 2) return;
+    const known = communes.find((c) => fold(c.name) === fold(commune));
+    const quartier = next.quartier.trim();
+    const avenue = next.avenue.trim();
+    const isNewCommune = !known;
+    const isNewQuartier = Boolean(
+      quartier && !inCatalog(known?.quartiers ?? [], quartier),
+    );
+    const isNewAvenue = Boolean(
+      avenue && !inCatalog(known?.avenues ?? [], avenue),
+    );
+    if (!isNewCommune && !isNewQuartier && !isNewAvenue) return;
+
+    const { res, data } = await fetchJson<{
+      communes?: Commune[];
+      error?: string;
+    }>("/api/geo/kinshasa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        commune,
+        quartier: quartier || undefined,
+        avenue: avenue || undefined,
+        lat: next.lat,
+        lng: next.lng,
+      }),
+    });
+    if (!res.ok) return;
+    if (data?.communes) setCommunes(data.communes);
+    if (notify) {
+      toast.success("Nouveau lieu enregistré — il sera proposé la prochaine fois");
+    }
+  }
+
+  const communesForSelect = useMemo(() => {
+    const extraCommune =
+      value.commune && !communes.some((c) => c.name === value.commune)
+        ? [
+            {
+              name: value.commune,
+              quartiers: value.quartier ? [value.quartier] : [],
+              avenues: value.avenue ? [value.avenue] : [],
+            } satisfies Commune,
+          ]
+        : [];
+    return [...extraCommune, ...communes].map((c) => {
+      if (c.name !== value.commune) return c;
+      const quartiers =
+        value.quartier && !c.quartiers.includes(value.quartier)
+          ? [value.quartier, ...c.quartiers]
+          : c.quartiers;
+      const avenues =
+        value.avenue && !c.avenues.includes(value.avenue)
+          ? [value.avenue, ...c.avenues]
+          : c.avenues;
+      return { ...c, quartiers, avenues };
+    });
+  }, [communes, value.commune, value.quartier, value.avenue]);
+
   const selected = useMemo(
-    () => communes.find((c) => c.name === value.commune),
-    [communes, value.commune],
+    () => communesForSelect.find((c) => c.name === value.commune),
+    [communesForSelect, value.commune],
   );
 
   const preview = composeAddress({
@@ -107,36 +191,44 @@ export function KinshasaAddressForm({
   async function applyCoords(lat: number, lng: number, accuracy?: number) {
     try {
       const geo = await reverseGeocode(lat, lng);
-      const matched = matchCommune(geo.commune || geo.quartier, communes);
-      const communeName = matched?.name ?? "";
-      const quartier =
-        matched?.quartiers.find(
-          (q) =>
-            q.toLowerCase() === geo.quartier.toLowerCase() ||
-            geo.quartier.toLowerCase().includes(q.toLowerCase()),
-        ) ??
-        (matched ? "" : geo.quartier);
-      const avenue =
-        matched?.avenues.find(
-          (a) =>
-            a.toLowerCase() === geo.avenue.toLowerCase() ||
-            geo.avenue.toLowerCase().includes(a.toLowerCase()),
-        ) ?? geo.avenue;
+      const city = cityName || "Kinshasa";
+      const matched = matchCommune(geo.commune, communes);
+      const communeName = matched?.name || geo.commune;
+      const quartier = matchInList(
+        geo.quartier,
+        matched?.quartiers ?? [],
+      );
+      const avenue = matchInList(geo.avenue, matched?.avenues ?? []);
+      const parcelle = geo.houseNumber || value.parcelle;
 
+      const next: AddressState = {
+        ...value,
+        city,
+        commune: communeName,
+        quartier,
+        avenue,
+        parcelle,
+        lat,
+        lng,
+        accuracyM: accuracy ?? null,
+      };
+      onChange(next);
+      setShowMap(true);
+      void saveIfNew(next);
+      if (!geo.houseNumber) {
+        toast.message("Numéro non trouvé — saisissez-le manuellement");
+      }
+    } catch {
       onChange({
         ...value,
-        city: "Kinshasa",
-        commune: communeName || value.commune,
-        quartier: quartier || value.quartier,
-        avenue: avenue || value.avenue,
+        city: value.city || cityName || "Kinshasa",
         lat,
         lng,
         accuracyM: accuracy ?? null,
       });
-      setShowMap(true);
-    } catch {
-      onChange({ ...value, lat, lng, accuracyM: accuracy ?? null });
-      toast.error("Position enregistrée — adresse textuelle non résolue");
+      toast.error(
+        "Position GPS OK — commune / quartier à compléter à la main",
+      );
     }
   }
 
@@ -157,17 +249,32 @@ export function KinshasaAddressForm({
     }
   }
 
+  function patch(partial: Partial<AddressState>) {
+    onChange({
+      ...value,
+      city: (partial.city ?? value.city) || cityName,
+      ...partial,
+    });
+  }
+
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label>
+        <Label htmlFor="addr-city">
           Ville <span className="text-destructive">*</span>
         </Label>
         <Input
+          id="addr-city"
+          list="addr-city-list"
           value={value.city || cityName}
-          readOnly
-          className="bg-surface-2 opacity-90"
+          onChange={(e) => patch({ city: e.target.value })}
+          placeholder="Obligatoire"
+          required
+          className="bg-surface-2"
         />
+        <datalist id="addr-city-list">
+          <option value={cityName} />
+        </datalist>
       </div>
 
       {enableMap && (
@@ -205,83 +312,105 @@ export function KinshasaAddressForm({
             </p>
           )}
           {showMap && (
-            <AddressMapPicker
-              latitude={mapLat}
-              longitude={mapLng}
-              onChange={(lat, lng) => applyCoords(lat, lng)}
-            />
+            <div className="relative">
+              <AddressMapPicker
+                latitude={mapLat}
+                longitude={mapLng}
+                onChange={(lat, lng) => {
+                  void (async () => {
+                    setLocating(true);
+                    try {
+                      await applyCoords(lat, lng);
+                    } finally {
+                      setLocating(false);
+                    }
+                  })();
+                }}
+              />
+              {locating && (
+                <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/50">
+                  <Loader2 className="size-6 animate-spin text-primary" />
+                </div>
+              )}
+            </div>
           )}
           <p className="text-[10px] text-muted-foreground">
-            Cliquez sur la carte ou utilisez le GPS (multi-mesures, style
-            Eteyelo) pour une adresse précise.
+            GPS charge la ville, commune, quartier et avenue depuis le
+            catalogue. Vous pouvez corriger ou ajouter un nom manquant — il
+            est alors enregistré pour les prochaines fois.
           </p>
         </div>
       )}
 
       <div className="space-y-2">
-        <Label>Commune (optionnel)</Label>
-        <select
-          value={value.commune}
-          onChange={(e) =>
-            onChange({
-              ...value,
-              city: value.city || cityName,
-              commune: e.target.value,
-              quartier: "",
-              avenue: "",
-            })
-          }
-          className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm"
-        >
-          <option value="">—</option>
-          {communes.map((c) => (
-            <option key={c.name} value={c.name}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Quartier (optionnel)</Label>
-        <select
-          value={value.quartier}
-          onChange={(e) => onChange({ ...value, quartier: e.target.value })}
-          disabled={!selected}
-          className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm disabled:opacity-40"
-        >
-          <option value="">—</option>
-          {(selected?.quartiers ?? []).map((q) => (
-            <option key={q} value={q}>
-              {q}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Avenue (optionnel)</Label>
-        <select
-          value={value.avenue}
-          onChange={(e) => onChange({ ...value, avenue: e.target.value })}
-          disabled={!selected}
-          className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm disabled:opacity-40"
-        >
-          <option value="">—</option>
-          {(selected?.avenues ?? []).map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>N° parcelle (optionnel)</Label>
+        <Label htmlFor="addr-commune">Commune</Label>
         <Input
+          id="addr-commune"
+          list="addr-commune-list"
+          value={value.commune}
+          onChange={(e) => {
+            const commune = e.target.value;
+            const known = communes.some((c) => c.name === commune);
+            patch(
+              known && commune !== value.commune
+                ? { commune, quartier: "", avenue: "" }
+                : { commune },
+            );
+          }}
+          placeholder="Liste ou saisie libre"
+          className="bg-surface-2"
+          onBlur={() => void saveIfNew(value, true)}
+        />
+        <datalist id="addr-commune-list">
+          {communesForSelect.map((c) => (
+            <option key={c.name} value={c.name} />
+          ))}
+        </datalist>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="addr-quartier">Quartier</Label>
+        <Input
+          id="addr-quartier"
+          list="addr-quartier-list"
+          value={value.quartier}
+          onChange={(e) => patch({ quartier: e.target.value })}
+          placeholder="Liste ou saisie libre"
+          className="bg-surface-2"
+          onBlur={() => void saveIfNew(value, true)}
+        />
+        <datalist id="addr-quartier-list">
+          {(selected?.quartiers ?? []).map((q) => (
+            <option key={q} value={q} />
+          ))}
+        </datalist>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="addr-avenue">Avenue</Label>
+        <Input
+          id="addr-avenue"
+          list="addr-avenue-list"
+          value={value.avenue}
+          onChange={(e) => patch({ avenue: e.target.value })}
+          placeholder="Liste ou saisie libre"
+          className="bg-surface-2"
+          onBlur={() => void saveIfNew(value, true)}
+        />
+        <datalist id="addr-avenue-list">
+          {(selected?.avenues ?? []).map((a) => (
+            <option key={a} value={a} />
+          ))}
+        </datalist>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="addr-parcelle">N° parcelle / numéro</Label>
+        <Input
+          id="addr-parcelle"
           value={value.parcelle}
-          onChange={(e) => onChange({ ...value, parcelle: e.target.value })}
-          placeholder="ex. 45"
+          onChange={(e) => patch({ parcelle: e.target.value })}
+          placeholder="GPS ou saisie manuelle, ex. 45"
           className="bg-surface-2"
         />
       </div>

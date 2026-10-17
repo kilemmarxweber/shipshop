@@ -1,12 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Smartphone, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { fetchJson } from "@/lib/fetch-json";
+import {
+  composePhone,
+  isValidContactPhone,
+  splitPhone,
+} from "@/lib/phone";
 import { formatMoney, cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n-provider";
+import { PhoneField } from "@/components/phone-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,12 +37,13 @@ type Txn = {
 };
 
 export default function WalletPage() {
+  const router = useRouter();
   const { data: session } = authClient.useSession();
   const { t } = useI18n();
   const [balance, setBalance] = useState(0);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [provider, setProvider] = useState<"MPESA" | "ORANGE" | "AIRTEL">("MPESA");
-  const [phone, setPhone] = useState("+243");
+  const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("50");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,7 +57,16 @@ export default function WalletPage() {
   }
 
   useEffect(() => {
-    if (session) refresh();
+    if (!session) return;
+    void refresh();
+    fetchJson<{ user?: { phone?: string | null } }>("/api/profile")
+      .then(({ data }) => {
+        const saved = data?.user?.phone ?? "";
+        if (saved) {
+          setPhone((prev) => prev || saved);
+        }
+      })
+      .catch(() => undefined);
   }, [session]);
 
   if (!session) {
@@ -66,6 +84,12 @@ export default function WalletPage() {
   }
 
   async function initiate() {
+    const parts = splitPhone(phone);
+    const e164 = composePhone(parts.dial, parts.national);
+    if (!isValidContactPhone(e164)) {
+      toast.error("Indiquez un numéro e-money avec l’indicatif pays");
+      return;
+    }
     setLoading(true);
     const res = await fetch("/api/wallet/deposit", {
       method: "POST",
@@ -73,7 +97,7 @@ export default function WalletPage() {
       body: JSON.stringify({
         action: "initiate",
         provider,
-        phone,
+        phone: e164,
         amountCents: Math.round(parseFloat(amount) * 100),
       }),
     });
@@ -103,7 +127,7 @@ export default function WalletPage() {
     }
     toast.success(`Compte rechargé · ${formatMoney(json.balanceCents)}`);
     setPendingId(null);
-    refresh();
+    router.push("/discover");
   }
 
   return (
@@ -139,18 +163,12 @@ export default function WalletPage() {
             </button>
           ))}
         </div>
-        <div className="space-y-2">
-          <Label>Numéro e-money</Label>
-          <div className="relative">
-            <Smartphone className="absolute top-3 left-3 size-4 text-muted-foreground" />
-            <Input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="h-11 bg-surface-2 pl-10"
-              placeholder="+243 8XX XXX XXX"
-            />
-          </div>
-        </div>
+        <PhoneField
+          id="wallet-phone"
+          label="Numéro e-money"
+          value={phone}
+          onChange={setPhone}
+        />
         <div className="space-y-2">
           <Label>Montant (USD)</Label>
           <Input

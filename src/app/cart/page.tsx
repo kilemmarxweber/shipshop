@@ -7,6 +7,7 @@ import { ShoppingCart, Trash2, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney } from "@/lib/utils";
 import { useI18n } from "@/components/i18n-provider";
 import { FulfillmentForm } from "@/components/fulfillment-form";
@@ -137,8 +138,12 @@ export default function CartPage() {
   }
 
   async function confirmPurchase() {
-    if (!fulfillment.contactPhone.trim()) {
-      toast.error("Indiquez un numéro de contact");
+    const contactPhone = (() => {
+      const parts = splitPhone(fulfillment.contactPhone);
+      return composePhone(parts.dial, parts.national);
+    })();
+    if (!isValidContactPhone(contactPhone)) {
+      toast.error("Indiquez un téléphone de contact avec l’indicatif pays");
       return;
     }
     if (
@@ -164,7 +169,7 @@ export default function CartPage() {
         deliveryParcelle: fulfillment.deliveryParcelle || null,
         deliveryLat: fulfillment.deliveryLat,
         deliveryLng: fulfillment.deliveryLng,
-        contactPhone: fulfillment.contactPhone,
+        contactPhone,
       }),
     });
     setBusy(false);

@@ -4,12 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   AlertTriangle,
+  Bell,
   Home,
   Search,
   Plus,
   User,
   Wallet,
-  Bell,
   ShoppingCart,
   MessageCircle,
 } from "lucide-react";
@@ -21,6 +21,8 @@ import { BackButton } from "@/components/back-button";
 import { BackNavProvider } from "@/components/back-nav-context";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationsBell } from "@/components/notifications-bell";
+import { useInboxUnread } from "@/hooks/use-inbox-unread";
 import { useI18n } from "@/components/i18n-provider";
 
 const NAV = [
@@ -32,13 +34,17 @@ const NAV = [
 ] as const;
 
 function BrandLabel({ name }: { name: string }) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return <>{name}</>;
-  const last = parts.pop()!;
+  const compact = name.replace(/\s+/g, "") || "ShipShop";
+  const shopAt = compact.toLowerCase().lastIndexOf("shop");
+  const prefix = shopAt > 0 ? compact.slice(0, shopAt) : compact;
+  const shop = shopAt >= 0 ? compact.slice(shopAt) : "";
   return (
     <>
-      {parts.join(" ")}
-      <span className="text-trust">{last}</span>
+      <span className="text-trust md:hidden">shop</span>
+      <span className="hidden md:inline">
+        {prefix}
+        <span className="text-trust">{shop}</span>
+      </span>
     </>
   );
 }
@@ -56,44 +62,30 @@ export function AppShell({
   const userId = session?.user?.id;
   const [balance, setBalance] = useState<number | null>(null);
   const [cartCount, setCartCount] = useState(0);
-  const [urgentCount, setUrgentCount] = useState(0);
-  const [unreadMessages, setUnreadMessages] = useState(0);
+  const inbox = useInboxUnread(userId, pathname);
 
   useEffect(() => {
     if (!userId) {
       setBalance(null);
       setCartCount(0);
-      setUrgentCount(0);
-      setUnreadMessages(0);
       return;
     }
     Promise.all([
       fetchJson<{ wallet?: { balanceCents?: number } }>("/api/wallet"),
       fetchJson<{ count?: number }>("/api/cart"),
-      fetchJson<{
-        conversations?: { urgentPending?: boolean; unreadCount?: number }[];
-      }>("/api/conversations"),
     ])
-      .then(([wallet, cart, convos]) => {
+      .then(([wallet, cart]) => {
         setBalance(wallet.data?.wallet?.balanceCents ?? 0);
         setCartCount(cart.data?.count ?? 0);
-        const list = convos.data?.conversations ?? [];
-        setUrgentCount(list.filter((c) => c.urgentPending).length);
-        setUnreadMessages(
-          list.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0),
-        );
       })
       .catch(() => {
         setBalance(null);
         setCartCount(0);
-        setUrgentCount(0);
-        setUnreadMessages(0);
       });
   }, [userId, pathname]);
 
   const hideChrome =
     pathname.startsWith("/auth") || pathname.startsWith("/onboarding");
-  // Pas de retour sur l’accueil ni les onglets du menu bas
   const hideBackOn = new Set([
     "/",
     "/discover",
@@ -106,6 +98,8 @@ export function AppShell({
     !hideBackOn.has(pathname) &&
     !pathname.startsWith("/shop/");
 
+  const { urgentCount, unreadMessages } = inbox;
+
   return (
     <BackNavProvider>
       <div className="app-viewport">
@@ -113,16 +107,20 @@ export function AppShell({
           {!hideChrome && (
             <header className="z-40 shrink-0 border-b border-border bg-background/90 px-4 pb-1.5 pt-2.5 backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3">
-                <Link href="/" className="flex items-center gap-2">
-                  <div className="grid size-8 place-items-center overflow-hidden rounded-lg bg-transparent">
+                <Link
+                  href="/"
+                  aria-label={appName}
+                  className="flex min-w-0 shrink items-center gap-1.5 md:gap-2"
+                >
+                  <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-transparent">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src="/shipshop-logo.png"
-                      alt={appName}
+                      alt=""
                       className="size-8 object-contain"
                     />
                   </div>
-                  <span className="font-heading text-lg font-bold tracking-tight">
+                  <span className="font-heading truncate text-lg font-bold tracking-tight whitespace-nowrap">
                     <BrandLabel name={appName} />
                   </span>
                 </Link>
@@ -148,17 +146,28 @@ export function AppShell({
                           </span>
                         )}
                       </Link>
+                      <NotificationsBell
+                        userId={userId}
+                        unreadMessages={unreadMessages}
+                        urgentCount={urgentCount}
+                        conversations={inbox.conversations}
+                        refreshing={inbox.refreshing}
+                        onRefresh={() => void inbox.refresh({ silent: true })}
+                        onOpenConversation={inbox.markConversationSeen}
+                      />
                     </>
                   )}
                   <LocaleToggle />
                   <ThemeToggle />
-                  <button
-                    type="button"
-                    className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50 text-foreground"
-                    aria-label={t("nav.notifications")}
-                  >
-                    <Bell className="size-4" />
-                  </button>
+                  {!session && (
+                    <Link
+                      href="/auth/login"
+                      className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50 text-foreground"
+                      aria-label={t("nav.notifications")}
+                    >
+                      <Bell className="size-4" />
+                    </Link>
+                  )}
                   <Link
                     href={session ? "/profile" : "/auth/login"}
                     prefetch={false}
@@ -184,7 +193,6 @@ export function AppShell({
           <main
             className={cn(
               "app-main",
-              /* Espace clair au-dessus du menu bas (safe area inclus) */
               !hideChrome &&
                 "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
             )}
@@ -213,7 +221,6 @@ export function AppShell({
                       prefetch={item.href === "/publish" ? false : undefined}
                       scroll={false}
                       onClick={(e) => {
-                        // Évite de remonter / vider le formulaire si déjà sur Publier
                         if (
                           item.href === "/publish" &&
                           pathname.startsWith("/publish")
@@ -227,8 +234,24 @@ export function AppShell({
                       )}
                     >
                       {item.href === "/publish" ? (
-                        <span className="grid h-7 w-10 place-items-center rounded-lg bg-gradient-to-br from-[#ff5722] via-[#ff7a45] to-[#00d68f]">
-                          <Icon className="size-4 text-white" />
+                        <span
+                          className={cn(
+                            "relative grid h-7 w-10 place-items-center rounded-lg bg-gradient-to-br from-[#ff5722] via-[#ff7a45] to-[#00d68f]",
+                            !active && "motion-safe:animate-publish-attract",
+                          )}
+                        >
+                          {!active && (
+                            <span
+                              aria-hidden
+                              className="pointer-events-none absolute inset-0 rounded-lg shadow-[0_0_0_2px_rgba(255,87,34,0.55)] motion-safe:animate-publish-ring"
+                            />
+                          )}
+                          <Icon
+                            className={cn(
+                              "relative size-4 text-white",
+                              !active && "motion-safe:animate-publish-plus",
+                            )}
+                          />
                         </span>
                       ) : (
                         <span className="relative">
@@ -240,23 +263,23 @@ export function AppShell({
                           )}
                           {item.href === "/messages" &&
                             (urgentCount > 0 || unreadMessages > 0) && (
-                            <span
-                              className={cn(
-                                "absolute -top-1.5 -right-2.5 grid min-w-4 place-items-center rounded-full px-0.5 text-[8px] font-bold shadow",
-                                urgentCount > 0
-                                  ? "size-4 bg-amber-500 text-black"
-                                  : "bg-primary text-white",
-                              )}
-                            >
-                              {urgentCount > 0 ? (
-                                <AlertTriangle className="size-2.5" />
-                              ) : unreadMessages > 9 ? (
-                                "9+"
-                              ) : (
-                                unreadMessages
-                              )}
-                            </span>
-                          )}
+                              <span
+                                className={cn(
+                                  "absolute -top-1.5 -right-2.5 grid min-w-4 place-items-center rounded-full px-0.5 text-[8px] font-bold shadow",
+                                  urgentCount > 0
+                                    ? "size-4 bg-amber-500 text-black"
+                                    : "bg-primary text-white",
+                                )}
+                              >
+                                {urgentCount > 0 ? (
+                                  <AlertTriangle className="size-2.5" />
+                                ) : unreadMessages > 9 ? (
+                                  "9+"
+                                ) : (
+                                  unreadMessages
+                                )}
+                              </span>
+                            )}
                         </span>
                       )}
                       <span>{t(`nav.${item.key}`)}</span>

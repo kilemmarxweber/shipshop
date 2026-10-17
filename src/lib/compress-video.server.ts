@@ -1,0 +1,163 @@
+import { mkdtemp, readFile, rm, writeFile, stat } from "fs/promises";
+import { tmpdir } from "os";
+import path from "path";
+import {
+  VIDEO_COMPRESS_SKIP_BYTES,
+  VIDEO_STORED_MAX_BYTES,
+} from "@/lib/media";
+import { isFfmpegAvailable, runFfmpeg } from "@/lib/ffmpeg.server";
+
+function compressTimeoutMs(inputBytes: number) {
+  const mb = inputBytes / (1024 * 1024);
+  return Math.min(600_000, Math.max(120_000, Math.round(120_000 + mb * 4_000)));
+}
+
+type PassOpts = {
+  inputPath: string;
+  outputPath: string;
+  maxWidth: number;
+  crf: number;
+  audioKbps: number;
+  fps?: number;
+  mono?: boolean;
+  noAudio?: boolean;
+  timeoutMs: number;
+};
+
+async function encodePass(opts: PassOpts) {
+  const scale = `scale='min(${opts.maxWidth},iw)':-2`;
+  const vf = opts.fps ? `${scale},fps=${opts.fps}` : scale;
+
+  const args = [
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-i",
+    opts.inputPath,
+    "-vf",
+    vf,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-crf",
+    String(opts.crf),
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    "-max_muxing_queue_size",
+    "1024",
+  ];
+
+  if (opts.noAudio) {
+    args.push("-an");
+  } else {
+    args.push(
+      "-c:a",
+      "aac",
+      "-b:a",
+      `${opts.audioKbps}k`,
+      "-ac",
+      opts.mono ? "1" : "2",
+    );
+  }
+
+  args.push(opts.outputPath);
+  await runFfmpeg(args, opts.timeoutMs);
+}
+
+/**
+ * Compression agressive pour le stockage (cible ≤ 12 Mo).
+ * Upload brut jusqu’à 100 Mo → sortie légère côté serveur.
+ */
+export async function compressVideoBuffer(
+  input: Buffer,
+): Promise<{ buffer: Buffer; ext: "mp4" }> {
+  if (input.length <= VIDEO_COMPRESS_SKIP_BYTES) {
+    return { buffer: input, ext: "mp4" };
+  }
+
+  if (!(await isFfmpegAvailable())) {
+    if (input.length <= VIDEO_STORED_MAX_BYTES) {
+      return { buffer: input, ext: "mp4" };
+    }
+    throw new Error(
+      "ffmpeg requis pour compresser les grosses vidéos (installez ffmpeg ou définissez FFMPEG_PATH)",
+    );
+  }
+
+  const dir = await mkdtemp(path.join(tmpdir(), "chipshop-vid-"));
+  const inputPath = path.join(dir, "in.bin");
+  const timeoutMs = compressTimeoutMs(input.length);
+
+  try {
+    await writeFile(inputPath, input);
+
+    // Passes de plus en plus légères jusqu’à ≤ 12 Mo
+    const attempts: Array<
+      Omit<PassOpts, "inputPath" | "outputPath" | "timeoutMs">
+    > = [
+      { maxWidth: 960, crf: 30, audioKbps: 64, mono: true, fps: 24 },
+      { maxWidth: 720, crf: 32, audioKbps: 48, mono: true, fps: 24 },
+      { maxWidth: 640, crf: 34, audioKbps: 48, mono: true, fps: 20 },
+      { maxWidth: 480, crf: 36, audioKbps: 32, mono: true, fps: 18 },
+    ];
+
+    let lastError: unknown;
+    let buffer: Buffer | null = null;
+
+    for (let i = 0; i < attempts.length; i++) {
+      const outputPath = path.join(dir, `out-${i}.mp4`);
+      const base = attempts[i];
+      try {
+        await encodePass({
+          ...base,
+          inputPath,
+          outputPath,
+          timeoutMs,
+        });
+      } catch {
+        try {
+          await encodePass({
+            ...base,
+            inputPath,
+            outputPath,
+            timeoutMs,
+            noAudio: true,
+          });
+        } catch (retryError) {
+          lastError = retryError;
+          continue;
+        }
+      }
+
+      const outStat = await stat(outputPath);
+      if (outStat.size < 2048) {
+        lastError = new Error("Compression vidéo impossible");
+        continue;
+      }
+
+      buffer = await readFile(outputPath);
+      if (buffer.length <= VIDEO_STORED_MAX_BYTES) {
+        if (
+          buffer.length >= input.length &&
+          input.length <= VIDEO_STORED_MAX_BYTES
+        ) {
+          return { buffer: input, ext: "mp4" };
+        }
+        return { buffer, ext: "mp4" };
+      }
+      lastError = new Error(
+        `Vidéo encore trop lourde (${Math.round(buffer.length / (1024 * 1024))} Mo, max 12 Mo)`,
+      );
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Impossible d'envoyer ce fichier");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}

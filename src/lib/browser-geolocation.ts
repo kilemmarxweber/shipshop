@@ -86,50 +86,29 @@ export type ReverseGeocodeResult = {
   commune: string;
   quartier: string;
   avenue: string;
-  road?: string;
+  houseNumber: string;
   displayName?: string;
 };
 
-/** Reverse geocode Nominatim (comme Eteyelo création de branche). */
+/** Reverse geocode via l’API app (Nominatim côté serveur, évite le CORS). */
 export async function reverseGeocode(
   lat: number,
   lng: number,
 ): Promise<ReverseGeocodeResult> {
   const res = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-    {
-      headers: {
-        Accept: "application/json",
-        // Nominatim usage policy — identify the app
-        "User-Agent": "ChipShop/1.0 (delivery)",
-      },
-    },
+    `/api/geo/reverse?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
   );
-  if (!res.ok) throw new Error("Reverse geocode échoué");
-  const data = (await res.json()) as {
-    display_name?: string;
-    address?: Record<string, string>;
-  };
-  const a = data.address ?? {};
+  const data = (await res.json()) as ReverseGeocodeResult & { error?: string };
+  if (!res.ok) {
+    throw new Error(data.error ?? "Reverse geocode échoué");
+  }
   return {
-    city:
-      a.city ||
-      a.town ||
-      a.village ||
-      a.municipality ||
-      a.county ||
-      "Kinshasa",
-    commune:
-      a.suburb ||
-      a.city_district ||
-      a.municipality ||
-      a.county ||
-      a.neighbourhood ||
-      "",
-    quartier: a.neighbourhood || a.suburb || a.quarter || "",
-    avenue: a.road || a.pedestrian || a.path || "",
-    road: a.road,
-    displayName: data.display_name,
+    city: data.city?.trim() || "Kinshasa",
+    commune: data.commune?.trim() || "",
+    quartier: data.quartier?.trim() || "",
+    avenue: data.avenue?.trim() || "",
+    houseNumber: data.houseNumber?.trim() || "",
+    displayName: data.displayName,
   };
 }
 

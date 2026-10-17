@@ -80,7 +80,17 @@ export default function AddressMapPicker({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <Marker position={[latitude, longitude]} icon={pinIcon} />
+        <Marker
+          position={[latitude, longitude]}
+          icon={pinIcon}
+          draggable
+          eventHandlers={{
+            dragend(e) {
+              const p = (e.target as L.Marker).getLatLng();
+              onChange(p.lat, p.lng);
+            },
+          }}
+        />
         <ClickHandler onChange={onChange} />
         <RecenterMap latitude={latitude} longitude={longitude} zoom={zoom} />
       </MapContainer>

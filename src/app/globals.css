@@ -45,6 +45,53 @@
   --color-card: var(--card);
   --color-trust: var(--trust);
   --color-trust-foreground: var(--trust-foreground);
+  --animate-publish-attract: publish-attract 2.6s ease-in-out infinite;
+  --animate-publish-ring: publish-attract-ring 2.6s ease-out infinite;
+  --animate-publish-plus: publish-attract-plus 2.6s ease-in-out infinite;
+  @keyframes publish-attract {
+    0%,
+    62%,
+    100% {
+      transform: scale(1);
+    }
+    68% {
+      transform: scale(1.14);
+    }
+    76% {
+      transform: scale(0.94);
+    }
+    84% {
+      transform: scale(1.08);
+    }
+  }
+  @keyframes publish-attract-ring {
+    0%,
+    62% {
+      opacity: 0;
+      transform: scale(1);
+    }
+    70% {
+      opacity: 0.7;
+      transform: scale(1.2);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.7);
+    }
+  }
+  @keyframes publish-attract-plus {
+    0%,
+    62%,
+    100% {
+      transform: rotate(0deg);
+    }
+    72% {
+      transform: rotate(90deg);
+    }
+    88% {
+      transform: rotate(90deg);
+    }
+  }
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -179,6 +226,10 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
+  scrollbar-width: none;
+}
+.app-main::-webkit-scrollbar {
+  display: none;
 }
 
 @media (min-width: 768px) {
@@ -209,6 +260,7 @@
 .h-scroll {
   display: flex;
   flex-wrap: nowrap;
+  align-items: center;
   gap: 0.5rem;
   overflow-x: auto;
   overflow-y: hidden;
@@ -216,10 +268,8 @@
   overscroll-behavior-x: contain;
   touch-action: pan-x;
   scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--foreground) 28%, transparent)
-    transparent;
-  padding-bottom: 0.35rem;
+  scrollbar-width: none;
+  padding-block: 0.5rem;
   margin-inline: -0.25rem;
   padding-inline: 0.25rem;
 }
@@ -230,14 +280,7 @@
 }
 
 .h-scroll::-webkit-scrollbar {
-  height: 4px;
-}
-.h-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.h-scroll::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 140, 0.35);
-  border-radius: 999px;
+  display: none;
 }
 
 .h-scroll-fade {
@@ -274,3 +317,4 @@
     scroll-snap-align: start;
   }
 }
+

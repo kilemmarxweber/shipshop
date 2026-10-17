@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { findBestCourier, proposeCouriers } from "@/lib/courier-match";
+import {
+  findBestCourier,
+  formatCourierAssignNote,
+  proposeCouriers,
+} from "@/lib/courier-match";
 import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -39,6 +43,8 @@ export async function GET(
     destLng: order.deliveryLng,
     commune: order.deliveryCommune,
     remoteZone: order.zone?.kind === "REMOTE",
+    shopId: order.shopId,
+    zoneId: order.zoneId,
     limit: 5,
   });
 
@@ -99,7 +105,7 @@ export async function POST(
           etaText: string;
         }
       | null;
-    let reason = "";
+    let assignNote = "";
 
     if (body.auto || !courierId) {
       const best = await findBestCourier({
@@ -107,13 +113,18 @@ export async function POST(
         destLng: order.deliveryLng,
         commune: order.deliveryCommune,
         remoteZone: order.zone?.kind === "REMOTE",
+        shopId: order.shopId,
+        zoneId: order.zoneId,
       });
       if (!best) {
-        return NextResponse.json({ error: "Aucun livreur disponible" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Aucun livreur disponible près de cette position" },
+          { status: 400 },
+        );
       }
       courierId = best.courier.id;
       eta = best.eta;
-      reason = best.reason;
+      assignNote = formatCourierAssignNote(best.courier, best.eta, best.reason);
     } else {
       const courier = await withDbRetry(() =>
         prisma.courier.findUnique({ where: { id: courierId! } }),
@@ -128,6 +139,10 @@ export async function POST(
         order.deliveryLat,
         order.deliveryLng,
         { remoteZone: order.zone?.kind === "REMOTE" },
+      );
+      assignNote = formatCourierAssignNote(
+        { name: courier.name, address: courier.address },
+        eta,
       );
     }
 
@@ -148,7 +163,7 @@ export async function POST(
           data: {
             orderId: id,
             status: "ASSIGNED",
-            note: `Livreur ${next.courier?.name} · ${eta!.distanceKm} km · ETA ~${eta!.etaText}${reason ? ` (${reason})` : ""}`,
+            note: assignNote || `Livreur ${next.courier?.name}`,
             actorUserId: session.user.id,
           },
         });

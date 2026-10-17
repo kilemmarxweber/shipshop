@@ -7,7 +7,10 @@ import {
   IMAGE_MAX_WIDTH,
   IMAGE_STORED_MAX_BYTES,
   IMAGE_TARGET_BYTES,
-  VIDEO_STORED_MAX_BYTES,
+  MEDIA_INPUT_MAX_BYTES,
+  VIDEO_INPUT_MAX_BYTES,
+  looksLikeImageFile,
+  looksLikeVideoFile,
   type CompressVariant,
   type MediaKind,
 } from "@/lib/media";
@@ -36,14 +39,8 @@ function fitInside(
 }
 
 function blobToFile(blob: Blob, name: string, type: string) {
-  const base = name.replace(/\.[^.]+$/, "");
-  const ext = type.includes("webm")
-    ? "webm"
-    : type.includes("mp4")
-      ? "mp4"
-      : type.includes("webp")
-        ? "webp"
-        : "jpg";
+  const base = name.replace(/\.[^.]+$/, "") || "media";
+  const ext = type.includes("webp") ? "webp" : "jpg";
   return new File([blob], `${base}.${ext}`, { type });
 }
 
@@ -59,12 +56,20 @@ async function canvasToBlob(
   return blob;
 }
 
+/** Compression image rapide (1–2 passes JPEG). Pas de re-encodage vidéo. */
 async function compressImageFile(file: File, variant: CompressVariant) {
   const { width: maxW, height: maxH } = boundsFor(variant);
   const bitmap = await createImageBitmap(file, {
     imageOrientation: "from-image",
   });
   try {
+    const needsResize = bitmap.width > maxW || bitmap.height > maxH;
+    const alreadyLight =
+      file.size <= IMAGE_TARGET_BYTES &&
+      !needsResize &&
+      /^image\/(jpeg|jpg|webp)$/i.test(file.type);
+    if (alreadyLight) return file;
+
     const { width, height } = fitInside(
       bitmap.width,
       bitmap.height,
@@ -74,141 +79,30 @@ async function compressImageFile(file: File, variant: CompressVariant) {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("Canvas indisponible");
     ctx.drawImage(bitmap, 0, 0, width, height);
 
-    let quality = 0.82;
-    let type = "image/webp";
+    const type = "image/jpeg";
+    let quality = file.size > 2 * 1024 * 1024 ? 0.78 : 0.84;
     let blob = await canvasToBlob(canvas, type, quality);
-    if (blob.size < 32 || blob.type === "image/png") {
-      type = "image/jpeg";
-      blob = await canvasToBlob(canvas, type, quality);
-    }
-    while (blob.size > IMAGE_TARGET_BYTES && quality > 0.5) {
-      quality -= 0.12;
+
+    if (blob.size > IMAGE_TARGET_BYTES * 1.35 && quality > 0.72) {
+      quality = 0.72;
       blob = await canvasToBlob(canvas, type, quality);
     }
     if (blob.size > IMAGE_STORED_MAX_BYTES) {
-      type = "image/jpeg";
-      blob = await canvasToBlob(canvas, type, 0.55);
+      blob = await canvasToBlob(canvas, type, 0.65);
     }
     if (blob.size > IMAGE_STORED_MAX_BYTES) {
       throw new Error("Impossible d'envoyer ce fichier");
+    }
+    if (blob.size >= file.size && file.size <= IMAGE_STORED_MAX_BYTES) {
+      return file;
     }
     return blobToFile(blob, file.name, type);
   } finally {
     bitmap.close();
-  }
-}
-
-function pickRecorderMime() {
-  const candidates = [
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm",
-    "video/mp4",
-  ];
-  return candidates.find((type) => {
-    try {
-      return typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type);
-    } catch {
-      return false;
-    }
-  });
-}
-
-function captureVideoStream(video: HTMLVideoElement): MediaStream | null {
-  const el = video as HTMLVideoElement & {
-    captureStream?: (fps?: number) => MediaStream;
-    mozCaptureStream?: (fps?: number) => MediaStream;
-  };
-  try {
-    if (typeof el.captureStream === "function") return el.captureStream();
-    if (typeof el.mozCaptureStream === "function") return el.mozCaptureStream();
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-async function compressVideoFile(file: File): Promise<File> {
-  if (file.size <= VIDEO_STORED_MAX_BYTES) {
-    return file;
-  }
-  if (typeof MediaRecorder === "undefined") {
-    throw new Error("Impossible d'envoyer ce fichier");
-  }
-  const mime = pickRecorderMime();
-  if (!mime) {
-    throw new Error("Impossible d'envoyer ce fichier");
-  }
-
-  const objectUrl = URL.createObjectURL(file);
-  const video = document.createElement("video");
-  video.muted = true;
-  video.playsInline = true;
-  video.setAttribute("playsinline", "true");
-  video.preload = "auto";
-  video.src = objectUrl;
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const fail = () => reject(new Error("Lecture vidéo impossible"));
-      video.onloadeddata = () => resolve();
-      video.onerror = fail;
-      video.load();
-    });
-
-    const duration = Number.isFinite(video.duration) ? video.duration : NaN;
-
-    const stream = captureVideoStream(video);
-    if (!stream) {
-      throw new Error("Impossible d'envoyer ce fichier");
-    }
-
-    const rec = new MediaRecorder(stream, {
-      mimeType: mime,
-      videoBitsPerSecond: Math.min(
-        1_800_000,
-        Math.floor(
-          (VIDEO_STORED_MAX_BYTES * 8 * 0.75) /
-            Math.max(Number.isFinite(duration) ? duration : 20, 1),
-        ),
-      ),
-    });
-    const chunks: Blob[] = [];
-    rec.ondataavailable = (event) => {
-      if (event.data.size) chunks.push(event.data);
-    };
-
-    const recorded = new Promise<Blob>((resolve, reject) => {
-      rec.onerror = () => reject(new Error("Compression vidéo impossible"));
-      rec.onstop = () =>
-        resolve(new Blob(chunks, { type: mime.split(";")[0] }));
-    });
-
-    rec.start(200);
-    await video.play();
-    await new Promise<void>((resolve) => {
-      if (video.ended) {
-        resolve();
-        return;
-      }
-      video.onended = () => resolve();
-    });
-    if (rec.state !== "inactive") rec.stop();
-    const blob = await recorded;
-    for (const track of stream.getTracks()) track.stop();
-    if (blob.size < 2048 || blob.size > VIDEO_STORED_MAX_BYTES) {
-      throw new Error("Impossible d'envoyer ce fichier");
-    }
-    return blobToFile(blob, file.name, blob.type || "video/webm");
-  } finally {
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-    URL.revokeObjectURL(objectUrl);
   }
 }
 
@@ -217,19 +111,31 @@ export async function compressMediaFile(
   variant: CompressVariant = "product",
 ): Promise<File> {
   if (file.size <= 0) throw new Error("Fichier vide");
-  if (file.type.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/i.test(file.name)) {
+  if (file.size > MEDIA_INPUT_MAX_BYTES) {
+    throw new Error("Fichier trop volumineux (max 100 Mo)");
+  }
+
+  if (looksLikeImageFile(file)) {
     try {
       return await compressImageFile(file, variant);
     } catch (error) {
-      if (file.size <= IMAGE_STORED_MAX_BYTES && file.type.startsWith("image/")) {
+      if (file.size <= IMAGE_STORED_MAX_BYTES && looksLikeImageFile(file)) {
         return file;
       }
-      throw error instanceof Error ? error : new Error("Impossible d'envoyer ce fichier");
+      throw error instanceof Error
+        ? error
+        : new Error("Impossible d'envoyer ce fichier");
     }
   }
-  if (file.type.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(file.name)) {
-    return compressVideoFile(file);
+
+  // Vidéo : envoi brut rapide ; compression ffmpeg côté serveur.
+  if (looksLikeVideoFile(file)) {
+    if (file.size > VIDEO_INPUT_MAX_BYTES) {
+      throw new Error("Fichier trop volumineux (max 100 Mo)");
+    }
+    return file;
   }
+
   throw new Error("Formats acceptés : image ou vidéo");
 }
 
@@ -244,7 +150,12 @@ export class MediaUploadError extends Error {
 
 export function mediaUploadToastMessage(
   error: unknown,
-  t: (path: "media.nsfwRejected" | "media.moderationUnavailable" | "auth.accountDisabled") => string,
+  t: (
+    path:
+      | "media.nsfwRejected"
+      | "media.moderationUnavailable"
+      | "auth.accountDisabled",
+  ) => string,
 ): string {
   const code = error instanceof MediaUploadError ? error.code : undefined;
   if (code === "ACCOUNT_DISABLED") return t("auth.accountDisabled");
@@ -258,14 +169,23 @@ export function mediaUploadToastMessage(
 export async function uploadCompressedMedia(
   file: File,
   variant: CompressVariant = "product",
-): Promise<{ url: string; kind: MediaKind; size: number }> {
+): Promise<{
+  url: string;
+  posterUrl?: string;
+  kind: MediaKind;
+  size: number;
+}> {
   const compressed = await compressMediaFile(file, variant);
   const form = new FormData();
   form.append("file", compressed);
   form.append("variant", variant);
+  if (looksLikeImageFile(compressed)) {
+    form.append("precompressed", "1");
+  }
   const res = await fetch("/api/upload", { method: "POST", body: form });
   const json = (await res.json()) as {
     url?: string;
+    posterUrl?: string;
     kind?: MediaKind;
     size?: number;
     error?: string;
@@ -276,6 +196,7 @@ export async function uploadCompressedMedia(
   }
   return {
     url: json.url,
+    posterUrl: json.posterUrl,
     kind: json.kind ?? "image",
     size: json.size ?? compressed.size,
   };

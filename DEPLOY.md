@@ -108,7 +108,7 @@ BETTER_AUTH_URL="https://shipshop.klambocore.com"
 NEXT_PUBLIC_APP_URL="https://shipshop.klambocore.com"
 
 APP_NAME="ShipShop"
-NEXT_PUBLIC_APP_NAME="Ship Shop"
+NEXT_PUBLIC_APP_NAME="ShipShop"
 
 ENCRYPTION_SECRET="...autre secret, à ne jamais changer après coup..."
 
@@ -122,7 +122,8 @@ AWS_REGION=eu-west-1
 AWS_ACCESS_KEY_ID="..."
 AWS_SECRET_ACCESS_KEY="..."
 # Sans ces clés, aucun scan NSFW (upload direct).
-# ffmpeg sur le VPS pour scanner les vidéos produit
+# ffmpeg sur le VPS : compression vidéo rapide (upload) + scan frames
+# sudo apt install -y ffmpeg
 # FFMPEG_PATH=/usr/bin/ffmpeg
 ```
 

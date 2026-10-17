@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Bike, MapPin } from "lucide-react";
 import { fetchJson } from "@/lib/fetch-json";
 import { composeAddress } from "@/lib/address";
 import { formatMoney, cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PhoneField } from "@/components/phone-field";
 import {
   KinshasaAddressForm,
   type AddressState,
@@ -26,6 +26,18 @@ export type FulfillmentState = {
   distanceKm: number | null;
 };
 
+type CourierPreview = {
+  id: string;
+  name: string;
+  phone: string;
+  address: string | null;
+  lat: number;
+  lng: number;
+  distanceKm: number;
+  etaMinutes: number;
+  etaText: string;
+};
+
 type Props = {
   shopId: string;
   productCents: number;
@@ -42,6 +54,7 @@ export function FulfillmentForm({
   onChange,
 }: Props) {
   const [quoting, setQuoting] = useState(false);
+  const [courier, setCourier] = useState<CourierPreview | null>(null);
 
   useEffect(() => {
     if (!value.contactPhone && defaultPhone) {
@@ -55,12 +68,14 @@ export function FulfillmentForm({
       if (value.shippingCents !== 0) {
         onChange({ ...value, shippingCents: 0, distanceKm: null });
       }
+      setCourier(null);
       return;
     }
     const t = setTimeout(async () => {
       setQuoting(true);
       const { res, data } = await fetchJson<{
         quote?: { shippingCents: number; distanceKm: number };
+        courier?: CourierPreview | null;
         error?: string;
       }>("/api/shipping/quote", {
         method: "POST",
@@ -88,6 +103,13 @@ export function FulfillmentForm({
           shippingCents: data.quote.shippingCents,
           distanceKm: data.quote.distanceKm,
         });
+        setCourier(
+          value.deliveryLat != null && value.deliveryLng != null
+            ? (data.courier ?? null)
+            : null,
+        );
+      } else {
+        setCourier(null);
       }
     }, 250);
     return () => clearTimeout(t);
@@ -105,6 +127,7 @@ export function FulfillmentForm({
   ]);
 
   const total = productCents + value.shippingCents;
+  const hasPosition = value.deliveryLat != null && value.deliveryLng != null;
 
   const addressValue: AddressState = {
     city: value.deliveryCity || "Kinshasa",
@@ -152,15 +175,10 @@ export function FulfillmentForm({
         ))}
       </div>
 
-      <div className="space-y-2">
-        <Label>Téléphone de contact</Label>
-        <Input
-          value={value.contactPhone}
-          onChange={(e) => onChange({ ...value, contactPhone: e.target.value })}
-          placeholder="+243 8XX XXX XXX"
-          className="bg-surface-2"
-        />
-      </div>
+      <PhoneField
+        value={value.contactPhone}
+        onChange={(contactPhone) => onChange({ ...value, contactPhone })}
+      />
 
       {value.fulfillmentType === "DELIVERY" && (
         <>
@@ -207,9 +225,39 @@ export function FulfillmentForm({
           <span className="text-muted-foreground">Produit</span>
           <span>{formatMoney(productCents)}</span>
         </div>
-        <div className="mt-1 flex justify-between">
-          <span className="text-muted-foreground">Transport</span>
-          <span>{formatMoney(value.shippingCents)}</span>
+        <div className="mt-1 flex items-start justify-between gap-3">
+          <span className="shrink-0 text-muted-foreground">Transport</span>
+          <div className="min-w-0 text-right">
+            <p className="font-medium">{formatMoney(value.shippingCents)}</p>
+            {value.fulfillmentType === "DELIVERY" && hasPosition && (
+              <div className="mt-1.5 space-y-0.5 text-left sm:text-right">
+                {quoting && !courier ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Recherche livreur…
+                  </p>
+                ) : courier ? (
+                  <>
+                    <p className="flex items-center justify-end gap-1 text-[11px] font-semibold text-trust">
+                      <Bike className="size-3 shrink-0" />
+                      <span className="truncate">{courier.name}</span>
+                    </p>
+                    <p className="flex items-start justify-end gap-1 text-[10px] text-muted-foreground">
+                      <MapPin className="mt-0.5 size-3 shrink-0" />
+                      <span className="line-clamp-2">
+                        {courier.address?.trim() ||
+                          `${courier.lat.toFixed(4)}, ${courier.lng.toFixed(4)}`}
+                        {` · ${courier.distanceKm} km · ETA ${courier.etaText}`}
+                      </span>
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-amber-500/90">
+                    Aucun livreur dispo à proximité
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <div className="mt-2 flex justify-between font-heading text-base font-bold text-trust">
           <span>Total à débiter</span>

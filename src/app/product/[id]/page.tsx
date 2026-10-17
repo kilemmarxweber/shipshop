@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney, cn } from "@/lib/utils";
 import { colorHex } from "@/lib/product-options";
 import { useI18n } from "@/components/i18n-provider";
@@ -318,8 +319,12 @@ function ProductInner() {
       router.push("/auth/login");
       return;
     }
-    if (!fulfillment.contactPhone.trim()) {
-      toast.error("Indiquez un numéro de contact");
+    const contactPhone = (() => {
+      const parts = splitPhone(fulfillment.contactPhone);
+      return composePhone(parts.dial, parts.national);
+    })();
+    if (!isValidContactPhone(contactPhone)) {
+      toast.error("Indiquez un téléphone de contact avec l’indicatif pays");
       return;
     }
     if (
@@ -349,7 +354,7 @@ function ProductInner() {
         deliveryParcelle: fulfillment.deliveryParcelle || null,
         deliveryLat: fulfillment.deliveryLat,
         deliveryLng: fulfillment.deliveryLng,
-        contactPhone: fulfillment.contactPhone,
+        contactPhone,
       }),
     });
     setLoading(null);

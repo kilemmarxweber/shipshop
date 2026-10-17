@@ -9,7 +9,7 @@ import {
 const initiateSchema = z.object({
   amountCents: z.number().int().min(100),
   provider: z.enum(["MPESA", "ORANGE", "AIRTEL"]),
-  phone: z.string().min(9).max(20),
+  phone: z.string().min(10).max(24),
 });
 
 const confirmSchema = z.object({

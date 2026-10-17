@@ -455,7 +455,7 @@ function DocSlot({
         <input
           ref={galleryRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
+          accept="image/*"
           className="hidden"
           onChange={(e) => handleFile(e.target.files?.[0])}
         />

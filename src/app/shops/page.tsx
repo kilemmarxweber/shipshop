@@ -239,6 +239,12 @@ export default function ShopsPage() {
           >
             Contacts
           </Link>
+          <Link
+            href="/shops/delivery"
+            className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
+          >
+            Livraison
+          </Link>
           {isOwner ? (
             <>
               <Link
@@ -258,6 +264,12 @@ export default function ShopsPage() {
                 className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
               >
                 Vendeurs & clients
+              </Link>
+              <Link
+                href="/shops/admin/delivery"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Zones & livreurs
               </Link>
               <Link
                 href="/shops/kyc"

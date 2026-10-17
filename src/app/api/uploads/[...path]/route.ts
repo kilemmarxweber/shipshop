@@ -1,7 +1,6 @@
-import { createReadStream } from "fs";
+import { createReadStream, type ReadStream } from "fs";
 import { stat } from "fs/promises";
 import path from "path";
-import { Readable } from "stream";
 import {
   findUploadedFilePath,
   relativeUploadPathFromUrl,
@@ -14,9 +13,23 @@ const CONTENT_TYPES: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
   ".gif": "image/gif",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+  ".tif": "image/tiff",
+  ".tiff": "image/tiff",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
   ".mp4": "video/mp4",
   ".webm": "video/webm",
   ".mov": "video/quicktime",
+  ".m4v": "video/x-m4v",
+  ".mkv": "video/x-matroska",
+  ".avi": "video/x-msvideo",
+  ".3gp": "video/3gpp",
+  ".ogv": "video/ogg",
+  ".mpeg": "video/mpeg",
+  ".mpg": "video/mpeg",
+  ".wmv": "video/x-ms-wmv",
 };
 
 function contentTypeFor(filePath: string): string {
@@ -47,10 +60,94 @@ function parseByteRange(header: string | null, size: number) {
   return { start, end: Math.min(end, size - 1) };
 }
 
+/**
+ * Évite ERR_INVALID_STATE (Controller already closed) quand le player
+ * annule un range précédent (seek / abort).
+ */
+function fileStreamToWeb(
+  nodeStream: ReadStream,
+  signal?: AbortSignal | null,
+): ReadableStream<Uint8Array> {
+  let stopped = false;
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    nodeStream.removeAllListeners("data");
+    nodeStream.removeAllListeners("end");
+    nodeStream.removeAllListeners("error");
+    if (!nodeStream.destroyed) {
+      nodeStream.destroy();
+    }
+  };
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      const onAbort = () => {
+        try {
+          controller.close();
+        } catch {
+          /* déjà fermé */
+        }
+        stop();
+      };
+
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
+
+      nodeStream.on("data", (chunk: Buffer | string) => {
+        if (stopped) return;
+        try {
+          const bytes =
+            typeof chunk === "string"
+              ? new TextEncoder().encode(chunk)
+              : new Uint8Array(chunk);
+          controller.enqueue(bytes);
+          if (controller.desiredSize !== null && controller.desiredSize <= 0) {
+            nodeStream.pause();
+          }
+        } catch {
+          stop();
+        }
+      });
+
+      nodeStream.on("end", () => {
+        if (stopped) return;
+        try {
+          controller.close();
+        } catch {
+          /* déjà fermé */
+        }
+        stop();
+      });
+
+      nodeStream.on("error", (err) => {
+        if (stopped) return;
+        try {
+          controller.error(err);
+        } catch {
+          /* déjà fermé */
+        }
+        stop();
+      });
+    },
+    pull() {
+      if (!stopped && nodeStream.isPaused()) nodeStream.resume();
+    },
+    cancel() {
+      stop();
+    },
+  });
+}
+
 async function fileResponse(
   relativePath: string | null,
   includeBody: boolean,
   rangeHeader: string | null,
+  signal?: AbortSignal | null,
 ): Promise<Response> {
   if (!relativePath) {
     return Response.json({ error: "Nom de fichier invalide" }, { status: 400 });
@@ -103,7 +200,7 @@ async function fileResponse(
     start,
     end,
   });
-  const body = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+  const body = fileStreamToWeb(nodeStream, signal);
   return new Response(body, {
     status: partial ? 206 : 200,
     headers,
@@ -118,7 +215,12 @@ export async function GET(
   const relativePath = relativeUploadPathFromUrl(
     toPublicUploadPath((segments ?? []).join("/")),
   );
-  return fileResponse(relativePath, true, request.headers.get("range"));
+  return fileResponse(
+    relativePath,
+    true,
+    request.headers.get("range"),
+    request.signal,
+  );
 }
 
 export async function HEAD(
@@ -129,5 +231,10 @@ export async function HEAD(
   const relativePath = relativeUploadPathFromUrl(
     toPublicUploadPath((segments ?? []).join("/")),
   );
-  return fileResponse(relativePath, false, request.headers.get("range"));
+  return fileResponse(
+    relativePath,
+    false,
+    request.headers.get("range"),
+    request.signal,
+  );
 }

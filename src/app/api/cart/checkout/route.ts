@@ -16,7 +16,7 @@ const schema = z.object({
   deliveryParcelle: z.string().max(40).optional().nullable(),
   deliveryLat: z.number().optional().nullable(),
   deliveryLng: z.number().optional().nullable(),
-  contactPhone: z.string().min(9).max(20),
+  contactPhone: z.string().min(10).max(24),
 });
 
 export async function POST(req: Request) {

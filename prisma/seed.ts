@@ -118,6 +118,8 @@ async function main() {
         ratePerKmCents: kind === "CENTER" ? 55 : 100,
         centerLat: coords.lat,
         centerLng: coords.lng,
+        quartiers: c.quartiers,
+        avenues: c.avenues,
       },
       update: {
         kind,
@@ -145,6 +147,7 @@ async function main() {
     {
       name: "Jean Livreur",
       phone: "+243820000001",
+      address: "Av. du Port, Gombe, Kinshasa",
       lat: -4.306,
       lng: 15.312,
       zoneId: gombe?.id,
@@ -152,6 +155,7 @@ async function main() {
     {
       name: "Grace Moto",
       phone: "+243820000002",
+      address: "Blvd Lumumba, Limete, Kinshasa",
       lat: -4.358,
       lng: 15.338,
       zoneId: limete?.id,
@@ -159,6 +163,7 @@ async function main() {
     {
       name: "Patrick Express",
       phone: "+243820000003",
+      address: "Route de Nsele, Nsele, Kinshasa",
       lat: -4.375,
       lng: 15.49,
       zoneId: nsele?.id,
@@ -173,6 +178,7 @@ async function main() {
       await prisma.courier.update({
         where: { id: exists.id },
         data: {
+          address: c.address,
           lat: c.lat,
           lng: c.lng,
           zoneId: c.zoneId,

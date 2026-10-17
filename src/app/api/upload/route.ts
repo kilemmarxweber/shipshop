@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { compressImageBuffer } from "@/lib/compress-image.server";
+import { compressVideoBuffer } from "@/lib/compress-video.server";
+import { extractVideoPosterJpeg } from "@/lib/video-poster.server";
 import { IMAGE_STORED_MAX_BYTES, VIDEO_STORED_MAX_BYTES } from "@/lib/media";
 import { enforceCatalogModeration } from "@/lib/moderation.server";
 import {
@@ -52,7 +54,11 @@ export async function POST(req: Request) {
         ? variantRaw
         : "product";
     if (kind === "image") {
-      const compressed = await compressImageBuffer(raw, variant);
+      const precompressed = String(form.get("precompressed") ?? "") === "1";
+      const compressed = await compressImageBuffer(raw, variant, {
+        skipIfLight: precompressed,
+        mimeHint: file.type,
+      });
       stored = Buffer.from(compressed.buffer);
       ext = compressed.ext;
       if (stored.length > IMAGE_STORED_MAX_BYTES) {
@@ -61,11 +67,27 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-    } else if (stored.length > VIDEO_STORED_MAX_BYTES) {
-      return NextResponse.json(
-        { error: "Impossible d'envoyer ce fichier" },
-        { status: 400 },
-      );
+    } else if (kind === "video") {
+      try {
+        const compressed = await compressVideoBuffer(raw);
+        stored = Buffer.from(compressed.buffer);
+        ext = compressed.ext;
+      } catch (error) {
+        console.error("[upload] video compress failed:", error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Impossible d'envoyer ce fichier";
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      if (stored.length > VIDEO_STORED_MAX_BYTES) {
+        return NextResponse.json(
+          {
+            error: `Vidéo trop lourde après compression (max ${Math.round(VIDEO_STORED_MAX_BYTES / (1024 * 1024))} Mo)`,
+          },
+          { status: 400 },
+        );
+      }
     }
 
     const verdict = await enforceCatalogModeration({
@@ -81,11 +103,26 @@ export async function POST(req: Request) {
       );
     }
 
-    const filename = `${randomUUID()}.${ext}`;
+    const id = randomUUID();
+    const filename = `${id}.${ext}`;
     const saved = await writeUploadBuffer(filename, stored);
+
+    let posterUrl: string | undefined;
+    if (kind === "video") {
+      try {
+        const poster = await extractVideoPosterJpeg(stored);
+        if (poster?.length) {
+          const posterSaved = await writeUploadBuffer(`${id}.jpg`, poster);
+          posterUrl = posterSaved.url;
+        }
+      } catch (error) {
+        console.error("[upload] video poster failed:", error);
+      }
+    }
 
     return NextResponse.json({
       url: saved.url,
+      posterUrl,
       kind,
       size: stored.length,
       name: file.name,

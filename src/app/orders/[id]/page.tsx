@@ -64,6 +64,7 @@ type OrderDetail = {
     id: string;
     name: string;
     phone: string;
+    address?: string | null;
     lat?: number;
     lng?: number;
     lastLat?: number | null;
@@ -305,9 +306,17 @@ function OrderInner() {
             </p>
           )}
           {order.courier && (
-            <p>
-              Livreur: {order.courier.name} · {order.courier.phone}
-            </p>
+            <div className="space-y-0.5">
+              <p>
+                Livreur: {order.courier.name} · {order.courier.phone}
+              </p>
+              {order.courier.address && (
+                <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <MapPin className="size-3 shrink-0" />
+                  Base: {order.courier.address}
+                </p>
+              )}
+            </div>
           )}
           {order.fulfillmentType === "DELIVERY" &&
             (order.courierDistanceKm != null || liveEtaText) && (
@@ -329,10 +338,21 @@ function OrderInner() {
 
       {order.fulfillmentType === "DELIVERY" && order.courier && (
         <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="font-heading text-sm font-bold">Suivi live 🛵</p>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-heading text-sm font-bold">Suivi live 🛵</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {order.courier.name}
+                {order.courier.phone ? ` · ${order.courier.phone}` : ""}
+              </p>
+              {order.courier.address && (
+                <p className="truncate text-[11px] text-muted-foreground">
+                  Base: {order.courier.address}
+                </p>
+              )}
+            </div>
             {liveTracking && (
-              <span className="animate-pulse text-[10px] font-semibold text-trust">
+              <span className="shrink-0 animate-pulse text-[10px] font-semibold text-trust">
                 ● Temps réel
               </span>
             )}

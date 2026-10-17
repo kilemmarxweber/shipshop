@@ -9,9 +9,11 @@ export type CourierProposal = {
     id: string;
     name: string;
     phone: string;
+    address: string | null;
     lat: number;
     lng: number;
     zoneId: string | null;
+    shopId: string | null;
   };
   reason: "FREE" | "SAME_AREA" | "NEAREST_BUSY";
   activeOrders: number;
@@ -21,20 +23,31 @@ export type CourierProposal = {
 };
 
 /**
- * Propose un livreur :
- * 1) disponible sans course active (plus proche)
+ * Propose un livreur selon position GPS + disponibilité :
+ * 1) dispo sans course active, le plus proche de la destination
  * 2) sinon course vers la même commune (groupage)
  * 3) sinon le moins chargé / plus proche
+ *
+ * Scope : livreurs de la boutique + livreurs plateforme (shopId null).
  */
 export async function proposeCouriers(input: {
   destLat: number;
   destLng: number;
   commune?: string | null;
   remoteZone?: boolean;
+  shopId?: string | null;
+  zoneId?: string | null;
   limit?: number;
 }): Promise<CourierProposal[]> {
   const couriers = await withDbRetry(() =>
-    prisma.courier.findMany({ where: { isAvailable: true } }),
+    prisma.courier.findMany({
+      where: {
+        isAvailable: true,
+        ...(input.shopId
+          ? { OR: [{ shopId: input.shopId }, { shopId: null }] }
+          : {}),
+      },
+    }),
   );
   if (couriers.length === 0) return [];
 
@@ -85,7 +98,6 @@ export async function proposeCouriers(input: {
       ? (busy?.communes.filter((x) => x.toLowerCase() === commune).length ?? 0)
       : 0;
 
-    // Point de départ ETA : position livreur, ou dernière destination si en course même zone
     let fromLat = lat;
     let fromLng = lng;
     let reason: CourierProposal["reason"] = "FREE";
@@ -106,20 +118,26 @@ export async function proposeCouriers(input: {
       remoteZone: input.remoteZone,
     });
 
-    // Score plus bas = meilleur
+    // Score plus bas = meilleur (distance + charge)
     let score = eta.distanceKm + eta.etaMinutes / 10;
     if (reason === "FREE") score -= 50;
     if (reason === "SAME_AREA") score -= 30;
     score += activeCount * 8;
+    // Priorité livreurs rattachés à la boutique
+    if (input.shopId && c.shopId === input.shopId) score -= 15;
+    // Même zone catalogue
+    if (input.zoneId && c.zoneId === input.zoneId) score -= 10;
 
     proposals.push({
       courier: {
         id: c.id,
         name: c.name,
         phone: c.phone,
+        address: c.address ?? null,
         lat,
         lng,
         zoneId: c.zoneId,
+        shopId: c.shopId,
       },
       reason,
       activeOrders: activeCount,
@@ -138,6 +156,8 @@ export async function findBestCourier(input: {
   destLng: number;
   commune?: string | null;
   remoteZone?: boolean;
+  shopId?: string | null;
+  zoneId?: string | null;
 }) {
   const list = await proposeCouriers({ ...input, limit: 1 });
   return list[0] ?? null;
@@ -158,4 +178,24 @@ export function courierDistanceKm(
   destLng: number,
 ) {
   return Math.round(haversineKm(courierLat, courierLng, destLat, destLng) * 10) / 10;
+}
+
+export function formatCourierAssignNote(
+  courier: { name: string; address?: string | null },
+  eta: { distanceKm: number; etaText?: string; etaMinutes?: number },
+  reason?: string,
+) {
+  const addr = courier.address?.trim();
+  const etaPart =
+    eta.etaText ??
+    (eta.etaMinutes != null ? `~${eta.etaMinutes} min` : null);
+  return [
+    `Livreur auto: ${courier.name}`,
+    addr ? `base ${addr}` : null,
+    `${eta.distanceKm} km`,
+    etaPart ? `ETA ${etaPart}` : null,
+    reason ? `(${reason})` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

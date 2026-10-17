@@ -8,10 +8,14 @@ import {
   uploadCompressedMedia,
 } from "@/lib/compress-media";
 import { useI18n } from "@/components/i18n-provider";
-import { isVideoUrl } from "@/lib/media";
+import {
+  isVideoUrl,
+  looksLikeImageFile,
+  looksLikeVideoFile,
+} from "@/lib/media";
 import { cn } from "@/lib/utils";
 
-const ACCEPT = "image/*,video/mp4,video/webm,video/quicktime";
+const ACCEPT = "image/*,video/*";
 
 type Props = {
   urls: string[];
@@ -37,14 +41,23 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
     const next = [...urls];
 
     for (const file of list) {
-      if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      if (!looksLikeImageFile(file) && !looksLikeVideoFile(file)) {
         toast.error(`${file.name} : image ou vidéo uniquement`);
         continue;
       }
 
       try {
         const uploaded = await uploadCompressedMedia(file, "product");
-        if (uploaded.url && !next.includes(uploaded.url)) next.push(uploaded.url);
+        // Poster JPEG en premier → miniatures / cover non vides
+        if (
+          uploaded.posterUrl &&
+          !next.includes(uploaded.posterUrl)
+        ) {
+          next.push(uploaded.posterUrl);
+        }
+        if (uploaded.url && !next.includes(uploaded.url)) {
+          next.push(uploaded.url);
+        }
       } catch (error) {
         toast.error(mediaUploadToastMessage(error, t));
       }

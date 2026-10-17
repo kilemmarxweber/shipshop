@@ -177,10 +177,36 @@ export async function findUploadedFilePath(
   return null;
 }
 
-export const MEDIA_MAX_BYTES = 10 * 1024 * 1024;
+/** Taille max reçue par l’API (brut avant compression serveur). */
+export const MEDIA_MAX_BYTES = 100 * 1024 * 1024;
 
-const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
-const VIDEO_EXT = new Set([".mp4", ".webm", ".mov"]);
+const IMAGE_EXT = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".avif",
+  ".heic",
+  ".heif",
+  ".bmp",
+  ".tif",
+  ".tiff",
+]);
+const VIDEO_EXT = new Set([
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".m4v",
+  ".mkv",
+  ".avi",
+  ".3gp",
+  ".ogv",
+  ".mpeg",
+  ".mpg",
+  ".wmv",
+  ".flv",
+]);
 
 export function detectMediaKind(
   file: { name?: string; type?: string },
@@ -204,11 +230,17 @@ export function extForMedia(
   }
   if (kind === "video") {
     if (file.type?.includes("webm")) return "webm";
-    if (file.type?.includes("quicktime")) return "mov";
+    if (file.type?.includes("quicktime") || file.type?.includes("mov")) {
+      return "mov";
+    }
+    if (file.type?.includes("matroska") || file.type?.includes("x-matroska")) {
+      return "mkv";
+    }
     return "mp4";
   }
   if (file.type?.includes("png")) return "png";
   if (file.type?.includes("webp")) return "webp";
   if (file.type?.includes("gif")) return "gif";
+  if (file.type?.includes("avif")) return "avif";
   return "jpg";
 }
