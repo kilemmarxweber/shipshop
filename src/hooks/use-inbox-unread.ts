@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchJson } from "@/lib/fetch-json";
+import {
+  INBOX_SEEN_EVENT,
+  type InboxSeenDetail,
+} from "@/lib/inbox-events";
 
 export type InboxConversation = {
   id: string;
@@ -41,7 +45,6 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
   const [comments, setComments] = useState<InboxComment[]>([]);
   const [unreadComments, setUnreadComments] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -51,8 +54,7 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
         setUnreadComments(0);
         return;
       }
-      if (opts?.silent) setRefreshing(true);
-      else setLoading(true);
+      if (!opts?.silent) setLoading(true);
       try {
         const [{ data }, commentsRes] = await Promise.all([
           fetchJson<{
@@ -79,7 +81,6 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
         /* keep previous */
       } finally {
         setLoading(false);
-        setRefreshing(false);
       }
     },
     [userId],
@@ -97,16 +98,64 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
       void refresh({ silent: true });
     }, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [userId, pathname, refresh]);
+  }, [userId, refresh]);
 
-  const unreadMessages = conversations.reduce(
-    (sum, c) => sum + (c.unreadCount ?? 0),
-    0,
-  );
-  const urgentCount = conversations.filter((c) => c.urgentPending).length;
+  useEffect(() => {
+    function applySeen(detail: InboxSeenDetail) {
+      if (detail.conversationId) {
+        const id = detail.conversationId;
+        setConversations((prev) =>
+          prev.map((c) => {
+            if (c.id !== id) return c;
+            if (c.urgentPending) return c;
+            return { ...c, unreadCount: 0 };
+          }),
+        );
+      }
+      if (detail.commentIds?.length) {
+        const ids = new Set(detail.commentIds);
+        setComments((prev) => {
+          let dropped = 0;
+          const next = prev.map((c) => {
+            if (!ids.has(c.id) || !c.unread) return c;
+            dropped += 1;
+            return { ...c, unread: false };
+          });
+          if (dropped) {
+            setUnreadComments((n) => Math.max(0, n - dropped));
+          }
+          return next;
+        });
+      } else if (detail.productId) {
+        const productId = detail.productId;
+        setComments((prev) => {
+          const hit = prev.filter((c) => c.unread && c.product.id === productId);
+          if (hit.length) {
+            setUnreadComments((n) => Math.max(0, n - hit.length));
+          }
+          return prev.map((c) =>
+            c.product.id === productId ? { ...c, unread: false } : c,
+          );
+        });
+      }
+      window.setTimeout(() => {
+        void refresh({ silent: true });
+      }, 350);
+    }
 
-  /** Optimistic : après clic, décrémente le badge (sauf urgence à acquitter). */
-  function markConversationSeen(id: string) {
+    function onSeen(event: Event) {
+      const detail = (event as CustomEvent<InboxSeenDetail>).detail ?? {};
+      applySeen(detail);
+    }
+
+    window.addEventListener(INBOX_SEEN_EVENT, onSeen);
+    return () => window.removeEventListener(INBOX_SEEN_EVENT, onSeen);
+  }, [refresh]);
+
+  useEffect(() => {
+    const match = pathname?.match(/^\/messages\/([^/?]+)$/);
+    if (!match?.[1] || !userId) return;
+    const id = match[1];
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
@@ -114,18 +163,17 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
         return { ...c, unreadCount: 0 };
       }),
     );
-  }
+    const timer = window.setTimeout(() => {
+      void refresh({ silent: true });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [pathname, userId, refresh]);
 
-  function markCommentsSeen(ids?: string[]) {
-    setComments((prev) =>
-      prev.map((c) =>
-        !ids || ids.includes(c.id) ? { ...c, unread: false } : c,
-      ),
-    );
-    setUnreadComments((n) =>
-      ids ? Math.max(0, n - ids.length) : 0,
-    );
-  }
+  const unreadMessages = conversations.reduce(
+    (sum, c) => sum + (c.unreadCount ?? 0),
+    0,
+  );
+  const urgentCount = conversations.filter((c) => c.urgentPending).length;
 
   return {
     conversations,
@@ -134,9 +182,6 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
     unreadComments,
     urgentCount,
     loading,
-    refreshing,
     refresh,
-    markConversationSeen,
-    markCommentsSeen,
   };
 }

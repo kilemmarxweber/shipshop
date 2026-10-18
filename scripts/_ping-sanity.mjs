@@ -1,4 +1,4 @@
-import { readFileSync, unlinkSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
 const raw = readFileSync(new URL("../.env", import.meta.url), "utf8");
 const env = {};
@@ -14,4 +14,3 @@ const url = `https://${id}.api.sanity.io/v2021-06-07/data/query/${ds}?query=${en
 const res = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
 const json = await res.json();
 console.log("query", res.status, json.result ?? null, json.error || json.message || "ok");
-unlinkSync(new URL(import.meta.url));

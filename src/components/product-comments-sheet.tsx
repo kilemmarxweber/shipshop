@@ -6,6 +6,7 @@ import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { notifyInboxSeen } from "@/lib/inbox-events";
 import { useI18n } from "@/components/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,7 @@ export function ProductCommentsSheet({
           .filter((c) => c.user.id !== session?.user?.id)
           .map((c) => c.id);
         if (unreadIds.length) {
+          notifyInboxSeen({ productId });
           void fetchJson("/api/comments/read", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

@@ -6,11 +6,14 @@ const PLACEHOLDERS = new Set([
   "project_id",
 ]);
 
-/** Vrai projectId Sanity (ex. 3do82whm), pas un placeholder. */
+/** Aligné sur `@sanity/client` : `projectId` = `[-a-z0-9]+`. */
+const SANITY_PROJECT_ID_RE = /^[-a-z0-9]+$/i;
+
+/** Vrai projectId Sanity, pas un placeholder. */
 export function sanityProjectId() {
   const id = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID?.trim() ?? "";
   if (!id || PLACEHOLDERS.has(id.toLowerCase())) return "";
-  if (!/^[a-z0-9]{8,16}$/i.test(id)) return "";
+  if (!SANITY_PROJECT_ID_RE.test(id)) return "";
   const unique = new Set(id.toLowerCase());
   if (unique.size < 3) return "";
   return id;

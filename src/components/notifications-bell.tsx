@@ -3,14 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  AlertTriangle,
-  Bell,
-  MessageCircle,
-  RefreshCw,
-} from "lucide-react";
+import { AlertTriangle, Bell, MessageCircle } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { notifyInboxSeen } from "@/lib/inbox-events";
 import {
   useInboxUnread,
   type InboxComment,
@@ -34,10 +30,6 @@ type Props = {
   urgentCount: number;
   conversations: InboxConversation[];
   comments: InboxComment[];
-  refreshing: boolean;
-  onRefresh: () => void;
-  onOpenConversation: (id: string) => void;
-  onCommentsSeen: (ids?: string[]) => void;
   userId?: string;
 };
 
@@ -55,10 +47,6 @@ export function NotificationsBell({
   urgentCount,
   conversations,
   comments,
-  refreshing,
-  onRefresh,
-  onOpenConversation,
-  onCommentsSeen,
   userId,
 }: Props) {
   const { t, locale } = useI18n();
@@ -70,19 +58,6 @@ export function NotificationsBell({
   const hasBadge = urgentCount > 0 || combined > 0;
 
   const recent = conversations.slice(0, 12);
-
-  async function openCommentsTab() {
-    setTab("comments");
-    const unreadIds = comments.filter((c) => c.unread).map((c) => c.id);
-    if (unreadIds.length) {
-      await fetchJson("/api/comments/read", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commentIds: unreadIds }),
-      });
-      onCommentsSeen(unreadIds);
-    }
-  }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -113,23 +88,9 @@ export function NotificationsBell({
       </SheetTrigger>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b border-border px-4 py-3 text-left">
-          <div className="flex items-center justify-between gap-2 pr-8">
-            <SheetTitle className="font-heading text-base">
-              {t("notifications.title")}
-            </SheetTitle>
-            <button
-              type="button"
-              onClick={() => onRefresh()}
-              disabled={refreshing}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-semibold transition hover:bg-muted disabled:opacity-50"
-              aria-label={t("notifications.refresh")}
-            >
-              <RefreshCw
-                className={cn("size-3.5", refreshing && "animate-spin")}
-              />
-              {t("notifications.refresh")}
-            </button>
-          </div>
+          <SheetTitle className="pr-8 font-heading text-base">
+            {t("notifications.title")}
+          </SheetTitle>
           <p className="text-[11px] text-muted-foreground">
             {t("notifications.commentsHint")}
           </p>
@@ -149,7 +110,7 @@ export function NotificationsBell({
             </button>
             <button
               type="button"
-              onClick={() => void openCommentsTab()}
+              onClick={() => setTab("comments")}
               className={cn(
                 "rounded-full px-3 py-1 text-xs font-semibold",
                 tab === "comments"
@@ -187,7 +148,7 @@ export function NotificationsBell({
                           urgent && "bg-amber-500/10",
                         )}
                         onClick={() => {
-                          onOpenConversation(c.id);
+                          notifyInboxSeen({ conversationId: c.id });
                           setOpen(false);
                           router.push(`/messages/${c.id}`);
                         }}
@@ -289,6 +250,14 @@ export function NotificationsBell({
                       c.unread && "bg-primary/5",
                     )}
                     onClick={() => {
+                      if (c.unread) {
+                        notifyInboxSeen({ commentIds: [c.id] });
+                        void fetchJson("/api/comments/read", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ commentIds: [c.id] }),
+                        });
+                      }
                       setOpen(false);
                       router.push(`/product/${c.product.id}?comments=1`);
                     }}
@@ -364,10 +333,6 @@ export function NotificationsBellConnected() {
       urgentCount={inbox.urgentCount}
       conversations={inbox.conversations}
       comments={inbox.comments}
-      refreshing={inbox.refreshing}
-      onRefresh={() => void inbox.refresh({ silent: true })}
-      onOpenConversation={inbox.markConversationSeen}
-      onCommentsSeen={inbox.markCommentsSeen}
     />
   );
 }

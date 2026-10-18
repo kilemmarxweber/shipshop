@@ -168,10 +168,6 @@ export function AppShell({
                       urgentCount={urgentCount}
                       conversations={inbox.conversations}
                       comments={inbox.comments}
-                      refreshing={inbox.refreshing}
-                      onRefresh={() => void inbox.refresh({ silent: true })}
-                      onOpenConversation={inbox.markConversationSeen}
-                      onCommentsSeen={inbox.markCommentsSeen}
                     />
                   ) : (
                     <Link

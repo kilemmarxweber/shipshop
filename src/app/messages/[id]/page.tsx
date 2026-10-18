@@ -7,6 +7,7 @@ import { AlertTriangle, Send } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { notifyInboxSeen } from "@/lib/inbox-events";
 import { ISSUE_TYPE_LABELS } from "@/lib/handover";
 import { useI18n } from "@/components/i18n-provider";
 import { usePageBack } from "@/components/back-nav-context";
@@ -77,6 +78,7 @@ function ChatInner() {
     setConversation(data?.conversation ?? null);
     setMessages(data?.messages ?? []);
     setOpenIssues(data?.openIssues ?? []);
+    notifyInboxSeen({ conversationId: id });
   }
 
   useEffect(() => {
