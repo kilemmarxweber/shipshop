@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateWallet, getSession } from "@/lib/session";
+import { expireStaleMovements, flushNotifyOutbox } from "@/lib/payments/ledger";
 
 export async function GET() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
+
+  await expireStaleMovements();
+  void flushNotifyOutbox();
 
   const wallet = await getOrCreateWallet(session.user.id);
   const [transactions, contacts, user] = await Promise.all([

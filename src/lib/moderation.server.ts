@@ -6,6 +6,7 @@ import {
 import type { MediaModerationDecision, Prisma } from "@/generated/prisma/client";
 import { assertChipShopOwner } from "@/lib/kyc";
 import { extractVideoJpegFrames } from "@/lib/moderation-frames.server";
+import { getAppConfig } from "@/lib/content-source";
 import { prisma, withDbRetry } from "@/lib/prisma";
 
 export type ModerationVariant = "product" | "avatar" | "document";
@@ -51,11 +52,16 @@ function hasAwsCredentials() {
   );
 }
 
-/** Sans clés AWS : pas d'appel Rekognition / ffmpeg, upload inchangé. */
+/** Sans clés AWS : pas d'appel Rekognition / ffmpeg. */
 function catalogModerationActive() {
   const chosen = provider();
   if (chosen === "none" || chosen === "off") return false;
   return hasAwsCredentials();
+}
+
+/** Rekognition scanner optionnel — Sanity ne le remplace pas. */
+export function catalogScanActive() {
+  return catalogModerationActive();
 }
 
 function contentHash(buffer: Buffer) {
@@ -233,7 +239,43 @@ export async function enforceCatalogModeration(opts: {
     };
   }
 
+  const cfg = await getAppConfig();
+  const rejectMsg = cfg.nsfwPolicy.rejectFr;
+
   if (!catalogModerationActive()) {
+    if (cfg.source === "sanity" && variant === "product") {
+      const hash = contentHash(buffer);
+      if (cfg.nsfwPolicy.humanReview) {
+        await withDbRetry(() =>
+          prisma.mediaReview.create({
+            data: {
+              userId,
+              kind,
+              variant,
+              contentHash: hash,
+              note: "Scan AWS off — file d’empreinte, fichier non stocké",
+              status: "pending",
+            },
+          }),
+        );
+        return {
+          allowed: false,
+          httpStatus: 422,
+          error: "Média en revue — pas publié (aucun fichier conservé)",
+          code: "PENDING_REVIEW",
+          decision: "REJECT",
+          banned: false,
+        };
+      }
+      return {
+        allowed: false,
+        httpStatus: 422,
+        error: "Scan NSFW requis (mode Sanity, fail-closed)",
+        code: "SCAN_REQUIRED",
+        decision: "REJECT",
+        banned: false,
+      };
+    }
     return {
       allowed: true,
       httpStatus: 200,
@@ -281,6 +323,32 @@ export async function enforceCatalogModeration(opts: {
       error: "",
       code: "SCAN_SKIPPED",
       decision: "SKIP",
+      banned: false,
+    };
+  }
+
+  const blockedHit = cfg.nsfwPolicy.blockedLabels.some((blocked) => {
+    const needle = blocked.toLowerCase();
+    return scan.labels.some((label) =>
+      `${label.parent ?? ""} ${label.name}`.toLowerCase().includes(needle),
+    );
+  });
+  if (blockedHit) {
+    await logEvent({
+      userId,
+      variant,
+      kind,
+      decision: "REJECT",
+      labels: scan.labels,
+      score: Math.max(scan.score, 0.5),
+      contentHash: hash,
+    });
+    return {
+      allowed: false,
+      httpStatus: 422,
+      error: rejectMsg,
+      code: "POLICY_BLOCKED",
+      decision: "REJECT",
       banned: false,
     };
   }
@@ -370,7 +438,7 @@ export async function enforceCatalogModeration(opts: {
     httpStatus: 422,
     error: shouldBan
       ? "Compte désactivé — contenu pornographique détecté"
-      : "Média refusé — contenu sexuel explicite interdit",
+      : rejectMsg,
     code: shouldBan ? "ACCOUNT_DISABLED" : "NSFW_REJECTED",
     decision,
     banned: shouldBan,

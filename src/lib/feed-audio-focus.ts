@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  getPageMediaRoute,
+  isPageMediaDocumentVisible,
+  subscribePageMedia,
+  usePageMediaLive,
+} from "@/lib/page-media-session";
 
 /**
  * Un seul son dans le feed : vidéo ou soundtrack.
@@ -9,22 +15,29 @@ import { useEffect, useState } from "react";
 const VISIBLE_RATIO = 0.4;
 const KEEP_PIN_RATIO = 0.22;
 
-type Score = { ratio: number; left: number };
+type Score = { ratio: number; left: number; page: string };
 type Listener = (activeId: string | null) => void;
 
 const scores = new Map<string, Score>();
 const listeners = new Set<Listener>();
 let pinnedId: string | null = null;
 let activeId: string | null = null;
+let pageMediaBound = false;
+
+function ensurePageMediaBinding() {
+  if (pageMediaBound) return;
+  pageMediaBound = true;
+  subscribePageMedia(() => commit());
+}
 
 function pickWinner(): string | null {
+  if (!isPageMediaDocumentVisible()) return null;
+  const page = getPageMediaRoute();
   const visible = [...scores.entries()].filter(
-    ([, s]) => s.ratio >= VISIBLE_RATIO,
+    ([, s]) => s.page === page && s.ratio >= VISIBLE_RATIO,
   );
-  if (
-    pinnedId &&
-    (scores.get(pinnedId)?.ratio ?? 0) >= KEEP_PIN_RATIO
-  ) {
+  const pin = pinnedId ? scores.get(pinnedId) : undefined;
+  if (pin && pin.page === page && pin.ratio >= KEEP_PIN_RATIO) {
     return pinnedId;
   }
   pinnedId = null;
@@ -47,12 +60,14 @@ function commit() {
 export function setFeedAudioScore(
   id: string,
   score: { ratio: number; left: number },
+  page = getPageMediaRoute(),
 ) {
+  ensurePageMediaBinding();
   if (score.ratio < 0.12) {
     scores.delete(id);
     if (pinnedId === id) pinnedId = null;
   } else {
-    scores.set(id, score);
+    scores.set(id, { ...score, page });
   }
   commit();
 }
@@ -65,12 +80,20 @@ export function clearFeedAudioScore(id: string) {
 
 /** Tap / bouton son : cette card devient la seule source audio. */
 export function requestFeedAudioFocus(id: string) {
+  ensurePageMediaBinding();
   pinnedId = id;
   const prev = scores.get(id);
   scores.set(id, {
     ratio: Math.max(prev?.ratio ?? 0, 0.99),
     left: prev?.left ?? 0,
+    page: prev?.page ?? getPageMediaRoute(),
   });
+  commit();
+}
+
+/** Relâche le pin (2e tap) : le premier plan visible reprend. */
+export function unpinFeedAudio() {
+  pinnedId = null;
   commit();
 }
 
@@ -92,6 +115,7 @@ export function resetFeedAudioFocus() {
 }
 
 export function useFeedAudioFocus() {
+  const live = usePageMediaLive();
   const [id, setId] = useState<string | null>(null);
   useEffect(() => {
     const unsub = subscribeFeedAudioFocus(setId);
@@ -100,5 +124,5 @@ export function useFeedAudioFocus() {
       resetFeedAudioFocus();
     };
   }, []);
-  return id;
+  return live ? id : null;
 }

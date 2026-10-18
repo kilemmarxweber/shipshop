@@ -20,7 +20,9 @@ import {
   uploadCompressedMedia,
 } from "@/lib/compress-media";
 import { fetchJson } from "@/lib/fetch-json";
+import { parseCurrency, walletCents, type WalletBalances } from "@/lib/money";
 import { formatMoney, cn } from "@/lib/utils";
+import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppearanceSettings } from "@/components/appearance-settings";
@@ -99,13 +101,14 @@ export default function ProfilePage() {
         fetchJson<{ orders?: Order[]; error?: string }>(
           `/api/orders?period=${period}&status=${tab}`,
         ),
-        fetchJson<{ wallet?: { balanceCents?: number } }>("/api/wallet"),
+        fetchJson<{ wallet?: WalletBalances }>("/api/wallet"),
         fetchJson<{ count?: number }>("/api/cart"),
         fetchJson<{ user?: ProfileUser }>("/api/profile"),
         fetchJson<{ kyc?: KycSummary | null; isOwner?: boolean }>("/api/kyc"),
       ]);
     setOrders(ordersRes.data?.orders ?? []);
-    setBalance(walletRes.data?.wallet?.balanceCents ?? 0);
+    const w = walletRes.data?.wallet;
+    setBalance(w ? walletCents(w, parseCurrency(w.currency)) : 0);
     setCartCount(cartRes.data?.count ?? 0);
     if (profileRes.data?.user) {
       applyProfile(profileRes.data.user);
@@ -225,9 +228,7 @@ export default function ProfilePage() {
       return;
     }
     toast.success("Commande annulée — remboursement effectué");
-    if (typeof data?.balanceCents === "number") {
-      setBalance(data.balanceCents);
-    }
+    notifyWalletUpdated();
     await refresh();
   }
 
@@ -716,6 +717,7 @@ export default function ProfilePage() {
                     ["/shops/messaging", "Messages (admin)"],
                     ["/shops/admin/products", "Modération produits (tout)"],
                     ["/shops/admin/vendors", "Vendeurs & clients"],
+                    ["/shops/admin/ledger", "Ledger paiements"],
                     ["/shops/kyc", "Revue KYC"],
                     ["/shops/admin/moderation", "Modération NSFW"],
                   ] as const)

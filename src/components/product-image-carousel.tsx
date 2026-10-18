@@ -14,6 +14,15 @@ import {
   subscribeFeedVideoActive,
 } from "@/lib/feed-video-playback";
 import { isVideoUrl } from "@/lib/media";
+import {
+  defaultSlideMotion,
+  slideshowSlotMs,
+  type SlideMotion,
+} from "@/lib/montage";
+import {
+  useFrozenPageKey,
+  usePageMediaLive,
+} from "@/lib/page-media-session";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -30,11 +39,20 @@ type Props = {
   muted?: boolean;
   /** Volume 0–1 quand unmuted (défaut 1). */
   volume?: number;
+  /** Montage : le son importé passe en premier, la vidéo d’origine reste muette. */
+  hasSoundtrack?: boolean;
   onDoubleLike?: () => void;
   onAutoplayBlocked?: () => void;
   /** Id produit : un seul son (vidéo / musique) à la fois dans le feed. */
   audioKey?: string;
   onActivateSound?: () => void;
+  /** false = la vidéo s’arrête en fin de clip (file Découvrir). */
+  loop?: boolean;
+  onPlaybackEnded?: () => void;
+  /** Styles Ken Burns (même ordre que images). */
+  motions?: string[];
+  /** Minute de son : le diaporama couvre toute la fenêtre (lent s’il y a peu d’images). */
+  clipMs?: number;
 };
 
 function HeartBurst() {
@@ -66,7 +84,12 @@ function SlideMedia({
   fit,
   muted,
   volume,
+  loop,
   onAutoplayBlocked,
+  onPlaybackEnded,
+  motion,
+  motionMs,
+  animate,
 }: {
   src: string;
   playing: boolean;
@@ -74,7 +97,12 @@ function SlideMedia({
   fit: "cover" | "contain";
   muted: boolean;
   volume: number;
+  loop: boolean;
   onAutoplayBlocked?: () => void;
+  onPlaybackEnded?: () => void;
+  motion?: SlideMotion;
+  motionMs?: number;
+  animate?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const video = isVideoUrl(src);
@@ -105,6 +133,9 @@ function SlideMedia({
     } else {
       el.pause();
     }
+    return () => {
+      el.pause();
+    };
   }, [playing, shouldLoad, src, video, onAutoplayBlocked]);
 
   useEffect(() => {
@@ -131,17 +162,27 @@ function SlideMedia({
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [playing, shouldLoad, video]);
 
+  const ken = Boolean(motion && animate);
+  const kenStyle = {
+    objectPosition: "center center",
+    ["--ss-ms" as string]: `${Math.max(800, motionMs ?? 3200)}ms`,
+  };
+
   if (video) {
     return (
       <video
         ref={videoRef}
         muted={muted}
-        loop
+        loop={loop}
         playsInline
         preload="none"
         disablePictureInPicture
-        className={mediaClass(fit)}
-        style={{ objectPosition: "center center" }}
+        onEnded={() => {
+          if (!loop) onPlaybackEnded?.();
+        }}
+        className={cn(mediaClass(fit), ken && "ss-ken")}
+        data-motion={ken ? motion : undefined}
+        style={kenStyle}
       />
     );
   }
@@ -155,8 +196,9 @@ function SlideMedia({
       loading={playing ? "eager" : "lazy"}
       decoding="async"
       fetchPriority={playing ? "high" : "low"}
-      className={mediaClass(fit)}
-      style={{ objectPosition: "center center" }}
+      className={cn(mediaClass(fit), ken && "ss-ken")}
+      data-motion={ken ? motion : undefined}
+      style={kenStyle}
     />
   );
 }
@@ -181,16 +223,24 @@ export function ProductImageCarousel({
   eager = false,
   muted = false,
   volume = 1,
+  hasSoundtrack = false,
   onDoubleLike,
   onAutoplayBlocked,
   audioKey,
   onActivateSound,
+  loop = true,
+  onPlaybackEnded,
+  motions,
+  clipMs,
 }: Props) {
+  const videoMuted = hasSoundtrack || muted;
   const list =
     images.length > 0
       ? images
       : ["https://picsum.photos/seed/chipshop/800/1000"];
   const feedId = useId();
+  const pageKey = useFrozenPageKey();
+  const pageLive = usePageMediaLive();
   const [index, setIndex] = useState(0);
   const [inView, setInView] = useState(eager);
   const [nearView, setNearView] = useState(eager);
@@ -209,6 +259,23 @@ export function ProductImageCarousel({
 
   const hasVideo = list.some((url) => isVideoUrl(url));
   const currentIsVideo = isVideoUrl(list[index] ?? "");
+  const coverSrc = list[0];
+
+  useEffect(() => {
+    if (!nearView || !coverSrc) return;
+    if (isVideoUrl(coverSrc)) {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.muted = true;
+      video.src = coverSrc;
+      return () => {
+        video.removeAttribute("src");
+        video.load();
+      };
+    }
+    const img = new Image();
+    img.src = coverSrc;
+  }, [nearView, coverSrc]);
 
   useEffect(() => {
     if (eager || !hasVideo) return;
@@ -232,7 +299,7 @@ export function ProductImageCarousel({
             if (!entry) return;
             setNearView(entry.isIntersecting);
           },
-          { root, rootMargin: "80px 0px", threshold: 0.01 },
+          { root, rootMargin: "120% 0px", threshold: 0.01 },
         );
 
     const playIo = new IntersectionObserver(
@@ -241,13 +308,17 @@ export function ProductImageCarousel({
         const ratio = entry.intersectionRatio;
 
         if (hasVideo && !eager) {
-          setFeedVideoScore(feedId, ratio);
+          setFeedVideoScore(feedId, ratio, pageKey);
         }
         if (audioKey) {
-          setFeedAudioScore(audioKey, {
-            ratio,
-            left: entry.boundingClientRect.left,
-          });
+          setFeedAudioScore(
+            audioKey,
+            {
+              ratio,
+              left: entry.boundingClientRect.left,
+            },
+            pageKey,
+          );
         }
 
         if (ratio < LEFT_VIEW_RATIO) {
@@ -274,18 +345,23 @@ export function ProductImageCarousel({
       if (hasVideo && !eager) clearFeedVideoScore(feedId);
       if (audioKey) clearFeedAudioScore(audioKey);
     };
-  }, [audioKey, eager, feedId, hasVideo]);
+  }, [audioKey, eager, feedId, hasVideo, pageKey]);
+
+  const slotMs = clipMs
+    ? slideshowSlotMs(list.length, clipMs)
+    : intervalMs;
 
   useEffect(() => {
     if (list.length <= 1 || manualHold || !inView) return;
-    if (hasVideo && currentIsVideo) return;
+    if (!clipMs && hasVideo && currentIsVideo) return;
     const t = setInterval(() => {
       setIndex((i) => (i + 1) % list.length);
-    }, intervalMs);
+    }, slotMs);
     return () => clearInterval(t);
   }, [
     list.length,
-    intervalMs,
+    slotMs,
+    clipMs,
     manualHold,
     inView,
     hasVideo,
@@ -353,9 +429,10 @@ export function ProductImageCarousel({
       lastTapRef.current = now;
       pendingTapRef.current = setTimeout(() => {
         pendingTapRef.current = null;
-        if (audioKey) {
+        if (onActivateSound) {
+          onActivateSound();
+        } else if (audioKey) {
           requestFeedAudioFocus(audioKey);
-          onActivateSound?.();
         }
         if (!currentIsVideo) return;
         const slotActive = eager ? inView : feedActiveIds.has(feedId);
@@ -389,7 +466,7 @@ export function ProductImageCarousel({
     : hasVideo
       ? feedActiveIds.has(feedId)
       : inView;
-  const cardMayPlay = slotActive && !userPaused;
+  const cardMayPlay = pageLive && slotActive && !userPaused;
 
   return (
     <div
@@ -441,13 +518,22 @@ export function ProductImageCarousel({
           >
             {mount ? (
               <SlideMedia
+                key={`${src}-${i}-${active ? "on" : "off"}`}
                 src={src}
                 playing={playing}
                 shouldLoad={shouldLoad}
                 fit={fit}
-                muted={muted}
+                muted={videoMuted}
                 volume={volume}
+                loop={loop}
                 onAutoplayBlocked={onAutoplayBlocked}
+                onPlaybackEnded={active ? onPlaybackEnded : undefined}
+                motion={
+                  (motions?.[i] as SlideMotion | undefined) ??
+                  defaultSlideMotion(i)
+                }
+                motionMs={slotMs}
+                animate={active && (Boolean(clipMs) || list.length > 1)}
               />
             ) : null}
             {overlay && (

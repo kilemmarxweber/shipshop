@@ -1,14 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { CATEGORIES } from "@/lib/categories";
-import { fetchJson } from "@/lib/fetch-json";
+import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
+import { useAppConfig } from "@/lib/use-app-config";
 import { formatMoney, cn } from "@/lib/utils";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
+import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
+import {
+  DEFAULT_VIDEO_SOUND,
+  VideoSoundButton,
+  productHasVideo,
+  type VideoSoundState,
+} from "@/components/video-sound-button";
 import { Input } from "@/components/ui/input";
+import { FeedLoadSentinel } from "@/components/feed-load-trigger";
+import { usePaginatedList } from "@/lib/use-paginated-list";
+import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+import {
+  requestFeedAudioFocus,
+  resetFeedAudioFocus,
+  unpinFeedAudio,
+  useFeedAudioFocus,
+} from "@/lib/feed-audio-focus";
 
 type Product = {
   id: string;
@@ -16,29 +33,139 @@ type Product = {
   priceCents: number;
   currency?: string;
   images: string[];
+  imageMotions?: string[];
   category: string;
+  soundtrackStartMs?: number;
+  soundtrack?: { audioUrl: string; durationMs?: number } | null;
 };
+
+function hasAudio(p: Product) {
+  return Boolean(p.soundtrack?.audioUrl) || productHasVideo(p.images);
+}
 
 export default function DiscoverPage() {
   const { t } = useI18n();
+  const appConfig = useAppConfig();
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [category, setCategory] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
+    {},
+  );
+  const [userPinned, setUserPinned] = useState<string | null>(null);
+  const [audioOff, setAudioOff] = useState(false);
+  const audioFocusId = useFeedAudioFocus();
+  const prevAudioFocus = useRef<string | null>(null);
+  const userPinnedRef = useRef<string | null>(null);
+  const audioOffRef = useRef(false);
+  const visibleRef = useRef(new Set<string>());
+  const productsRef = useRef<Product[]>([]);
 
   useEffect(() => {
-    const params = new URLSearchParams({ status: "ACTIVE" });
-    if (q) params.set("q", q);
-    if (category) params.set("category", category);
-    const timer = setTimeout(() => {
-      fetchJson<{ products?: Product[] }>(`/api/products?${params}`)
-        .then(({ data }) => setProducts(data?.products ?? []))
-        .catch(() => setProducts([]));
-    }, 200);
+    const timer = setTimeout(() => setDebouncedQ(q.trim()), 200);
     return () => clearTimeout(timer);
-  }, [q, category]);
+  }, [q]);
+
+  const feed = usePaginatedList<Product>({
+    prefetchRemaining: 4,
+    cacheKey: `discover:${category ?? ""}:${debouncedQ}`,
+    deps: [debouncedQ, category],
+    buildUrl: (cursor) => {
+      const params = new URLSearchParams({
+        status: "ACTIVE",
+        limit: String(PUBLIC_PAGE_SIZE),
+      });
+      if (debouncedQ) params.set("q", debouncedQ);
+      if (category) params.set("category", category);
+      if (cursor) params.set("cursor", cursor);
+      return `/api/products?${params}`;
+    },
+    extract: (json) => {
+      const data = json as { products?: Product[]; nextCursor?: string | null };
+      return { items: data.products ?? [], nextCursor: data.nextCursor ?? null };
+    },
+  });
+
+  const products = feed.items;
+  productsRef.current = products;
+  userPinnedRef.current = userPinned;
+  audioOffRef.current = audioOff;
+
+  useEffect(() => {
+    const root = document.querySelector(".app-main");
+    if (!root) return;
+    const onScroll = () => feed.noteUserScroll();
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => root.removeEventListener("scroll", onScroll);
+  }, [feed.noteUserScroll]);
+
+  useEffect(() => {
+    if (prevAudioFocus.current === audioFocusId) return;
+    prevAudioFocus.current = audioFocusId;
+    setSoundById({});
+  }, [audioFocusId]);
+
+  useEffect(() => {
+    setUserPinned(null);
+    setAudioOff(false);
+    resetFeedAudioFocus();
+    setSoundById({});
+  }, [debouncedQ, category]);
+
+  function soundFor(id: string): VideoSoundState {
+    const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
+    if (audioOff || audioFocusId !== id) return { ...base, muted: true };
+    return base;
+  }
+
+  function activateSound(id: string) {
+    requestFeedAudioFocus(id);
+    setSoundById((prev) =>
+      applyExclusiveVideoSound(prev, id, {
+        muted: false,
+        volume: (prev[id] ?? DEFAULT_VIDEO_SOUND).volume,
+      }),
+    );
+  }
+
+  const playNext = useCallback((fromId: string) => {
+    if (userPinnedRef.current || audioOffRef.current) return;
+    const visible = visibleRef.current;
+    const order = productsRef.current
+      .filter((p) => visible.has(p.id) && hasAudio(p))
+      .map((p) => p.id);
+    if (order.length === 0) return;
+    const i = order.indexOf(fromId);
+    const next = order[(i + 1) % order.length] ?? order[0];
+    if (next) requestFeedAudioFocus(next);
+  }, []);
+
+  const onTileVisible = useCallback((id: string, visible: boolean) => {
+    if (visible) visibleRef.current.add(id);
+    else visibleRef.current.delete(id);
+  }, []);
+
+  function onTileActivate(id: string) {
+    setAudioOff(false);
+    if (userPinned === id) {
+      setUserPinned(null);
+      setSoundById({});
+      unpinFeedAudio();
+      return;
+    }
+    setUserPinned(id);
+    activateSound(id);
+  }
+
+  function muteWantedBanner() {
+    setAudioOff(true);
+    setUserPinned(null);
+    setSoundById({});
+    resetFeedAudioFocus();
+  }
 
   return (
-    <div className="px-4 pb-4 pt-3 md:px-8">
+    <div className="discover-scroll px-4 pb-4 pt-3 md:px-8">
       <div className="mb-4 flex items-center gap-2 rounded-2xl border border-border bg-surface-2 px-3">
         <Search className="size-4 text-muted-foreground" />
         <Input
@@ -51,6 +178,7 @@ export default function DiscoverPage() {
 
       <Link
         href="/wanted"
+        onClick={muteWantedBanner}
         className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-surface-2 px-4 py-3"
       >
         <span>
@@ -92,32 +220,134 @@ export default function DiscoverPage() {
         {t("discover.trendsHeading")}
       </h2>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-        {products.map((p) => (
-          <Link
-            key={p.id}
-            href={`/product/${p.id}`}
-            className="group relative aspect-[3/4] overflow-hidden rounded-2xl"
-          >
-            <ProductImageCarousel
-              images={p.images}
-              className="absolute inset-0"
-              showDots={p.images.length > 1}
-              intervalMs={3500}
-            />
-            <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 to-transparent p-3">
-              <p className="truncate text-xs font-bold">{p.title}</p>
-              <p className="text-[11px] font-bold text-trust">
-                {formatMoney(p.priceCents, p.currency)}
-              </p>
-            </div>
-          </Link>
-        ))}
+        {products.map((p) => {
+          const cover = p.images[0] ? [p.images[0]] : [];
+          const audio = hasAudio(p);
+          const focused = audioFocusId === p.id && !audioOff;
+          return (
+            <DiscoverTile
+              key={p.id}
+              id={p.id}
+              onVisible={onTileVisible}
+            >
+              <ProductImageCarousel
+                images={
+                  p.soundtrack?.audioUrl
+                    ? p.images.slice(0, appConfig.maxImages)
+                    : cover
+                }
+                className="absolute inset-0"
+                showDots={false}
+                intervalMs={3500}
+                muted={soundFor(p.id).muted}
+                volume={soundFor(p.id).volume}
+                hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
+                clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
+                motions={p.imageMotions}
+                audioKey={audio ? p.id : undefined}
+                loop={userPinned === p.id}
+                onActivateSound={audio ? () => onTileActivate(p.id) : undefined}
+                onPlaybackEnded={
+                  p.soundtrack?.audioUrl ? undefined : () => playNext(p.id)
+                }
+              />
+              {p.soundtrack?.audioUrl && focused ? (
+                <FeedSoundtrackPlayer
+                  audioUrl={p.soundtrack.audioUrl}
+                  startMs={p.soundtrackStartMs}
+                  sound={soundFor(p.id)}
+                  active
+                  loop={userPinned === p.id}
+                  onCycleEnd={() => playNext(p.id)}
+                />
+              ) : null}
+              {audio ? (
+                <div className="absolute top-2 right-2 z-20">
+                  <VideoSoundButton
+                    images={p.images}
+                    hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
+                    sound={soundFor(p.id)}
+                    onChange={(next) => {
+                      setAudioOff(false);
+                      if (!next.muted) {
+                        setUserPinned(p.id);
+                        requestFeedAudioFocus(p.id);
+                      } else if (userPinned === p.id) {
+                        setUserPinned(null);
+                        unpinFeedAudio();
+                      }
+                      setSoundById((prev) =>
+                        applyExclusiveVideoSound(prev, p.id, next),
+                      );
+                    }}
+                  />
+                </div>
+              ) : null}
+              <Link
+                href={`/product/${p.id}`}
+                className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 to-transparent p-3"
+              >
+                <p className="truncate text-xs font-bold">{p.title}</p>
+                <p className="text-[11px] font-bold text-trust">
+                  {formatMoney(p.priceCents, p.currency)}
+                </p>
+              </Link>
+            </DiscoverTile>
+          );
+        })}
       </div>
-      {products.length === 0 && (
+      {feed.hasMore ? (
+        <FeedLoadSentinel onVisible={feed.loadMore} rootSelector=".app-main" />
+      ) : null}
+      {feed.loadingMore ? (
+        <p className="py-4 text-center text-xs text-muted-foreground">…</p>
+      ) : null}
+      {feed.loading && products.length === 0 ? (
+        <p className="py-12 text-center text-sm text-muted-foreground">…</p>
+      ) : null}
+      {products.length === 0 && !feed.loading && (
         <p className="py-12 text-center text-sm text-muted-foreground">
           {t("discover.emptyResults")}
         </p>
       )}
     </div>
+  );
+}
+
+function DiscoverTile({
+  id,
+  onVisible,
+  children,
+}: {
+  id: string;
+  onVisible: (id: string, visible: boolean) => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.querySelector(".app-main");
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        onVisible(id, (entry?.intersectionRatio ?? 0) >= 0.35);
+      },
+      { root, threshold: [0, 0.35, 0.6, 1] },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      onVisible(id, false);
+    };
+  }, [id, onVisible]);
+
+  return (
+    <article
+      ref={ref}
+      className="group relative aspect-[3/4] overflow-hidden rounded-2xl"
+    >
+      {children}
+    </article>
   );
 }

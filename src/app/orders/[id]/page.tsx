@@ -17,6 +17,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { ISSUE_TYPE_LABELS, qrImageUrl } from "@/lib/handover";
 import { formatMoney, cn } from "@/lib/utils";
+import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
@@ -198,6 +199,7 @@ function OrderInner() {
       return;
     }
     toast.success("Remboursement crédité sur votre portefeuille");
+    notifyWalletUpdated();
     await load();
   }
 

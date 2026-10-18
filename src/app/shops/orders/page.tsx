@@ -14,6 +14,7 @@ import {
   isOrderCancellable,
 } from "@/lib/order-cancel";
 import { formatMoney, cn } from "@/lib/utils";
+import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -205,6 +206,7 @@ export default function VendorOrdersPage() {
       return;
     }
     toast.success(data?.message ?? "Commande annulée — client remboursé");
+    notifyWalletUpdated();
     setCancelOrderId(null);
     setCancelNote("");
     setCancelReason("OUT_OF_STOCK");

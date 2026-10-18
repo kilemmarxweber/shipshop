@@ -55,8 +55,23 @@ export const DELIVERY_EVENT_KEYS = [
 
 export type DeliveryEventKey = (typeof DELIVERY_EVENT_KEYS)[number];
 
+export const WALLET_EVENT_KEYS = [
+  "WALLET_SENT",
+  "WALLET_RECEIVED",
+  "WALLET_DEPOSIT",
+] as const;
+
+export type WalletEventKey = (typeof WALLET_EVENT_KEYS)[number];
+
+export type MessageEventKey = DeliveryEventKey | WalletEventKey;
+
+export const ALL_EVENT_KEYS = [
+  ...DELIVERY_EVENT_KEYS,
+  ...WALLET_EVENT_KEYS,
+] as const;
+
 export const DEFAULT_TEMPLATES: {
-  eventKey: DeliveryEventKey;
+  eventKey: MessageEventKey;
   name: string;
   body: string;
 }[] = [
@@ -94,5 +109,20 @@ export const DEFAULT_TEMPLATES: {
     eventKey: "HANDOVER_SCANNED",
     name: "Confirmer la réception",
     body: "{{brand}} · {{shop_name}}\nLe QR de {{product_title}} a été scanné. Confirmez la réception dans Chip Shop pour clôturer la commande : {{tracking_url}}",
+  },
+  {
+    eventKey: "WALLET_SENT",
+    name: "Portefeuille — envoyé",
+    body: "{{brand}}\n{{payer_name}}, vous avez envoyé {{amount}} à {{recipient_name}}.\nRéseau : {{rail}}\nRéf. {{reference}}\nVotre solde : {{payer_balance}}\n{{wallet_url}}",
+  },
+  {
+    eventKey: "WALLET_RECEIVED",
+    name: "Portefeuille — reçu",
+    body: "{{brand}}\n{{recipient_name}}, {{payer_name}} vous a envoyé {{amount}}.\nRéseau : {{rail}}\nRéf. {{reference}}\nNouveau solde : {{recipient_balance}}\n{{wallet_url}}",
+  },
+  {
+    eventKey: "WALLET_DEPOSIT",
+    name: "Portefeuille — recharge",
+    body: "{{brand}}\n{{payer_name}}, votre compte a été rechargé de {{amount}}.\nRéseau : {{rail}}\nRéf. {{reference}}\nNouveau solde : {{payer_balance}}\n{{wallet_url}}",
   },
 ];

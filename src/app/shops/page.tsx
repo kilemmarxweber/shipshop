@@ -286,10 +286,22 @@ export default function ShopsPage() {
                 Zones & livreurs
               </Link>
               <Link
+                href="/shops/admin/ledger"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Ledger
+              </Link>
+              <Link
                 href="/shops/kyc"
                 className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[0.8rem] font-medium whitespace-nowrap"
               >
                 KYC
+              </Link>
+              <Link
+                href="/shops/admin/content"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Contenu
               </Link>
               <Link
                 href="/shops/admin/moderation"

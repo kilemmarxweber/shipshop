@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { hashPassword } from "better-auth/crypto";
 import { assertChipShopOwner } from "@/lib/kyc";
 import {
+  passwordResetHtml,
   passwordResetMessage,
   sendDirectEmail,
   sendDirectSms,
@@ -105,7 +106,17 @@ export async function POST(
       const emailResult = await sendDirectEmail({
         to: user.email,
         subject: `${process.env.NEXT_PUBLIC_APP_NAME || "ShipShop"} — nouveau mot de passe`,
+        title: "Nouveau mot de passe",
         text: body,
+        html: passwordResetHtml({
+          name: user.name,
+          email: user.email,
+          password: temporaryPassword,
+        }),
+        cta: {
+          href: `${process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000"}/auth/login`,
+          label: "Se connecter",
+        },
       });
       channels.email = { ok: true, provider: emailResult.provider };
     } catch (err) {

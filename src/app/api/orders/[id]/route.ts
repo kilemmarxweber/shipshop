@@ -67,7 +67,11 @@ export async function DELETE(
     const result = await withDbRetry(() =>
       prisma.$transaction((tx) => cancelOrder(tx, session.user.id, id)),
     );
-    return NextResponse.json(result);
+    return NextResponse.json({
+      order: result.order,
+      balanceCents: result.balanceCents,
+      refundCents: result.refundCents,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Annulation impossible";

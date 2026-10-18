@@ -116,6 +116,12 @@ UPLOAD_DIR=/var/www/chipshop-uploads
 #UPLOAD_DIR=C:/chipshop-uploads
 NEXT_PUBLIC_UPLOAD_URL=/uploads
 
+CONTENT_SOURCE=system
+NEXT_PUBLIC_SANITY_PROJECT_ID=
+NEXT_PUBLIC_SANITY_DATASET=production
+SANITY_API_READ_TOKEN=
+# SANITY_API_WRITE_TOKEN=   # migration catalogue : pnpm sanity:migrate-tracks
+
 MODERATION_PROVIDER=rekognition
 MODERATION_FAIL_CLOSED=true
 AWS_REGION=eu-west-1
@@ -132,6 +138,16 @@ FFMPEG_PATH=/usr/bin/ffmpeg
 SHIPSHOP_MSISDN_MPESA=+243810000100
 SHIPSHOP_MSISDN_ORANGE=+243890000100
 SHIPSHOP_MSISDN_AIRTEL=+243990000100
+
+# SMTP Hostinger (même stack qu’Eteyelo). Sans identifiants : log console.
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=contact@klambocore.com
+SMTP_PASS="..."
+CONTACT_NAME=ShipShop
+CONTACT_EMAIL=contact@klambocore.com
+CONTACT_PHONE=+243971651881
 ```
 
 Notes :

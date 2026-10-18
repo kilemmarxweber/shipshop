@@ -8,6 +8,11 @@ const publicUploadUrl = normalizePublicUploadUrl(
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "cdn.sanity.io" },
+    ],
+  },
   experimental: {
     // Aligné sur VIDEO_INPUT_MAX_BYTES (100 Mo) — compression vidéo côté serveur
     proxyClientMaxBodySize: "100mb",

@@ -113,6 +113,43 @@ export async function runFfmpeg(
   return runFfmpegWithBin(bin, args, timeoutMs);
 }
 
+function parseDurationMs(stderr: string) {
+  const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderr);
+  if (!m) return null;
+  const hours = Number(m[1]);
+  const minutes = Number(m[2]);
+  const seconds = Number(m[3]);
+  if (![hours, minutes, seconds].every(Number.isFinite)) return null;
+  return Math.round((hours * 3600 + minutes * 60 + seconds) * 1000);
+}
+
+/** Durée d’un fichier (ffmpeg -i, sans transcodage). */
+export async function probeDurationMs(inputPath: string): Promise<number | null> {
+  const bin = (await resolveFfmpegBin()) || ffmpegBin();
+  return new Promise((resolve) => {
+    const child = spawn(bin, ["-hide_banner", "-i", inputPath], {
+      windowsHide: true,
+      env: process.env,
+    });
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(parseDurationMs(stderr));
+    }, 12_000);
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
+    child.on("close", () => {
+      clearTimeout(timer);
+      resolve(parseDurationMs(stderr));
+    });
+  });
+}
+
 let ffmpegAvailableCache: boolean | null = null;
 
 /** Détecte si ffmpeg est utilisable (avec résolution de chemin Windows). */

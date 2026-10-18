@@ -52,9 +52,15 @@ export async function PUT(req: Request) {
         );
       }
       seen.add(row.provider);
+      if (!row.phone.trim()) continue;
       const parts = splitPhone(row.phone);
       const e164 = composePhone(parts.dial, parts.national);
-      if (!e164 || !isValidContactPhone(e164)) continue;
+      if (!e164 || !isValidContactPhone(e164)) {
+        return NextResponse.json(
+          { error: `Numéro invalide (${row.provider})` },
+          { status: 400 },
+        );
+      }
       if (phones.has(e164)) {
         return NextResponse.json(
           { error: "Numéros en double" },

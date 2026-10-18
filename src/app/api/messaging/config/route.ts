@@ -43,6 +43,7 @@ const patchSchema = z.object({
   waFromNumber: z.string().optional().nullable(),
   notifySms: z.boolean().optional(),
   notifyWhatsapp: z.boolean().optional(),
+  notifyEmail: z.boolean().optional(),
   brandPrefix: z.string().min(2).max(40).optional(),
 });
 
@@ -77,6 +78,7 @@ export async function PATCH(req: Request) {
     if (body.notifySms !== undefined) data.notifySms = body.notifySms;
     if (body.notifyWhatsapp !== undefined)
       data.notifyWhatsapp = body.notifyWhatsapp;
+    if (body.notifyEmail !== undefined) data.notifyEmail = body.notifyEmail;
     if (body.brandPrefix) data.brandPrefix = body.brandPrefix;
 
     if (body.klamboApiKey?.trim()) {

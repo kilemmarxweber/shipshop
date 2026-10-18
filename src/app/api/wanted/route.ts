@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CATEGORIES } from "@/lib/categories";
+import {
+  decodeTimeIdCursor,
+  pageFromRows,
+  parseListLimit,
+  PUBLIC_PAGE_SIZE,
+  timeIdCursorWhere,
+} from "@/lib/list-cursor";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import {
@@ -84,7 +91,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ requests });
     }
 
-    const requests = await withDbRetry(() =>
+    const cursorRaw = searchParams.get("cursor");
+    const paginated = searchParams.has("limit") || Boolean(cursorRaw);
+    const limit = paginated
+      ? parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_SIZE)
+      : 80;
+    const cursor = decodeTimeIdCursor(cursorRaw);
+
+    const fetched = await withDbRetry(() =>
       prisma.wantedRequest.findMany({
         where: {
           status: "OPEN",
@@ -93,13 +107,18 @@ export async function GET(req: Request) {
           ...(condition === "NEW_SHOP" || condition === "USED"
             ? { condition }
             : {}),
+          ...(cursor ? timeIdCursorWhere(cursor) : {}),
         },
         select: listSelect,
-        orderBy: { createdAt: "desc" },
-        take: 80,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
       }),
     );
-    return NextResponse.json({ requests });
+    const sliced = pageFromRows(fetched, limit);
+    return NextResponse.json({
+      requests: sliced.page,
+      nextCursor: sliced.nextCursor,
+    });
   } catch (error) {
     console.error("[wanted GET]", error);
     return NextResponse.json(

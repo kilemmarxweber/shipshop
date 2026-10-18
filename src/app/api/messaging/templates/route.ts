@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertChipShopOwner } from "@/lib/kyc";
 import { ensureMessagingSetup } from "@/lib/messaging/config";
-import { DELIVERY_EVENT_KEYS } from "@/lib/messaging/templates";
+import { ALL_EVENT_KEYS } from "@/lib/messaging/templates";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -29,7 +29,7 @@ export async function GET() {
 
   return NextResponse.json({
     templates,
-    eventKeys: DELIVERY_EVENT_KEYS,
+    eventKeys: ALL_EVENT_KEYS,
   });
 }
 

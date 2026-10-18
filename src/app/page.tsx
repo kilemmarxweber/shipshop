@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
+import { useAppConfig } from "@/lib/use-app-config";
 import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { FollowShopButton } from "@/components/follow-shop-button";
@@ -31,6 +32,12 @@ import { colorHex } from "@/lib/product-options";
 import { MediaThumb } from "@/components/media-thumb";
 import type { MessagePath } from "@/components/i18n-provider";
 import { WantedCard, type WantedListItem } from "@/components/wanted-card";
+import {
+  FeedLoadSentinel,
+  FeedLoadTrigger,
+} from "@/components/feed-load-trigger";
+import { usePaginatedList } from "@/lib/use-paginated-list";
+import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 
 type Product = {
   id: string;
@@ -40,6 +47,7 @@ type Product = {
   currency?: string;
   category: string;
   images: string[];
+  imageMotions?: string[];
   colors: string[];
   sizes: string[];
   location: string | null;
@@ -72,11 +80,55 @@ function categoryLabel(
 export default function FeedPage() {
   const router = useRouter();
   const { t } = useI18n();
+  const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [wanted, setWanted] = useState<WantedListItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<FeedTab>("foryou");
+  const productFeed = usePaginatedList<Product>({
+    enabled: tab !== "wanted" && !(tab === "following" && !session),
+    cacheKey:
+      tab === "following"
+        ? `products:following:${session?.user?.id ?? ""}`
+        : "products:foryou",
+    prefetchRemaining: 4,
+    deps: [tab, session?.user?.id],
+    buildUrl: (cursor) => {
+      const params = new URLSearchParams({
+        status: "ACTIVE",
+        limit: String(PUBLIC_PAGE_SIZE),
+      });
+      if (tab === "following") params.set("following", "1");
+      if (cursor) params.set("cursor", cursor);
+      return `/api/products?${params}`;
+    },
+    extract: (json) => {
+      const data = json as { products?: Product[]; nextCursor?: string | null };
+      return { items: data.products ?? [], nextCursor: data.nextCursor ?? null };
+    },
+  });
+  const wantedFeed = usePaginatedList<WantedListItem>({
+    enabled: tab === "wanted",
+    cacheKey: "wanted:open",
+    deps: [tab],
+    buildUrl: (cursor) => {
+      const params = new URLSearchParams({ limit: String(PUBLIC_PAGE_SIZE) });
+      if (cursor) params.set("cursor", cursor);
+      return `/api/wanted?${params}`;
+    },
+    extract: (json) => {
+      const data = json as {
+        requests?: WantedListItem[];
+        nextCursor?: string | null;
+      };
+      return { items: data.requests ?? [], nextCursor: data.nextCursor ?? null };
+    },
+  });
+  const products = productFeed.items;
+  const setProducts = productFeed.setItems;
+  const wanted = wantedFeed.items;
+  const loading =
+    tab === "wanted" ? wantedFeed.loading : productFeed.loading;
+  const loadMoreProducts = productFeed.loadMore;
+  const loadMoreWanted = wantedFeed.loadMore;
   const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
     {},
   );
@@ -110,30 +162,18 @@ export default function FeedPage() {
     );
   }
 
+  const prefetchAt = Math.max(0, products.length - 4);
+
   useEffect(() => {
-    if (tab === "following" && !session) {
-      setProducts([]);
-      setWanted([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    if (tab === "wanted") {
-      fetchJson<{ requests?: WantedListItem[] }>("/api/wanted")
-        .then(({ data }) => setWanted(data?.requests ?? []))
-        .catch(() => setWanted([]))
-        .finally(() => setLoading(false));
-      return;
-    }
-    const url =
-      tab === "following"
-        ? "/api/products?status=ACTIVE&following=1"
-        : "/api/products?status=ACTIVE";
-    fetchJson<{ products?: Product[] }>(url)
-      .then(({ data }) => setProducts(data?.products ?? []))
-      .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
-  }, [tab, session?.user?.id]);
+    const root = document.querySelector(".app-main");
+    if (!root) return;
+    const onScroll = () => {
+      productFeed.noteUserScroll();
+      wantedFeed.noteUserScroll();
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => root.removeEventListener("scroll", onScroll);
+  }, [productFeed.noteUserScroll, wantedFeed.noteUserScroll]);
 
   function setShopFollowed(shopId: string, followed: boolean) {
     setProducts((prev) => {
@@ -288,7 +328,10 @@ export default function FeedPage() {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         {tabs}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div
+          className="feed-wanted-scroll flex-1 overflow-y-auto px-4 py-3"
+          onScroll={wantedFeed.noteUserScroll}
+        >
           {wanted.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">
               {t("wanted.empty")}
@@ -298,6 +341,12 @@ export default function FeedPage() {
               {wanted.map((item) => (
                 <WantedCard key={item.id} item={item} />
               ))}
+              {wantedFeed.hasMore ? (
+                <FeedLoadSentinel
+                  onVisible={loadMoreWanted}
+                  rootSelector=".feed-wanted-scroll"
+                />
+              ) : null}
             </div>
           )}
         </div>
@@ -351,8 +400,12 @@ export default function FeedPage() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden md:h-auto md:overflow-visible">
       {tabs}
 
-      <div className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4 md:pb-8">
-        {products.map((p) => (
+      <div
+        className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4 md:pb-8"
+        data-experiment-id={appConfig.experimentId ?? undefined}
+        onScroll={productFeed.noteUserScroll}
+      >
+        {products.map((p, index) => (
           <article
             key={p.id}
             className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden md:h-[min(520px,70dvh)] md:min-h-0 md:rounded-2xl"
@@ -364,6 +417,9 @@ export default function FeedPage() {
               className="absolute inset-0"
               muted={soundFor(p.id).muted}
               volume={soundFor(p.id).volume}
+              hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
+              clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
+              motions={p.imageMotions}
               audioKey={
                 productHasVideo(p.images) || p.soundtrack?.audioUrl
                   ? p.id
@@ -378,12 +434,18 @@ export default function FeedPage() {
                 }))
               }
             />
-            {p.soundtrack?.audioUrl ? (
+            {p.soundtrack?.audioUrl && audioFocusId === p.id ? (
               <FeedSoundtrackPlayer
                 audioUrl={p.soundtrack.audioUrl}
                 startMs={p.soundtrackStartMs}
                 sound={soundFor(p.id)}
-                active={audioFocusId === p.id}
+                active
+              />
+            ) : null}
+            {index === prefetchAt || index === products.length - 1 ? (
+              <FeedLoadTrigger
+                onNearEnd={loadMoreProducts}
+                disabled={!productFeed.hasMore}
               />
             ) : null}
 
@@ -538,6 +600,14 @@ export default function FeedPage() {
             </div>
           </article>
         ))}
+        {productFeed.hasMore ? (
+          <FeedLoadSentinel onVisible={loadMoreProducts} />
+        ) : null}
+        {productFeed.loadingMore ? (
+          <p className="py-4 text-center text-xs text-muted-foreground md:col-span-2">
+            …
+          </p>
+        ) : null}
       </div>
       <ProductCommentsSheet
         productId={commentProductId}

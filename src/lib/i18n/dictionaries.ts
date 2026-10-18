@@ -240,6 +240,18 @@ export type Messages = {
     orange: string;
     airtel: string;
     emoneyPhone: string;
+    fromBalance: string;
+    sendFromBalance: string;
+    balanceHint: string;
+    transferOk: string;
+    verifyState: string;
+    connectionLost: string;
+    expiredPay: string;
+    txnRefund: string;
+    txnPurchase: string;
+    txnReceived: string;
+    txnSent: string;
+    txnAdjustment: string;
   };
   shopExtra: {
     followerOne: string;
@@ -283,6 +295,41 @@ export type Messages = {
     skip: string;
     needLogo: string;
     noSuggestions: string;
+    importDevice: string;
+    importing: string;
+    maxOneMinute: string;
+    clipWindow: string;
+    clipPlay: string;
+    clipPause: string;
+    clipHint: string;
+    importOk: string;
+    undo: string;
+    pickColor: string;
+    brush: string;
+    reset: string;
+    select: string;
+    autoFill: string;
+    searchOnline: string;
+    searchPlaceholder: string;
+    searching: string;
+    searchEmpty: string;
+    searchHint: string;
+    tempOnly: string;
+    fetchOnline: string;
+    slidesTitle: string;
+    slidesHint: string;
+    changeMotion: string;
+    motionZoomIn: string;
+    motionZoomOut: string;
+    motionPanLeft: string;
+    motionPanRight: string;
+    motionPanUp: string;
+  };
+  publish: {
+    titleProduct: string;
+    titlePlaceholder: string;
+    shop: string;
+    media: string;
   };
 };
 
@@ -529,6 +576,19 @@ const fr: Messages = {
     orange: "Orange Money",
     airtel: "Airtel Money",
     emoneyPhone: "Votre numéro sur ce réseau",
+    fromBalance: "Solde ShipShop",
+    sendFromBalance: "Envoyer depuis mon solde",
+    balanceHint:
+      "Sans réseau : ShipShop débite votre solde et crédite le bénéficiaire.",
+    transferOk: "Transfert effectué",
+    verifyState: "Vérifier l’état",
+    connectionLost: "Connexion interrompue — on vérifie le paiement, sans renvoyer.",
+    expiredPay: "Délai dépassé — relancez une nouvelle demande.",
+    txnRefund: "Remboursement",
+    txnPurchase: "Achat",
+    txnReceived: "Reçu",
+    txnSent: "Envoyé",
+    txnAdjustment: "Ajustement",
   },
   shopExtra: {
     followerOne: "abonné",
@@ -559,19 +619,56 @@ const fr: Messages = {
   },
   montage: {
     title: "Montage",
-    hint: "Musique optionnelle et nettoyage visuel avant publication",
-    music: "Musique actualités",
+    hint: "Le fichier reste dans le navigateur jusqu’à la publication. On n’enregistre que l’extrait d’1 minute du produit — l’original n’est pas gardé. Si la vidéo a déjà un son, elle devient muette.",
+    music: "Musique / son",
     none: "Sans musique",
-    analyze: "Détecter logos, textes, prix",
+    analyze: "Détecter les objets",
     analyzing: "Analyse…",
-    blur: "Masquer",
-    stampLogo: "Logo boutique",
-    stampPrice: "Coller le prix",
-    eraser: "Gomme sticker",
-    apply: "Appliquer sur l'image",
+    blur: "Masquer l’objet",
+    stampLogo: "Tampon logo",
+    stampPrice: "Tampon prix",
+    eraser: "Gomme",
+    apply: "Appliquer",
     skip: "Passer",
     needLogo: "Ajoutez d'abord le logo de votre boutique",
-    noSuggestions: "Rien de détecté — utilisez la gomme ou tamponnez le logo",
+    noSuggestions: "Rien de détecté — pipettez le fond puis gommez",
+    importDevice: "Importer musique ou vidéo",
+    importing: "Import…",
+    maxOneMinute: "1 minute sur le produit",
+    clipWindow: "Extrait (1 min)",
+    clipPlay: "Écouter l’extrait",
+    clipPause: "Pause",
+    clipHint: "Faites glisser pour choisir la minute jouée. Écoutez avant de publier.",
+    importOk: "Son importé — choisissez 1 minute",
+    undo: "Annuler",
+    pickColor: "Pipette (couleur de fond)",
+    brush: "Taille de gomme",
+    reset: "Image d’origine",
+    select: "Sélection",
+    autoFill: "Fond auto (pixels autour)",
+    searchOnline: "Chercher en ligne",
+    searchPlaceholder: "Nom ou titre (ex. rumba, actualités)",
+    searching: "Recherche…",
+    searchEmpty: "Aucun son libre trouvé — essayez un autre titre",
+    searchHint:
+      "Pas de fichier sur l’appareil ? Cherchez un titre : extraits du domaine public (Internet Archive), pas de téléchargement pirate.",
+    tempOnly: "Temporaire — supprimé après publication",
+    fetchOnline: "Utiliser ce son",
+    slidesTitle: "Images sur 1 minute",
+    slidesHint:
+      "Jusqu’à 12 images : elles défilent pendant la minute de son. Peu d’images = plus lent. Choisissez le mouvement de chaque vue.",
+    changeMotion: "Animation",
+    motionZoomIn: "Zoom avant",
+    motionZoomOut: "Zoom arrière",
+    motionPanLeft: "Travelling gauche",
+    motionPanRight: "Travelling droit",
+    motionPanUp: "Travelling haut",
+  },
+  publish: {
+    titleProduct: "Titre (produit)",
+    titlePlaceholder: "iPhone 15 Pro Max 256Go",
+    shop: "Boutique",
+    media: "Images / vidéos",
   },
 };
 
@@ -818,6 +915,19 @@ const en: Messages = {
     orange: "Orange Money",
     airtel: "Airtel Money",
     emoneyPhone: "Your number on this network",
+    fromBalance: "ShipShop balance",
+    sendFromBalance: "Send from my balance",
+    balanceHint:
+      "No network: ShipShop debits your balance and credits the recipient.",
+    transferOk: "Transfer complete",
+    verifyState: "Check status",
+    connectionLost: "Connection lost — checking the payment, not sending again.",
+    expiredPay: "Timed out — start a new request.",
+    txnRefund: "Refund",
+    txnPurchase: "Purchase",
+    txnReceived: "Received",
+    txnSent: "Sent",
+    txnAdjustment: "Adjustment",
   },
   shopExtra: {
     followerOne: "follower",
@@ -848,19 +958,56 @@ const en: Messages = {
   },
   montage: {
     title: "Edit",
-    hint: "Optional music and visual cleanup before publishing",
-    music: "News music",
+    hint: "The file stays in the browser until you publish. Only the product’s 1-minute clip is saved — the original is discarded. Product video audio is muted.",
+    music: "Music / sound",
     none: "No music",
-    analyze: "Detect logos, text, prices",
+    analyze: "Detect objects",
     analyzing: "Analyzing…",
-    blur: "Hide",
-    stampLogo: "Shop logo",
+    blur: "Hide object",
+    stampLogo: "Stamp logo",
     stampPrice: "Stamp price",
-    eraser: "Sticker eraser",
-    apply: "Apply to image",
+    eraser: "Eraser",
+    apply: "Apply",
     skip: "Skip",
     needLogo: "Add your shop logo first",
-    noSuggestions: "Nothing detected — use the eraser or stamp the logo",
+    noSuggestions: "Nothing detected — sample the background then erase",
+    importDevice: "Import music or video",
+    importing: "Importing…",
+    maxOneMinute: "1 minute on the product",
+    clipWindow: "Clip (1 min)",
+    clipPlay: "Play clip",
+    clipPause: "Pause",
+    clipHint: "Drag to choose which minute plays. Listen before publishing.",
+    importOk: "Sound imported — pick 1 minute",
+    undo: "Undo",
+    pickColor: "Eyedropper (background color)",
+    brush: "Eraser size",
+    reset: "Original image",
+    select: "Select",
+    autoFill: "Auto fill (nearby pixels)",
+    searchOnline: "Search online",
+    searchPlaceholder: "Name or title (e.g. rumba, news)",
+    searching: "Searching…",
+    searchEmpty: "No public-domain sound found — try another title",
+    searchHint:
+      "No file on this device? Search a title: public-domain clips (Internet Archive), not pirate downloads.",
+    tempOnly: "Temporary — deleted after publishing",
+    fetchOnline: "Use this sound",
+    slidesTitle: "Images over 1 minute",
+    slidesHint:
+      "Up to 12 images play across the soundtrack minute. Fewer images stay longer. Pick each frame’s motion.",
+    changeMotion: "Motion",
+    motionZoomIn: "Zoom in",
+    motionZoomOut: "Zoom out",
+    motionPanLeft: "Pan left",
+    motionPanRight: "Pan right",
+    motionPanUp: "Pan up",
+  },
+  publish: {
+    titleProduct: "Title (product)",
+    titlePlaceholder: "iPhone 15 Pro Max 256GB",
+    shop: "Shop",
+    media: "Images / videos",
   },
 };
 
@@ -1107,6 +1254,19 @@ const pt: Messages = {
     orange: "Orange Money",
     airtel: "Airtel Money",
     emoneyPhone: "O seu número nesta rede",
+    fromBalance: "Saldo ShipShop",
+    sendFromBalance: "Enviar do meu saldo",
+    balanceHint:
+      "Sem rede: a ShipShop debita o seu saldo e credita o beneficiário.",
+    transferOk: "Transferência concluída",
+    verifyState: "Verificar estado",
+    connectionLost: "Ligação interrompida — a verificar o pagamento, sem reenviar.",
+    expiredPay: "Prazo esgotado — inicie um novo pedido.",
+    txnRefund: "Reembolso",
+    txnPurchase: "Compra",
+    txnReceived: "Recebido",
+    txnSent: "Enviado",
+    txnAdjustment: "Ajuste",
   },
   shopExtra: {
     followerOne: "seguidor",
@@ -1137,19 +1297,56 @@ const pt: Messages = {
   },
   montage: {
     title: "Montagem",
-    hint: "Música opcional e limpeza visual antes de publicar",
-    music: "Música de atualidades",
+    hint: "O ficheiro fica no navegador até publicar. Só o excerto de 1 minuto do produto é guardado — o original é apagado. Se o vídeo já tiver som, fica mudo.",
+    music: "Música / som",
     none: "Sem música",
-    analyze: "Detetar logos, textos, preços",
+    analyze: "Detetar objetos",
     analyzing: "A analisar…",
-    blur: "Ocultar",
-    stampLogo: "Logótipo da loja",
-    stampPrice: "Colar o preço",
-    eraser: "Borracha de sticker",
-    apply: "Aplicar na imagem",
+    blur: "Ocultar objeto",
+    stampLogo: "Carimbo do logótipo",
+    stampPrice: "Carimbo do preço",
+    eraser: "Borracha",
+    apply: "Aplicar",
     skip: "Saltar",
     needLogo: "Adicione primeiro o logótipo da loja",
-    noSuggestions: "Nada detetado — use a borracha ou o logótipo",
+    noSuggestions: "Nada detetado — escolha a cor de fundo e apague",
+    importDevice: "Importar música ou vídeo",
+    importing: "A importar…",
+    maxOneMinute: "1 minuto no produto",
+    clipWindow: "Excerto (1 min)",
+    clipPlay: "Ouvir o excerto",
+    clipPause: "Pausa",
+    clipHint: "Arraste para escolher o minuto. Ouça antes de publicar.",
+    importOk: "Som importado — escolha 1 minuto",
+    undo: "Desfazer",
+    pickColor: "Conta-gotas (cor de fundo)",
+    brush: "Tamanho da borracha",
+    reset: "Imagem original",
+    select: "Selecionar",
+    autoFill: "Fundo auto (pixels à volta)",
+    searchOnline: "Procurar online",
+    searchPlaceholder: "Nome ou título (ex. rumba, notícias)",
+    searching: "A procurar…",
+    searchEmpty: "Nenhum som livre encontrado — tente outro título",
+    searchHint:
+      "Sem ficheiro no aparelho? Procure um título: excertos de domínio público (Internet Archive), sem descargas pirata.",
+    tempOnly: "Temporário — apagado após publicar",
+    fetchOnline: "Usar este som",
+    slidesTitle: "Imagens em 1 minuto",
+    slidesHint:
+      "Até 12 imagens percorrem o minuto de som. Poucas imagens ficam mais tempo. Escolha o movimento de cada vista.",
+    changeMotion: "Animação",
+    motionZoomIn: "Zoom in",
+    motionZoomOut: "Zoom out",
+    motionPanLeft: "Travelling esquerda",
+    motionPanRight: "Travelling direita",
+    motionPanUp: "Travelling cima",
+  },
+  publish: {
+    titleProduct: "Título (produto)",
+    titlePlaceholder: "iPhone 15 Pro Max 256GB",
+    shop: "Loja",
+    media: "Imagens / vídeos",
   },
 };
 

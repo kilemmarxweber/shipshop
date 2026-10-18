@@ -14,6 +14,7 @@ import {
   looksLikeVideoFile,
 } from "@/lib/media";
 import { cn } from "@/lib/utils";
+import { useAppConfig } from "@/lib/use-app-config";
 
 const ACCEPT = "image/*,video/*";
 
@@ -23,16 +24,18 @@ type Props = {
   max?: number;
 };
 
-export function MediaUploader({ urls, onChange, max = 12 }: Props) {
+export function MediaUploader({ urls, onChange, max }: Props) {
   const { t } = useI18n();
+  const cfg = useAppConfig();
+  const cap = max ?? cfg.maxImages;
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
   async function onFiles(files: FileList | null) {
     if (!files?.length) return;
-    const remaining = max - urls.length;
+    const remaining = cap - urls.length;
     if (remaining <= 0) {
-      toast.error(`Maximum ${max} médias`);
+      toast.error(`Maximum ${cap} médias`);
       return;
     }
 
@@ -81,11 +84,11 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
 
       <button
         type="button"
-        disabled={uploading || urls.length >= max}
+        disabled={uploading || urls.length >= cap}
         onClick={() => inputRef.current?.click()}
         className={cn(
           "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-surface-2 text-sm font-semibold",
-          (uploading || urls.length >= max) && "opacity-50",
+          (uploading || urls.length >= cap) && "opacity-50",
         )}
       >
         {uploading ? (
@@ -97,7 +100,7 @@ export function MediaUploader({ urls, onChange, max = 12 }: Props) {
       </button>
 
       <p className="text-[11px] text-muted-foreground">
-        {urls.length}/{max}
+        {urls.length}/{cap}
       </p>
 
       {urls.length > 0 && (

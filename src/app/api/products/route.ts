@@ -1,9 +1,23 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { collectFollowingProductIds } from "@/lib/following-feed";
+import {
+  decodeTimeIdCursor,
+  pageFromRows,
+  parseListLimit,
+  PUBLIC_PAGE_SIZE,
+  timeIdCursorWhere,
+} from "@/lib/list-cursor";
+import { getAppConfig } from "@/lib/content-source";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
+import {
+  clampSoundtrackStartMs,
+  LOCAL_SOUNDTRACK_ID,
+  normalizeMotions,
+  SOUNDTRACK_START_MAX_MS,
+} from "@/lib/montage";
 
 const createSchema = z.object({
   shopId: z.string().min(1),
@@ -18,7 +32,8 @@ const createSchema = z.object({
   sizes: z.array(z.string().min(1).max(20)).max(20).default([]),
   location: z.string().max(200).optional(),
   soundtrackId: z.string().min(1).optional().nullable(),
-  soundtrackStartMs: z.number().int().min(0).max(600_000).optional(),
+  soundtrackStartMs: z.number().int().min(0).max(SOUNDTRACK_START_MAX_MS).optional(),
+  imageMotions: z.array(z.string().min(1).max(24)).max(12).optional(),
   status: z.enum(["DRAFT", "ACTIVE"]).default("DRAFT"),
 });
 
@@ -32,6 +47,12 @@ export async function GET(req: Request) {
     const mine = searchParams.get("mine") === "1";
     const following = searchParams.get("following") === "1";
     const status = searchParams.get("status");
+    const cursorRaw = searchParams.get("cursor");
+    const paginated = searchParams.has("limit") || Boolean(cursorRaw);
+    const limit = paginated
+      ? parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_SIZE)
+      : 80;
+    const cursor = decodeTimeIdCursor(cursorRaw);
 
     if (mine) {
       if (!session) {
@@ -105,7 +126,7 @@ export async function GET(req: Request) {
       recency = collected.recency;
       followedShopIds = collected.shopIds;
       if (collected.shopIds.length === 0 && collected.productIds.length === 0) {
-        return NextResponse.json({ products: [] });
+        return NextResponse.json({ products: [], nextCursor: null });
       }
       const or: object[] = [];
       if (collected.shopIds.length) {
@@ -148,8 +169,9 @@ export async function GET(req: Request) {
         ],
       });
     }
+    if (cursor) and.push(timeIdCursorWhere(cursor));
 
-    let products = await withDbRetry(() =>
+    const fetched = await withDbRetry(() =>
       prisma.product.findMany({
         where: (and.length === 1 ? and[0] : { AND: and }) as never,
         include: {
@@ -172,10 +194,12 @@ export async function GET(req: Request) {
             },
           },
         },
-        orderBy: { createdAt: "desc" },
-        take: 80,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
       }),
     );
+    const sliced = pageFromRows(fetched, limit);
+    let products = sliced.page;
 
     if (following) {
       const followed = new Set(followedShopIds);
@@ -234,7 +258,10 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ products: mapped });
+    return NextResponse.json({
+      products: mapped,
+      nextCursor: sliced.nextCursor,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erreur produits";
     console.error("[api/products]", message);
@@ -266,10 +293,62 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 
+    const cfg = await getAppConfig();
     const images = body.images
       .map((u) => u.trim())
       .filter(Boolean)
-      .slice(0, 12);
+      .slice(0, cfg.maxImages);
+
+    let soundtrackStartMs = body.soundtrackStartMs ?? 0;
+    let soundtrackId = body.soundtrackId ?? null;
+    if (soundtrackId === LOCAL_SOUNDTRACK_ID) {
+      return NextResponse.json(
+        { error: "Importez le son avant de publier" },
+        { status: 400 },
+      );
+    }
+    if (soundtrackId) {
+      let track = await withDbRetry(() =>
+        prisma.soundtrack.findUnique({
+          where: { id: soundtrackId! },
+          select: { durationMs: true },
+        }),
+      );
+      if (!track) {
+        const catalog = cfg.catalogTracks.find((row) => row.id === soundtrackId);
+        if (catalog) {
+          await withDbRetry(() =>
+            prisma.soundtrack.upsert({
+              where: { id: catalog.id },
+              create: {
+                id: catalog.id,
+                title: catalog.title,
+                artist: catalog.artist,
+                mood: catalog.mood,
+                durationMs: catalog.durationMs || cfg.clipMs,
+                audioUrl: catalog.audioUrl,
+                isActive: true,
+              },
+              update: { audioUrl: catalog.audioUrl },
+            }),
+          );
+          track = { durationMs: catalog.durationMs || cfg.clipMs };
+        }
+      }
+      if (!track) {
+        return NextResponse.json(
+          { error: "Musique introuvable" },
+          { status: 400 },
+        );
+      }
+      soundtrackStartMs = clampSoundtrackStartMs(
+        soundtrackStartMs,
+        track.durationMs,
+        cfg.clipMs,
+      );
+    } else {
+      soundtrackStartMs = 0;
+    }
 
     const product = await prisma.product.create({
       data: {
@@ -288,8 +367,13 @@ export async function POST(req: Request) {
         colors: body.colors,
         sizes: body.sizes,
         location: body.location ?? "Kinshasa",
-        soundtrackId: body.soundtrackId ?? null,
-        soundtrackStartMs: body.soundtrackStartMs ?? 0,
+        soundtrackId,
+        soundtrackStartMs,
+        imageMotions: normalizeMotions(
+          images.length,
+          body.imageMotions,
+          cfg.maxImages,
+        ),
         status: body.status,
       },
       include: { shop: true },

@@ -5,22 +5,21 @@ import { formatMoney } from "@/lib/utils";
 
 const LIKE_MARKER = "❤️ Nouveau like Chip Shop";
 
+function likeKind(productId: string) {
+  return `product_like:${productId}`;
+}
+
 function buildLikeMessage(input: {
   clientName: string;
   product: {
-    id: string;
     title: string;
     priceCents: number;
     category: string;
-    location: string | null;
     colors: string[];
     sizes: string[];
-    images: string[];
   };
-  appUrl: string;
 }) {
-  const { clientName, product, appUrl } = input;
-  const link = `${appUrl}/product/${product.id}`;
+  const { clientName, product } = input;
   const lines = [
     LIKE_MARKER,
     "",
@@ -28,8 +27,6 @@ function buildLikeMessage(input: {
     `Produit : ${product.title}`,
     `Prix : ${formatMoney(product.priceCents)}`,
     `Catégorie : ${product.category}`,
-    `Lieu : ${product.location ?? "—"}`,
-    `Réf. produit : ${product.id}`,
   ];
   if (product.colors.length) {
     lines.push(`Couleurs : ${product.colors.join(", ")}`);
@@ -37,10 +34,6 @@ function buildLikeMessage(input: {
   if (product.sizes.length) {
     lines.push(`Tailles : ${product.sizes.join(", ")}`);
   }
-  if (product.images[0]) {
-    lines.push(`Image : ${product.images[0]}`);
-  }
-  lines.push(`Lien : ${link}`);
   lines.push("");
   lines.push("Un client a aimé votre produit.");
   return lines.join("\n");
@@ -55,17 +48,10 @@ async function notifySellerOfLike(
     title: string;
     priceCents: number;
     category: string;
-    location: string | null;
     colors: string[];
     sizes: string[];
-    images: string[];
   },
 ) {
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.BETTER_AUTH_URL ??
-    "http://localhost:3000";
-
   let conversation = await withDbRetry(() =>
     prisma.conversation.findUnique({
       where: {
@@ -99,7 +85,6 @@ async function notifySellerOfLike(
   const body = buildLikeMessage({
     clientName: buyerName,
     product,
-    appUrl,
   });
 
   await withDbRetry(() =>
@@ -108,6 +93,7 @@ async function notifySellerOfLike(
         conversationId: conversation!.id,
         senderId: buyerId,
         body,
+        kind: likeKind(product.id),
       },
     }),
   );
@@ -148,10 +134,15 @@ async function removeLikeMessages(buyerId: string, productId: string) {
       where: {
         conversationId: conversation.id,
         senderId: buyerId,
-        body: {
-          startsWith: LIKE_MARKER,
-          contains: `Réf. produit : ${productId}`,
-        },
+        OR: [
+          { kind: likeKind(productId) },
+          {
+            AND: [
+              { body: { startsWith: LIKE_MARKER } },
+              { body: { contains: `Réf. produit : ${productId}` } },
+            ],
+          },
+        ],
       },
     }),
   );

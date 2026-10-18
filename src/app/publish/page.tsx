@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
@@ -23,7 +23,12 @@ import {
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
 import { MediaUploader } from "@/components/media-uploader";
-import { PublishMontage } from "@/components/publish-montage";
+import {
+  PublishMontage,
+  type LocalMontageClip,
+} from "@/components/publish-montage";
+import { LOCAL_SOUNDTRACK_ID, normalizeMotions } from "@/lib/montage";
+import { useAppConfig } from "@/lib/use-app-config";
 import {
   KinshasaAddressForm,
   type AddressState,
@@ -46,6 +51,7 @@ function PublishInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n();
+  const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   const mode = searchParams.get("mode");
   const [step, setStep] = useState(1);
@@ -68,7 +74,27 @@ function PublishInner() {
   const [colors, setColors] = useState<string[]>([]);
   const [sizes, setSizes] = useState<string[]>([]);
   const [soundtrackId, setSoundtrackId] = useState<string | null>(null);
+  const [soundtrackStartMs, setSoundtrackStartMs] = useState(0);
+  const [localClip, setLocalClip] = useState<LocalMontageClip | null>(null);
+  const [imageMotions, setImageMotions] = useState<string[]>([]);
+  const localClipRef = useRef<LocalMontageClip | null>(null);
   const [loading, setLoading] = useState(false);
+
+  function replaceLocalClip(next: LocalMontageClip | null) {
+    const prev = localClipRef.current;
+    if (prev?.audioUrl && prev.audioUrl !== next?.audioUrl) {
+      URL.revokeObjectURL(prev.audioUrl);
+    }
+    localClipRef.current = next;
+    setLocalClip(next);
+  }
+
+  useEffect(() => {
+    return () => {
+      const prev = localClipRef.current;
+      if (prev?.audioUrl) URL.revokeObjectURL(prev.audioUrl);
+    };
+  }, []);
 
   usePageBack({
     onBack: step > 1 ? () => setStep((s) => s - 1) : undefined,
@@ -207,7 +233,57 @@ function PublishInner() {
     }
     const location = composeAddress(address);
     const publishedTitle = title.trim();
+    function resetPublishForm() {
+      setStep(1);
+      setTitle("");
+      setImages([]);
+      setPrice("");
+      setQuantity("1");
+      setCategory("Tech");
+      setDescription("");
+      setAddress({
+        city: "Kinshasa",
+        commune: "",
+        quartier: "",
+        avenue: "",
+        parcelle: "",
+      });
+      setColors([]);
+      setSizes([]);
+      setSoundtrackId(null);
+      setSoundtrackStartMs(0);
+      replaceLocalClip(null);
+      setImageMotions([]);
+    }
     try {
+      let publishedSoundtrackId = soundtrackId;
+      let publishedStartMs = soundtrackId ? soundtrackStartMs : 0;
+      if (soundtrackId === LOCAL_SOUNDTRACK_ID) {
+        const clip = localClipRef.current;
+        if (!clip) {
+          setLoading(false);
+          toast.error("Son temporaire introuvable — réimportez");
+          return;
+        }
+        const form = new FormData();
+        form.append("file", clip.file);
+        form.append("startMs", String(soundtrackStartMs));
+        form.append("title", clip.title);
+        const clipRes = await fetch("/api/soundtracks", {
+          method: "POST",
+          body: form,
+        });
+        const clipJson = (await clipRes.json()) as {
+          soundtrack?: { id: string };
+          error?: string;
+        };
+        if (!clipRes.ok || !clipJson.soundtrack) {
+          toast.error(clipJson.error ?? "Extrait audio impossible");
+          return;
+        }
+        publishedSoundtrackId = clipJson.soundtrack.id;
+        publishedStartMs = 0;
+      }
       const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -223,7 +299,9 @@ function PublishInner() {
           colors,
           sizes,
           location,
-          soundtrackId,
+          soundtrackId: publishedSoundtrackId,
+          soundtrackStartMs: publishedStartMs,
+          imageMotions: normalizeMotions(images.length, imageMotions),
           status: as,
         }),
       });
@@ -238,7 +316,7 @@ function PublishInner() {
             "Votre annonce est sauvegardée. Publiez-la quand vous voulez depuis Mes produits.",
           duration: 5000,
         });
-        router.replace("/shops/products");
+        resetPublishForm();
         router.refresh();
         return;
       }
@@ -246,7 +324,7 @@ function PublishInner() {
         description: `« ${publishedTitle} » est maintenant visible pour les acheteurs sur ShipShop.`,
         duration: 6000,
       });
-      router.replace("/shops/products");
+      resetPublishForm();
       router.refresh();
     } catch {
       toast.error("Publication impossible — réessayez");
@@ -278,7 +356,7 @@ function PublishInner() {
           </p>
           <h1 className="font-heading text-xl font-bold">Médias & titre</h1>
           <div className="space-y-2">
-            <Label>Boutique</Label>
+            <Label>{t("publish.shop")}</Label>
             <Select
               value={shopId}
               onValueChange={(v) => {
@@ -302,34 +380,56 @@ function PublishInner() {
           </div>
 
           <div className="space-y-2">
-            <Label>Images / vidéos</Label>
-            <MediaUploader urls={images} onChange={setImages} max={12} />
-          </div>
-          {images.length > 0 && (
-            <PublishMontage
-              images={images}
-              onImagesChange={setImages}
-              soundtrackId={soundtrackId}
-              onSoundtrackId={setSoundtrackId}
-              shopLogoUrl={shops.find((s) => s.id === shopId)?.logoUrl}
-              priceCents={
-                Number.parseFloat(price) > 0
-                  ? Math.round(Number.parseFloat(price) * 100)
-                  : undefined
-              }
-              currency={currency}
-            />
-          )}
-
-          <div className="space-y-2">
-            <Label>Titre</Label>
+            <Label>{t("publish.titleProduct")}</Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="iPhone 15 Pro Max 256Go"
+              placeholder={t("publish.titlePlaceholder")}
               className="bg-surface-2"
             />
           </div>
+
+          <div className="space-y-2">
+            <Label>{t("publish.media")}</Label>
+            <MediaUploader
+              urls={images}
+              onChange={(urls) => {
+                setImages(urls);
+                setImageMotions(
+                  normalizeMotions(
+                    urls.length,
+                    imageMotions,
+                    appConfig.maxImages,
+                  ),
+                );
+              }}
+              max={appConfig.maxImages}
+            />
+          </div>
+          <PublishMontage
+            images={images}
+            onImagesChange={setImages}
+            soundtrackId={soundtrackId}
+            onSoundtrackId={(id) => {
+              setSoundtrackId(id);
+              setSoundtrackStartMs(0);
+            }}
+            soundtrackStartMs={soundtrackStartMs}
+            onSoundtrackStartMs={setSoundtrackStartMs}
+            localClip={localClip}
+            onLocalClip={replaceLocalClip}
+            imageMotions={imageMotions}
+            onImageMotions={setImageMotions}
+            productTitle={title}
+            shopLogoUrl={shops.find((s) => s.id === shopId)?.logoUrl}
+            priceCents={
+              Number.parseFloat(price) > 0
+                ? Math.round(Number.parseFloat(price) * 100)
+                : undefined
+            }
+            currency={currency}
+          />
+
           <Button
             className="h-12 w-full font-bold"
             disabled={!title || !shopId}

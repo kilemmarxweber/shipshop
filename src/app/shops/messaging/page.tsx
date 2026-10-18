@@ -28,6 +28,7 @@ type ConfigForm = {
   waApiKeyMasked: string | null;
   notifySms: boolean;
   notifyWhatsapp: boolean;
+  notifyEmail: boolean;
   brandPrefix: string;
 };
 
@@ -35,7 +36,7 @@ type Template = {
   id: string;
   eventKey: string;
   name: string;
-  channel: "whatsapp" | "sms";
+  channel: "whatsapp" | "sms" | "email";
   body: string;
   isActive: boolean;
   infobipTemplateName: string | null;
@@ -97,6 +98,7 @@ export default function MessagingSettingsPage() {
         waApiKey: waKey || null,
         notifySms: config.notifySms,
         notifyWhatsapp: config.notifyWhatsapp,
+        notifyEmail: config.notifyEmail,
         brandPrefix: config.brandPrefix,
       }),
     });
@@ -209,6 +211,16 @@ export default function MessagingSettingsPage() {
               }
             />
             SMS
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={config.notifyEmail}
+              onChange={(e) =>
+                setConfig({ ...config, notifyEmail: e.target.checked })
+              }
+            />
+            E-mail
           </label>
         </div>
         <div className="space-y-2">
@@ -331,13 +343,14 @@ export default function MessagingSettingsPage() {
       </Button>
 
       <h2 className="mb-3 font-heading text-sm font-bold">
-        Templates livraison (tous vendeurs)
+        Templates (livraison + portefeuille)
       </h2>
       <p className="mb-3 text-[11px] text-muted-foreground">
-        Variables : {"{{brand}}"}, {"{{shop_name}}"}, {"{{customer_name}}"},{" "}
-        {"{{product_title}}"}, {"{{courier_name}}"}, {"{{courier_phone}}"},{" "}
-        {"{{distance_km}}"}, {"{{eta_text}}"}, {"{{pickup_code}}"},{" "}
-        {"{{tracking_url}}"}
+        Livraison : {"{{brand}}"}, {"{{shop_name}}"}, {"{{customer_name}}"},{" "}
+        {"{{product_title}}"}, {"{{courier_name}}"}, {"{{tracking_url}}"}.
+        Portefeuille : {"{{payer_name}}"}, {"{{recipient_name}}"},{" "}
+        {"{{amount}}"}, {"{{rail}}"}, {"{{reference}}"}, {"{{payer_balance}}"},{" "}
+        {"{{recipient_balance}}"}.
       </p>
       <ul className="space-y-2">
         {templates.map((t) => (

@@ -1,24 +1,18 @@
 import { decryptSecret } from "@/lib/crypto";
+import {
+  appDisplayName,
+  emailInfoCard,
+  emailLayoutHtml,
+  emailSecretValue,
+  escapeHtml,
+  publicAppUrl,
+  wrapTextEmail,
+} from "@/lib/email/email-layout";
+import { deliverMail, isSmtpConfigured } from "@/lib/email/smtp";
 import { getMessagingConfig } from "@/lib/messaging/config";
 import { KlamboClient } from "@/lib/messaging/klambo";
 import { sendInfobipWhatsappText } from "@/lib/messaging/infobip-whatsapp";
 import { sendInfobipSms } from "@/lib/messaging/infobip-sms";
-
-function appName() {
-  return (
-    process.env.NEXT_PUBLIC_APP_NAME?.trim() ||
-    process.env.APP_NAME?.trim() ||
-    "ShipShop"
-  );
-}
-
-function emailFrom() {
-  return (
-    process.env.EMAIL_FROM?.trim() ||
-    process.env.RESEND_FROM?.trim() ||
-    `${appName()} <noreply@shipshop.app>`
-  );
-}
 
 /** Envoi WhatsApp texte (Klambo ou Infobip) selon la config plateforme. */
 export async function sendDirectWhatsapp(to: string, text: string) {
@@ -80,52 +74,48 @@ export async function sendDirectSms(to: string, text: string) {
 }
 
 /**
- * E-mail transactionnel.
- * - Resend si `RESEND_API_KEY`
- * sinon log console (comme les invitations) pour ne pas bloquer le reset.
+ * E-mail transactionnel SMTP (Hostinger comme Eteyelo) + layout HTML.
  */
 export async function sendDirectEmail(input: {
   to: string;
   subject: string;
   text: string;
+  title?: string;
+  html?: string;
+  cta?: { href: string; label: string };
 }) {
   const to = input.to.trim();
   if (!to) throw new Error("E-mail manquant");
 
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  if (apiKey) {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: emailFrom(),
-        to: [to],
-        subject: input.subject,
-        text: input.text,
-      }),
+  const html =
+    input.html ??
+    wrapTextEmail({
+      title: input.title || input.subject,
+      text: input.text,
+      cta: input.cta,
     });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(body || `Resend ${res.status}`);
-    }
-    const json = (await res.json()) as { id?: string };
+
+  if (!isSmtpConfigured()) {
+    console.log(
+      `[email] SMTP off — to=${to} subject=${input.subject}\n${input.text}`,
+    );
     return {
       channel: "email" as const,
-      provider: "resend",
-      id: json.id ?? "sent",
+      provider: "console",
+      id: "logged",
     };
   }
 
-  console.log(
-    `[email] to=${to} subject=${input.subject}\n${input.text}\n(configure RESEND_API_KEY pour un envoi réel)`,
-  );
+  const result = await deliverMail({
+    to,
+    subject: input.subject,
+    text: input.text,
+    html,
+  });
   return {
     channel: "email" as const,
-    provider: "console",
-    id: "logged",
+    provider: "smtp",
+    id: result.messageId,
   };
 }
 
@@ -134,11 +124,8 @@ export function passwordResetMessage(input: {
   email: string;
   password: string;
 }) {
-  const brand = appName();
-  const base =
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    process.env.BETTER_AUTH_URL?.replace(/\/$/, "") ||
-    "http://localhost:3000";
+  const brand = appDisplayName();
+  const base = publicAppUrl();
   return (
     `${brand} — nouveau mot de passe\n\n` +
     `Bonjour ${input.name},\n` +
@@ -148,4 +135,30 @@ export function passwordResetMessage(input: {
     `Connectez-vous : ${base}/auth/login\n` +
     `Changez-le dès que possible dans votre profil.`
   );
+}
+
+export function passwordResetHtml(input: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  const brand = appDisplayName();
+  const loginUrl = `${publicAppUrl()}/auth/login`;
+  return emailLayoutHtml({
+    appName: brand,
+    title: "Nouveau mot de passe",
+    intro: `Bonjour ${escapeHtml(input.name)}, votre mot de passe a été réinitialisé par un administrateur.`,
+    bodyHtml: emailInfoCard([
+      {
+        label: "E-mail",
+        valueHtml: `<code style="background:#e2e8f0;padding:2px 8px;border-radius:6px;">${escapeHtml(input.email)}</code>`,
+      },
+      {
+        label: "Nouveau mot de passe",
+        valueHtml: emailSecretValue(input.password),
+      },
+    ]),
+    cta: { href: loginUrl, label: "Se connecter" },
+    footerNote: "Changez ce mot de passe dès que possible dans votre profil.",
+  });
 }

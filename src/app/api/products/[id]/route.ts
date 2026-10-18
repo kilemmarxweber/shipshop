@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertChipShopOwner } from "@/lib/kyc";
+import { getAppConfig } from "@/lib/content-source";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { APP_CURRENCIES } from "@/lib/money";
+import { normalizeMotions, SOUNDTRACK_START_MAX_MS } from "@/lib/montage";
 
 const updateSchema = z.object({
   title: z.string().min(2).max(120).optional(),
@@ -17,7 +19,8 @@ const updateSchema = z.object({
   sizes: z.array(z.string().min(1).max(20)).max(20).optional(),
   location: z.string().max(200).optional().nullable(),
   soundtrackId: z.string().min(1).optional().nullable(),
-  soundtrackStartMs: z.number().int().min(0).max(600_000).optional(),
+  soundtrackStartMs: z.number().int().min(0).max(SOUNDTRACK_START_MAX_MS).optional(),
+  imageMotions: z.array(z.string().min(1).max(24)).max(12).optional(),
   status: z.enum(["DRAFT", "ACTIVE", "SOLD", "HIDDEN"]).optional(),
 });
 
@@ -165,6 +168,11 @@ export async function PATCH(
       else if (existing.status === "SOLD" && quantity > 0) status = "ACTIVE";
     }
 
+    const cfg = await getAppConfig();
+    const nextImages =
+      body.images !== undefined
+        ? body.images.slice(0, cfg.maxImages)
+        : undefined;
     const product = await withDbRetry(() =>
       prisma.product.update({
         where: { id },
@@ -179,7 +187,7 @@ export async function PATCH(
           ...(body.currency !== undefined ? { currency: body.currency } : {}),
           ...(body.quantity !== undefined ? { quantity: body.quantity } : {}),
           ...(body.category !== undefined ? { category: body.category } : {}),
-          ...(body.images !== undefined ? { images: body.images } : {}),
+          ...(nextImages !== undefined ? { images: nextImages } : {}),
           ...(body.colors !== undefined ? { colors: body.colors } : {}),
           ...(body.sizes !== undefined ? { sizes: body.sizes } : {}),
           ...(body.location !== undefined ? { location: body.location } : {}),
@@ -188,6 +196,15 @@ export async function PATCH(
             : {}),
           ...(body.soundtrackStartMs !== undefined
             ? { soundtrackStartMs: body.soundtrackStartMs }
+            : {}),
+          ...(body.imageMotions !== undefined
+            ? {
+                imageMotions: normalizeMotions(
+                  (nextImages ?? existing.images).length,
+                  body.imageMotions,
+                  cfg.maxImages,
+                ),
+              }
             : {}),
           ...(status !== undefined ? { status } : {}),
         },

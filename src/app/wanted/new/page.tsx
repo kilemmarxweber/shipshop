@@ -154,11 +154,15 @@ export default function NewWantedPage() {
         ? `${n} demandes visibles pour tout le monde`
         : "Demande visible pour tout le monde",
     );
-    if (n > 1) {
-      router.replace("/wanted");
-    } else {
-      router.replace(`/wanted/${data.request.id}`);
-    }
+    setProducts([emptyDraft()]);
+    setAddress({
+      city: "Kinshasa",
+      commune: "",
+      quartier: "",
+      avenue: "",
+      parcelle: "",
+    });
+    router.refresh();
   }
 
   return (

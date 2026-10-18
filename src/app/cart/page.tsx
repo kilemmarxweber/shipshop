@@ -9,6 +9,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney } from "@/lib/utils";
+import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { useI18n } from "@/components/i18n-provider";
 import { FulfillmentForm } from "@/components/fulfillment-form";
 import { PageLoader } from "@/components/page-loader";
@@ -187,6 +188,7 @@ export default function CartPage() {
       return;
     }
     toast.success("Achat confirmé — solde débité");
+    notifyWalletUpdated();
     const first = data?.orders?.[0]?.id;
     router.push(first ? `/orders/${first}` : "/profile");
   }

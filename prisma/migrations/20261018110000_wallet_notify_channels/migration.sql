@@ -1,0 +1,4 @@
+ALTER TYPE "MsgChannel" ADD VALUE IF NOT EXISTS 'email';
+
+ALTER TABLE "messaging_config"
+  ADD COLUMN IF NOT EXISTS "notifyEmail" BOOLEAN NOT NULL DEFAULT true;

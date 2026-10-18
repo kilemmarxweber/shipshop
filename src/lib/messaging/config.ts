@@ -26,7 +26,7 @@ export async function ensureMessagingSetup() {
   }
 
   for (const tpl of DEFAULT_TEMPLATES) {
-    for (const channel of ["whatsapp", "sms"] as const) {
+    for (const channel of ["whatsapp", "sms", "email"] as const) {
       await withDbRetry(() =>
         prisma.messageTemplate.upsert({
           where: {
@@ -71,6 +71,7 @@ export function messagingFormState(config: {
   waFromNumber: string | null;
   notifySms: boolean;
   notifyWhatsapp: boolean;
+  notifyEmail: boolean;
   brandPrefix: string;
 }) {
   let klamboMasked: string | null = null;
@@ -111,6 +112,7 @@ export function messagingFormState(config: {
     waApiKeyMasked: waMasked,
     notifySms: config.notifySms,
     notifyWhatsapp: config.notifyWhatsapp,
+    notifyEmail: config.notifyEmail,
     brandPrefix: config.brandPrefix,
   };
 }

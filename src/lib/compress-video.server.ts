@@ -6,6 +6,16 @@ import {
   VIDEO_STORED_MAX_BYTES,
 } from "@/lib/media";
 import { isFfmpegAvailable, runFfmpeg } from "@/lib/ffmpeg.server";
+import { getAppConfig } from "@/lib/content-source";
+import { MONTAGE_MAX_SECONDS } from "@/lib/montage";
+
+async function clipSeconds() {
+  try {
+    return (await getAppConfig()).clipSeconds;
+  } catch {
+    return MONTAGE_MAX_SECONDS;
+  }
+}
 
 function compressTimeoutMs(inputBytes: number) {
   const mb = inputBytes / (1024 * 1024);
@@ -35,6 +45,8 @@ async function encodePass(opts: PassOpts) {
     "error",
     "-i",
     opts.inputPath,
+    "-t",
+    String(await clipSeconds()),
     "-vf",
     vf,
     "-c:v",
@@ -76,6 +88,40 @@ export async function compressVideoBuffer(
   input: Buffer,
 ): Promise<{ buffer: Buffer; ext: "mp4" }> {
   if (input.length <= VIDEO_COMPRESS_SKIP_BYTES) {
+    if (await isFfmpegAvailable()) {
+      const dir = await mkdtemp(path.join(tmpdir(), "chipshop-vidtrim-"));
+      const inputPath = path.join(dir, "in.bin");
+      const outputPath = path.join(dir, "out.mp4");
+      try {
+        await writeFile(inputPath, input);
+        await runFfmpeg(
+          [
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            inputPath,
+            "-t",
+            String(await clipSeconds()),
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            outputPath,
+          ],
+          30_000,
+        );
+        const trimmed = await readFile(outputPath);
+        if (trimmed.length >= 2048) {
+          return { buffer: trimmed, ext: "mp4" };
+        }
+      } catch {
+        /* copie impossible : garder l’original */
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    }
     return { buffer: input, ext: "mp4" };
   }
 
@@ -141,12 +187,6 @@ export async function compressVideoBuffer(
 
       buffer = await readFile(outputPath);
       if (buffer.length <= VIDEO_STORED_MAX_BYTES) {
-        if (
-          buffer.length >= input.length &&
-          input.length <= VIDEO_STORED_MAX_BYTES
-        ) {
-          return { buffer: input, ext: "mp4" };
-        }
         return { buffer, ext: "mp4" };
       }
       lastError = new Error(

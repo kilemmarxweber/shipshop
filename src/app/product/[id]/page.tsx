@@ -18,8 +18,10 @@ import {
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { useAppConfig } from "@/lib/use-app-config";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { parseCurrency } from "@/lib/money";
+import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { formatMoney, cn } from "@/lib/utils";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { colorHex } from "@/lib/product-options";
@@ -27,7 +29,9 @@ import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { ProductCommentsSheet } from "@/components/product-comments-sheet";
+import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
+import { DEFAULT_VIDEO_SOUND } from "@/components/video-sound-button";
 import { ShopBrand } from "@/components/shop-brand";
 import { FulfillmentForm } from "@/components/fulfillment-form";
 import { MediaUploader } from "@/components/media-uploader";
@@ -52,6 +56,7 @@ type Product = {
   quantity: number;
   category: string;
   images: string[];
+  imageMotions?: string[];
   colors: string[];
   sizes: string[];
   location: string | null;
@@ -60,6 +65,8 @@ type Product = {
   commentsCount: number;
   likedByMe: boolean;
   canDelete?: boolean;
+  soundtrackStartMs?: number;
+  soundtrack?: { id: string; audioUrl: string } | null;
   shop: {
     id: string;
     name: string;
@@ -74,6 +81,7 @@ function ProductInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { t } = useI18n();
+  const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   usePageBack({ fallbackHref: "/" });
   const [product, setProduct] = useState<Product | null>(null);
@@ -363,6 +371,7 @@ function ProductInner() {
       return;
     }
     toast.success("Achat réussi — solde débité");
+    notifyWalletUpdated();
     router.push(json?.order?.id ? `/orders/${json.order.id}` : "/profile");
   }
 
@@ -435,10 +444,21 @@ function ProductInner() {
             eager
             className="aspect-[4/3.6] w-full"
             intervalMs={2800}
+            hasSoundtrack={Boolean(product.soundtrack?.audioUrl)}
+            clipMs={product.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
+            motions={product.imageMotions}
             onDoubleLike={() => {
               if (!product.likedByMe) void toggleLike();
             }}
           />
+          {product.soundtrack?.audioUrl ? (
+            <FeedSoundtrackPlayer
+              audioUrl={product.soundtrack.audioUrl}
+              startMs={product.soundtrackStartMs}
+              sound={DEFAULT_VIDEO_SOUND}
+              active
+            />
+          ) : null}
         </div>
       </div>
 

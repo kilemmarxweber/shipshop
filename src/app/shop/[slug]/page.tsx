@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { CATEGORIES } from "@/lib/categories";
 import { fetchJson } from "@/lib/fetch-json";
+import { useAppConfig } from "@/lib/use-app-config";
 import { uploadCompressedMedia } from "@/lib/compress-media";
 import { colorHex } from "@/lib/product-options";
 import { formatMoney, cn } from "@/lib/utils";
@@ -73,6 +74,7 @@ type Product = {
   currency?: string;
   category: string;
   images: string[];
+  imageMotions?: string[];
   colors: string[];
   sizes: string[];
   location: string | null;
@@ -94,6 +96,7 @@ function ShopInner() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const { t } = useI18n();
+  const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   usePageBack({ fallbackHref: "/" });
   const [shop, setShop] = useState<ShopProfile | null>(null);
@@ -567,6 +570,9 @@ function ShopInner() {
                 className="absolute inset-0"
                 muted={soundFor(p.id).muted}
                 volume={soundFor(p.id).volume}
+                hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
+                clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
+                motions={p.imageMotions}
                 audioKey={
                   productHasVideo(p.images) || p.soundtrack?.audioUrl
                     ? p.id

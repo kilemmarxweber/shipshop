@@ -59,7 +59,7 @@ function ChatInner() {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [acting, setActing] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
 
   usePageBack({ fallbackHref: "/messages" });
 
@@ -84,7 +84,9 @@ function ChatInner() {
   }, [session, id]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = threadRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   async function send() {
@@ -155,8 +157,8 @@ function ChatInner() {
   const hasUrgent = messages.some((m) => m.isUrgent && m.requiresAck);
 
   return (
-    <div className="flex h-[calc(100dvh-8.5rem)] min-h-0 flex-col md:h-[calc(100%-0.5rem)] md:max-h-[calc(100dvh-7rem)]">
-      <div className="border-b border-border px-4 pb-3 pt-0">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 border-b border-border bg-background px-4 pb-3 pt-0">
         <div className="min-w-0">
           <p className="flex items-center gap-2 truncate font-heading text-sm font-bold">
             {title}
@@ -187,7 +189,7 @@ function ChatInner() {
       </div>
 
       {!isBuyer && openIssues.length > 0 && (
-        <div className="space-y-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-3">
+        <div className="shrink-0 space-y-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-3">
           {openIssues.map((issue) => (
             <div key={issue.id} className="rounded-xl border border-amber-500/40 bg-surface p-3">
               <p className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
@@ -236,7 +238,10 @@ function ChatInner() {
         </div>
       )}
 
-      <div className="min-w-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4">
+      <div
+        ref={threadRef}
+        className="min-h-0 min-w-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4"
+      >
         {messages.map((m) => {
           const mine = m.senderId === session.user.id;
           const urgent = Boolean(m.isUrgent);
@@ -288,10 +293,9 @@ function ChatInner() {
             </div>
           );
         })}
-        <div ref={bottomRef} />
       </div>
 
-      <div className="flex gap-2 border-t border-border p-3">
+      <div className="flex shrink-0 gap-2 border-t border-border bg-background p-3">
         <Input
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -322,8 +326,10 @@ function ChatInner() {
 
 export default function ConversationPage() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <ChatInner />
-    </Suspense>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <Suspense fallback={<PageLoader />}>
+        <ChatInner />
+      </Suspense>
+    </div>
   );
 }

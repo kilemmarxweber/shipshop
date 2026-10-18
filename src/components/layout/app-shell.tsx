@@ -25,6 +25,8 @@ import { NewListingFlash } from "@/components/new-listing-flash";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useInboxUnread } from "@/hooks/use-inbox-unread";
 import { useI18n } from "@/components/i18n-provider";
+import { WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
+import { useBindPageMediaSession } from "@/lib/page-media-session";
 
 const NAV = [
   { href: "/", key: "home" as const, icon: Home },
@@ -58,6 +60,7 @@ export function AppShell({
   appName: string;
 }) {
   const pathname = usePathname();
+  useBindPageMediaSession();
   const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
@@ -69,8 +72,8 @@ export function AppShell({
 
   useEffect(() => {
     const bump = () => setWalletTick((n) => n + 1);
-    window.addEventListener("wallet-updated", bump);
-    return () => window.removeEventListener("wallet-updated", bump);
+    window.addEventListener(WALLET_UPDATED_EVENT, bump);
+    return () => window.removeEventListener(WALLET_UPDATED_EVENT, bump);
   }, []);
 
   useEffect(() => {
@@ -105,7 +108,9 @@ export function AppShell({
   }, [userId, pathname, walletTick]);
 
   const hideChrome =
-    pathname.startsWith("/auth") || pathname.startsWith("/onboarding");
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/studio");
   // Racines onglets : pas de bouton retour (le bas nav suffit)
   const hideBackOn = new Set([
     "/",
@@ -203,12 +208,13 @@ export function AppShell({
           <main
             className={cn(
               "app-main",
+              pathname.startsWith("/messages/") && "app-main-chat",
               !hideChrome &&
                 "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
             )}
           >
             {showBack && (
-              <div className="px-4 pt-1">
+              <div className="shrink-0 px-4 pt-1">
                 <BackButton inline />
               </div>
             )}

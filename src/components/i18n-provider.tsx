@@ -37,7 +37,8 @@ export type MessagePath =
   | `wallet.${keyof Messages["wallet"]}`
   | `shopExtra.${keyof Messages["shopExtra"]}`
   | `wanted.${keyof Messages["wanted"]}`
-  | `montage.${keyof Messages["montage"]}`;
+  | `montage.${keyof Messages["montage"]}`
+  | `publish.${keyof Messages["publish"]}`;
 
 type I18nContextValue = {
   locale: UserLocale;

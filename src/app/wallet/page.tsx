@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Wallet } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -26,6 +26,12 @@ import { PhoneField } from "@/components/phone-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  clearPaymentIdempotencyKey,
+  fetchPaymentJson,
+  paymentIdempotencyKey,
+} from "@/lib/payments/idempotency-client";
+import { notifyWalletUpdated, WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
 
 const PROVIDERS: {
   id: RailProvider;
@@ -78,16 +84,32 @@ export default function WalletPage() {
     AIRTEL: "",
   });
   const [tab, setTab] = useState<"me" | "someone">("me");
-  const [provider, setProvider] = useState<RailProvider>("MPESA");
+  const [provider, setProvider] = useState<RailProvider | null>("MPESA");
   const [amount, setAmount] = useState("50");
   const [currency, setCurrency] = useState<AppCurrency>("USD");
   const [query, setQuery] = useState("");
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [picked, setPicked] = useState<Recipient | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [pendingMovementId, setPendingMovementId] = useState<string | null>(
+    null,
+  );
   const [ussdHint, setUssdHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [savingContacts, setSavingContacts] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  const payIntent = useMemo(
+    () =>
+      [
+        tab,
+        amount,
+        currency,
+        provider ?? "BAL",
+        picked?.id ?? "",
+      ].join("|"),
+    [tab, amount, currency, provider, picked?.id],
+  );
 
   async function refresh() {
     const res = await fetch("/api/wallet");
@@ -122,6 +144,14 @@ export default function WalletPage() {
     if (!session) return;
     void refresh();
   }, [session]);
+
+  useEffect(() => {
+    const onUpdate = () => {
+      void refresh();
+    };
+    window.addEventListener(WALLET_UPDATED_EVENT, onUpdate);
+    return () => window.removeEventListener(WALLET_UPDATED_EVENT, onUpdate);
+  }, []);
 
   useEffect(() => {
     if (tab !== "someone" || query.trim().length < 2) {
@@ -171,17 +201,90 @@ export default function WalletPage() {
       return;
     }
     toast.success("Numéros enregistrés");
-    void refresh();
+    await refresh();
+  }
+
+  async function resetAfterSend() {
+    clearPaymentIdempotencyKey(payIntent);
+    setPendingId(null);
+    setPendingMovementId(null);
+    setUssdHint(null);
+    setPicked(null);
+    setQuery("");
+    setRecipients([]);
+    setAmount("50");
+    notifyWalletUpdated();
+    await refresh();
+  }
+
+  type PayResult = {
+    error?: string;
+    transactionId?: string | null;
+    movementId?: string;
+    status?: string;
+    ussdHint?: string | null;
+    alreadyApplied?: boolean;
+    alreadyConfirmed?: boolean;
+    beneficiaryUserId?: string | null;
+    balanceCents?: number;
+    payerBalanceAfter?: number;
+    currency?: string;
+  };
+
+  function paintOwnBalance(json: PayResult) {
+    const code = parseCurrency(json.currency ?? currency);
+    const own =
+      typeof json.payerBalanceAfter === "number"
+        ? json.payerBalanceAfter
+        : json.beneficiaryUserId
+          ? undefined
+          : json.balanceCents;
+    if (typeof own !== "number") return;
+    setBalances((prev) => ({ ...prev, [code]: own }));
+    setBalance((prev) => (code === displayCurrency ? own : prev));
+  }
+
+  async function applyPayResult(json: PayResult, mode: "initiate" | "done") {
+    if (json.status === "EXPIRED" || json.status === "REJECTED") {
+      toast.error(t("wallet.expiredPay"));
+      await resetAfterSend();
+      return;
+    }
+    if (mode === "initiate" && json.status && json.status !== "POSTED") {
+      setPendingId(json.transactionId ?? null);
+      setPendingMovementId(json.movementId ?? null);
+      setUssdHint(json.ussdHint ?? null);
+      toast.message(json.ussdHint ?? t("wallet.ussdHint"));
+      return;
+    }
+    if (json.status === "POSTED" || json.alreadyApplied || json.alreadyConfirmed) {
+      paintOwnBalance(json);
+      const shown =
+        json.payerBalanceAfter ??
+        json.balanceCents ??
+        0;
+      toast.success(
+        json.beneficiaryUserId
+          ? `${t("wallet.youRecharge")} · ${formatMoney(shown, json.currency ?? currency)}`
+          : tab === "someone" && !provider
+            ? `${t("wallet.transferOk")} · ${formatMoney(shown, json.currency ?? currency)}`
+            : `Compte rechargé · ${formatMoney(shown, json.currency ?? currency)}`,
+      );
+      await resetAfterSend();
+    }
+  }
+
+  async function lookupPending(): Promise<PayResult | null> {
+    const qs = pendingMovementId
+      ? `id=${encodeURIComponent(pendingMovementId)}`
+      : `idempotencyKey=${encodeURIComponent(paymentIdempotencyKey(payIntent))}`;
+    const res = await fetch(`/api/wallet/movements?${qs}`);
+    if (res.status === 404) return null;
+    const json = await res.json();
+    return (json.movement ?? json) as PayResult;
   }
 
   async function initiate() {
-    const raw = contacts[provider];
-    const parts = splitPhone(raw);
-    const e164 = composePhone(parts.dial, parts.national);
-    if (!isValidContactPhone(e164)) {
-      toast.error("Enregistrez votre numéro sur ce réseau");
-      return;
-    }
     if (tab === "someone" && !picked) {
       toast.error("Choisissez un bénéficiaire");
       return;
@@ -191,61 +294,153 @@ export default function WalletPage() {
       toast.error("Montant invalide");
       return;
     }
-    setLoading(true);
-    const res = await fetch("/api/wallet/deposit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "initiate",
-        provider,
-        phone: e164,
-        amountCents: cents,
-        currency,
-        beneficiaryUserId: tab === "someone" ? picked?.id : undefined,
-      }),
-    });
-    const json = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      toast.error(json.error);
+    const key = paymentIdempotencyKey(payIntent);
+
+    if (tab === "someone" && !provider) {
+      setLoading(true);
+      try {
+        const { res, data } = await fetchPaymentJson<PayResult>(
+          "/api/wallet/transfer",
+          {
+            method: "POST",
+            idempotencyKey: key,
+            body: JSON.stringify({
+              amountCents: cents,
+              currency,
+              beneficiaryUserId: picked?.id,
+              idempotencyKey: key,
+            }),
+          },
+        );
+        setLoading(false);
+        if (!res.ok) {
+          toast.error(data.error ?? "Transfert impossible");
+          return;
+        }
+        await applyPayResult({ ...data, status: data.status ?? "POSTED" }, "done");
+      } catch (error) {
+        setLoading(false);
+        toast.message(t("wallet.connectionLost"));
+        const found = await lookupPending();
+        if (found) await applyPayResult(found, "done");
+        else toast.error(error instanceof Error ? error.message : "Erreur");
+      }
       return;
     }
-    setPendingId(json.transactionId);
-    setUssdHint(json.ussdHint ?? null);
-    toast.message(json.ussdHint ?? t("wallet.ussdHint"));
+
+    if (!provider) {
+      toast.error("Choisissez un réseau");
+      return;
+    }
+    const raw = contacts[provider];
+    const parts = splitPhone(raw);
+    const e164 = composePhone(parts.dial, parts.national);
+    if (!isValidContactPhone(e164)) {
+      toast.error("Enregistrez votre numéro sur ce réseau");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { res, data } = await fetchPaymentJson<PayResult>(
+        "/api/wallet/deposit",
+        {
+          method: "POST",
+          idempotencyKey: key,
+          body: JSON.stringify({
+            action: "initiate",
+            provider,
+            phone: e164,
+            amountCents: cents,
+            currency,
+            beneficiaryUserId: tab === "someone" ? picked?.id : undefined,
+            idempotencyKey: key,
+          }),
+        },
+      );
+      setLoading(false);
+      if (!res.ok) {
+        toast.error(data.error ?? "Demande impossible");
+        return;
+      }
+      await applyPayResult(data, "initiate");
+    } catch (error) {
+      setLoading(false);
+      toast.message(t("wallet.connectionLost"));
+      const found = await lookupPending();
+      if (found) await applyPayResult(found, "initiate");
+      else toast.error(error instanceof Error ? error.message : "Erreur");
+    }
   }
 
   async function confirm() {
-    if (!pendingId) return;
+    if (!pendingId && !pendingMovementId) return;
     setLoading(true);
-    const res = await fetch("/api/wallet/deposit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "confirm", transactionId: pendingId }),
-    });
-    const json = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      toast.error(json.error);
-      return;
+    try {
+      const found = await lookupPending();
+      if (found?.status === "POSTED") {
+        setLoading(false);
+        await applyPayResult(found, "done");
+        return;
+      }
+      if (found?.status === "EXPIRED" || found?.status === "REJECTED") {
+        setLoading(false);
+        await applyPayResult(found, "done");
+        return;
+      }
+      const txnId = pendingId ?? found?.transactionId;
+      if (!txnId) {
+        setLoading(false);
+        toast.error("Paiement introuvable");
+        return;
+      }
+      const { res, data } = await fetchPaymentJson<PayResult>(
+        "/api/wallet/deposit",
+        {
+          method: "POST",
+          idempotencyKey: paymentIdempotencyKey(payIntent),
+          body: JSON.stringify({ action: "confirm", transactionId: txnId }),
+        },
+      );
+      setLoading(false);
+      if (!res.ok) {
+        toast.error(data.error ?? "Confirmation impossible");
+        return;
+      }
+      await applyPayResult(data, "done");
+    } catch {
+      setLoading(false);
+      toast.message(t("wallet.connectionLost"));
+      const found = await lookupPending();
+      if (found) await applyPayResult(found, found.status === "POSTED" ? "done" : "initiate");
     }
-    toast.success(
-      json.beneficiaryUserId
-        ? `${t("wallet.youRecharge")} · ${formatMoney(json.balanceCents, json.currency ?? currency)}`
-        : `Compte rechargé · ${formatMoney(json.balanceCents, json.currency ?? currency)}`,
-    );
-    setPendingId(null);
-    setUssdHint(null);
-    window.dispatchEvent(new Event("wallet-updated"));
-    void refresh();
+  }
+
+  async function verifyState() {
+    setChecking(true);
+    try {
+      const found = await lookupPending();
+      if (!found) {
+        toast.error("Aucun mouvement à vérifier");
+        return;
+      }
+      await applyPayResult(
+        found,
+        found.status === "POSTED" ? "done" : "initiate",
+      );
+    } finally {
+      setChecking(false);
+    }
   }
 
   function txnLabel(row: Txn) {
-    if (row.type === "TRANSFER_IN") return "Reçu";
+    if (row.type === "REFUND") return t("wallet.txnRefund");
+    if (row.type === "PURCHASE") return t("wallet.txnPurchase");
+    if (row.type === "ADJUSTMENT") return t("wallet.txnAdjustment");
+    if (row.type === "TRANSFER_IN") return t("wallet.txnReceived");
     if (row.type === "TRANSFER_OUT") {
       return row.metadata?.beneficiaryName
         ? `Pour ${row.metadata.beneficiaryName}`
-        : "Envoyé";
+        : t("wallet.txnSent");
     }
     if (row.type === "DEPOSIT") return t("wallet.forYou");
     return row.type;
@@ -255,8 +450,11 @@ export default function WalletPage() {
     if (id === "MPESA") return t("wallet.vodacom");
     if (id === "ORANGE") return t("wallet.orange");
     if (id === "AIRTEL") return t("wallet.airtel");
+    if (id === "INTERNAL") return t("wallet.fromBalance");
     return id;
   }
+
+  const payFromBalance = tab === "someone" && !provider;
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-6 pt-0">
@@ -291,6 +489,7 @@ export default function WalletPage() {
             onClick={() => {
               setTab("me");
               setPicked(null);
+              setProvider((prev) => prev ?? "MPESA");
             }}
             className={cn(
               "h-10 rounded-xl text-sm font-semibold",
@@ -303,7 +502,10 @@ export default function WalletPage() {
           </button>
           <button
             type="button"
-            onClick={() => setTab("someone")}
+            onClick={() => {
+              setTab("someone");
+              setProvider(null);
+            }}
             className={cn(
               "h-10 rounded-xl text-sm font-semibold",
               tab === "someone"
@@ -362,12 +564,18 @@ export default function WalletPage() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className={cn("grid gap-2", tab === "someone" ? "grid-cols-2" : "grid-cols-3")}>
           {PROVIDERS.map((p) => (
             <button
               key={p.id}
               type="button"
-              onClick={() => setProvider(p.id)}
+              onClick={() => {
+                if (tab === "someone" && provider === p.id) {
+                  setProvider(null);
+                  return;
+                }
+                setProvider(p.id);
+              }}
               className={cn(
                 "rounded-2xl bg-gradient-to-br p-3 text-center text-[11px] font-bold leading-tight",
                 p.color,
@@ -378,16 +586,37 @@ export default function WalletPage() {
               {t(p.label)}
             </button>
           ))}
+          {tab === "someone" ? (
+            <button
+              type="button"
+              onClick={() => setProvider(null)}
+              className={cn(
+                "rounded-2xl bg-gradient-to-br from-zinc-700 to-zinc-500 p-3 text-center text-[11px] font-bold leading-tight",
+                !provider &&
+                  "ring-2 ring-white ring-offset-2 ring-offset-background",
+              )}
+            >
+              {t("wallet.fromBalance")}
+            </button>
+          ) : null}
         </div>
-        <p className="text-[11px] text-muted-foreground">{t("wallet.emoneyPhone")}</p>
-        <PhoneField
-          id="wallet-phone"
-          label={t(PROVIDERS.find((p) => p.id === provider)!.label)}
-          value={contacts[provider]}
-          onChange={(v) =>
-            setContacts((prev) => ({ ...prev, [provider]: v }))
-          }
-        />
+        {payFromBalance ? (
+          <p className="text-[11px] text-muted-foreground">{t("wallet.balanceHint")}</p>
+        ) : (
+          <>
+            <p className="text-[11px] text-muted-foreground">{t("wallet.emoneyPhone")}</p>
+            {provider ? (
+              <PhoneField
+                id="wallet-phone"
+                label={t(PROVIDERS.find((p) => p.id === provider)!.label)}
+                value={contacts[provider]}
+                onChange={(v) =>
+                  setContacts((prev) => ({ ...prev, [provider]: v }))
+                }
+              />
+            ) : null}
+          </>
+        )}
         <div className="space-y-2">
           <Label>{t("wallet.currency")}</Label>
           <CurrencyPicker value={currency} onChange={setCurrency} />
@@ -411,7 +640,11 @@ export default function WalletPage() {
             disabled={loading}
             className="h-12 w-full bg-gradient-to-r from-[#ff5722] to-[#ff7a45] font-bold"
           >
-            {loading ? "…" : t("wallet.sendPay")}
+            {loading
+              ? "…"
+              : payFromBalance
+                ? t("wallet.sendFromBalance")
+                : t("wallet.sendPay")}
           </Button>
         ) : (
           <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/10 p-4">
@@ -422,6 +655,15 @@ export default function WalletPage() {
               className="h-12 w-full bg-gradient-to-r from-trust to-[#00b377] font-bold"
             >
               {loading ? "…" : t("wallet.confirmPay")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={checking || loading}
+              onClick={() => void verifyState()}
+              className="h-10 w-full"
+            >
+              {checking ? "…" : t("wallet.verifyState")}
             </Button>
           </div>
         )}
@@ -473,18 +715,14 @@ export default function WalletPage() {
               <span
                 className={cn(
                   "font-heading font-bold",
-                  row.type === "PURCHASE"
+                  row.type === "PURCHASE" || row.type === "TRANSFER_OUT"
                     ? "text-destructive"
-                    : row.type === "TRANSFER_OUT"
-                      ? "text-foreground"
-                      : "text-trust",
+                    : "text-trust",
                 )}
               >
-                {row.type === "PURCHASE"
+                {row.type === "PURCHASE" || row.type === "TRANSFER_OUT"
                   ? "−"
-                  : row.type === "TRANSFER_OUT"
-                    ? ""
-                    : "+"}
+                  : "+"}
                 {formatMoney(Math.abs(row.amountCents), row.currency)}
               </span>
             </li>

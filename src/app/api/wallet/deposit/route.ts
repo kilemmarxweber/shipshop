@@ -6,6 +6,7 @@ import {
   confirmSimulatedDeposit,
   initiateDeposit,
 } from "@/lib/payments/mobile-money";
+import { auditFromRequest, idempotencyFrom } from "@/lib/payments/ledger";
 
 const initiateSchema = z.object({
   amountCents: z.number().int().min(100),
@@ -13,6 +14,7 @@ const initiateSchema = z.object({
   phone: z.string().min(10).max(24),
   currency: z.enum(APP_CURRENCIES).default("USD"),
   beneficiaryUserId: z.string().min(1).optional().nullable(),
+  idempotencyKey: z.string().optional(),
 });
 
 const confirmSchema = z.object({
@@ -27,6 +29,7 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const action = body.action as "initiate" | "confirm";
+  const audit = auditFromRequest(req, session.user.id, "USER");
 
   try {
     if (action === "confirm") {
@@ -34,11 +37,13 @@ export async function POST(req: Request) {
       const result = await confirmSimulatedDeposit(
         parsed.transactionId,
         session.user.id,
+        audit,
       );
       return NextResponse.json(result);
     }
 
     const parsed = initiateSchema.parse(body);
+    const idempotencyKey = idempotencyFrom(req, parsed.idempotencyKey);
     const result = await initiateDeposit({
       userId: session.user.id,
       amountCents: parsed.amountCents,
@@ -46,6 +51,8 @@ export async function POST(req: Request) {
       phone: parsed.phone,
       currency: parsed.currency,
       beneficiaryUserId: parsed.beneficiaryUserId,
+      idempotencyKey,
+      audit,
     });
     return NextResponse.json(result);
   } catch (error) {

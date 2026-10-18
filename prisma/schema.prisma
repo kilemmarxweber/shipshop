@@ -45,9 +45,14 @@ model User {
   comments          ProductComment[]
   commentReads      ProductCommentRead[]
   moderationEvents  MediaModerationEvent[]
+  mediaReviews      MediaReview[]
   wantedRequests    WantedRequest[]
   wantedOffers      WantedOffer[]
   moneyContacts     UserMoneyContact[]
+  soundtracks       Soundtrack[]
+  movementsPaid     MoneyMovement[]  @relation("MovementPayer")
+  movementsReceived MoneyMovement[]  @relation("MovementBeneficiary")
+  paymentAudits     PaymentAudit[]
 
   @@unique([email])
   @@map("user")
@@ -235,6 +240,33 @@ model MediaModerationEvent {
   @@map("media_moderation_event")
 }
 
+/// Interrupteur Config système / Sanity (owner).
+model ContentSourceConfig {
+  id         String   @id @default("default")
+  source     String   @default("system")
+  nsfwReview Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@map("content_source_config")
+}
+
+/// File de revue humaine (pas de fichier pornographique stocké).
+model MediaReview {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        String
+  variant     String
+  contentHash String
+  note        String?
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@map("media_review")
+}
+
 model Product {
   id          String        @id @default(cuid())
   shopId      String
@@ -246,6 +278,8 @@ model Product {
   currency    String        @default("USD")
   category    String
   images      String[]
+  /// Ken Burns / travellings, 1 style par image (même ordre que images).
+  imageMotions String[]     @default([])
   colors      String[]      @default([])
   sizes       String[]      @default([])
   status      ProductStatus @default(DRAFT)
@@ -336,9 +370,13 @@ model Soundtrack {
   durationMs Int
   audioUrl   String
   isActive   Boolean   @default(true)
+  /// Import utilisateur (null = catalogue plateforme)
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt  DateTime  @default(now())
   products   Product[]
 
+  @@index([userId])
   @@map("soundtrack")
 }
 
@@ -650,6 +688,7 @@ enum WalletTxnStatus {
   PENDING
   SUCCESS
   FAILED
+  EXPIRED
 }
 
 model WalletTransaction {
@@ -665,12 +704,109 @@ model WalletTransaction {
   reference        String?
   status           WalletTxnStatus     @default(PENDING)
   metadata         Json?
+  movementId       String?
+  movement         MoneyMovement?      @relation(fields: [movementId], references: [id], onDelete: SetNull)
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
   @@index([walletId, createdAt])
   @@index([reference])
+  @@index([movementId])
   @@map("wallet_transaction")
+}
+
+enum MoneyMovementKind {
+  DEPOSIT
+  P2P_MM
+  P2P_BALANCE
+}
+
+enum MoneyMovementStatus {
+  CREATED
+  AWAITING_FUNDS
+  POSTED
+  EXPIRED
+  FAILED
+  REJECTED
+}
+
+enum NotifyOutboxStatus {
+  PENDING
+  SENT
+  DEAD
+}
+
+enum PaymentAuditActor {
+  USER
+  SYSTEM
+  OWNER
+}
+
+/// Unité de paiement : 1 clé d’idempotence = 1 mouvement.
+model MoneyMovement {
+  id                   String               @id @default(cuid())
+  kind                 MoneyMovementKind
+  status               MoneyMovementStatus  @default(CREATED)
+  payerUserId          String
+  payer                User                 @relation("MovementPayer", fields: [payerUserId], references: [id], onDelete: Cascade)
+  beneficiaryUserId    String?
+  beneficiary          User?                @relation("MovementBeneficiary", fields: [beneficiaryUserId], references: [id], onDelete: SetNull)
+  amountCents          Int
+  currency             String               @default("USD")
+  provider             MobileMoneyProvider  @default(INTERNAL)
+  phone                String?
+  clientIdempotencyKey String               @unique
+  providerReference    String?              @unique
+  expiresAt            DateTime?
+  postedAt             DateTime?
+  evidenceNote         String?
+  metadata             Json?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  transactions         WalletTransaction[]
+  outbox               NotifyOutbox[]
+  audits               PaymentAudit[]
+
+  @@index([payerUserId, createdAt])
+  @@index([status, expiresAt])
+  @@map("money_movement")
+}
+
+model NotifyOutbox {
+  id         String             @id @default(cuid())
+  movementId String
+  movement   MoneyMovement      @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  eventKey   String
+  payload    Json
+  status     NotifyOutboxStatus @default(PENDING)
+  attempts   Int                @default(0)
+  lastError  String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@unique([movementId, eventKey])
+  @@index([status, createdAt])
+  @@map("notify_outbox")
+}
+
+model PaymentAudit {
+  id           String            @id @default(cuid())
+  movementId   String?
+  movement     MoneyMovement?    @relation(fields: [movementId], references: [id], onDelete: SetNull)
+  actorUserId  String?
+  actor        User?             @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorType    PaymentAuditActor @default(USER)
+  action       String
+  requestId    String?
+  ip           String?
+  fromStatus   String?
+  toStatus     String?
+  detail       Json?
+  createdAt    DateTime          @default(now())
+
+  @@index([movementId, createdAt])
+  @@index([createdAt])
+  @@map("payment_audit")
 }
 
 /// Numéros e-money par réseau (max 1 Airtel / Orange / Vodacom M-Pesa).
@@ -802,6 +938,7 @@ enum WhatsappProvider {
 enum MsgChannel {
   whatsapp
   sms
+  email
 }
 
 /// Config unique (org système) — Klambo / Infobip SMS / Infobip WhatsApp
@@ -824,6 +961,7 @@ model MessagingConfig {
   waFromNumber          String?
   notifySms             Boolean          @default(true)
   notifyWhatsapp        Boolean          @default(true)
+  notifyEmail           Boolean          @default(true)
   brandPrefix           String           @default("Chip Shop")
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
