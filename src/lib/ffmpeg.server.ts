@@ -81,7 +81,7 @@ function runFfmpegWithBin(
   timeoutMs: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, {
+    const child = spawn(/*turbopackIgnore: true*/ bin, args, {
       windowsHide: true,
       env: process.env,
     });
@@ -127,7 +127,11 @@ function parseDurationMs(stderr: string) {
 export async function probeDurationMs(inputPath: string): Promise<number | null> {
   const bin = (await resolveFfmpegBin()) || ffmpegBin();
   return new Promise((resolve) => {
-    const child = spawn(bin, ["-hide_banner", "-i", inputPath], {
+    const child = spawn(/*turbopackIgnore: true*/ bin, [
+      "-hide_banner",
+      "-i",
+      inputPath,
+    ], {
       windowsHide: true,
       env: process.env,
     });
