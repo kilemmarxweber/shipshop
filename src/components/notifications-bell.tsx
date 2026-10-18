@@ -59,6 +59,18 @@ export function NotificationsBell({
 
   const recent = conversations.slice(0, 12);
 
+  async function openCommentsTab() {
+    setTab("comments");
+    const unreadIds = comments.filter((c) => c.unread).map((c) => c.id);
+    if (!unreadIds.length) return;
+    notifyInboxSeen({ commentIds: unreadIds });
+    await fetchJson("/api/comments/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commentIds: unreadIds }),
+    });
+  }
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
@@ -110,7 +122,7 @@ export function NotificationsBell({
             </button>
             <button
               type="button"
-              onClick={() => setTab("comments")}
+              onClick={() => void openCommentsTab()}
               className={cn(
                 "rounded-full px-3 py-1 text-xs font-semibold",
                 tab === "comments"
