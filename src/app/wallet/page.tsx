@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Wallet } from "lucide-react";
@@ -19,18 +18,23 @@ import {
   parseCurrency,
   walletCents,
 } from "@/lib/money";
+import type { RailProvider } from "@/lib/payments/provider";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { usePageBack } from "@/components/back-nav-context";
-import { useI18n } from "@/components/i18n-provider";
+import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { PhoneField } from "@/components/phone-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const PROVIDERS = [
-  { id: "MPESA" as const, label: "M-Pesa", color: "from-green-600 to-green-500" },
-  { id: "ORANGE" as const, label: "Orange Money", color: "from-orange-600 to-orange-400" },
-  { id: "AIRTEL" as const, label: "Airtel Money", color: "from-red-600 to-red-400" },
+const PROVIDERS: {
+  id: RailProvider;
+  label: MessagePath;
+  color: string;
+}[] = [
+  { id: "MPESA", label: "wallet.vodacom", color: "from-green-600 to-green-500" },
+  { id: "ORANGE", label: "wallet.orange", color: "from-orange-600 to-orange-400" },
+  { id: "AIRTEL", label: "wallet.airtel", color: "from-red-600 to-red-400" },
 ];
 
 type Txn = {
@@ -43,10 +47,24 @@ type Txn = {
   phone: string | null;
   reference: string | null;
   createdAt: string;
+  balanceAfterCents?: number | null;
+  metadata?: {
+    beneficiaryName?: string;
+    beneficiaryUserId?: string;
+    ussdHint?: string;
+  } | null;
+};
+
+type Contact = { provider: RailProvider; phone: string };
+
+type Recipient = {
+  id: string;
+  name: string;
+  shopName: string | null;
+  phoneMasked: string;
 };
 
 export default function WalletPage() {
-  const router = useRouter();
   const { data: session } = authClient.useSession();
   const { t } = useI18n();
   usePageBack({ fallbackHref: "/profile" });
@@ -54,12 +72,22 @@ export default function WalletPage() {
   const [displayCurrency, setDisplayCurrency] = useState<AppCurrency>("USD");
   const [balances, setBalances] = useState({ USD: 0, CDF: 0, KW: 0 });
   const [txns, setTxns] = useState<Txn[]>([]);
-  const [provider, setProvider] = useState<"MPESA" | "ORANGE" | "AIRTEL">("MPESA");
-  const [phone, setPhone] = useState("");
+  const [contacts, setContacts] = useState<Record<RailProvider, string>>({
+    MPESA: "",
+    ORANGE: "",
+    AIRTEL: "",
+  });
+  const [tab, setTab] = useState<"me" | "someone">("me");
+  const [provider, setProvider] = useState<RailProvider>("MPESA");
   const [amount, setAmount] = useState("50");
   const [currency, setCurrency] = useState<AppCurrency>("USD");
+  const [query, setQuery] = useState("");
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [picked, setPicked] = useState<Recipient | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [ussdHint, setUssdHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [savingContacts, setSavingContacts] = useState(false);
 
   async function refresh() {
     const res = await fetch("/api/wallet");
@@ -75,20 +103,39 @@ export default function WalletPage() {
     });
     setBalance(walletCents(wallet, code));
     setTxns(json.transactions ?? []);
+    const next: Record<RailProvider, string> = {
+      MPESA: "",
+      ORANGE: "",
+      AIRTEL: "",
+    };
+    for (const c of (json.contacts ?? []) as Contact[]) {
+      if (c.provider in next) next[c.provider] = c.phone;
+    }
+    const accountPhone = (json.accountPhone as string | null) ?? "";
+    if (accountPhone && !next.MPESA && !next.ORANGE && !next.AIRTEL) {
+      next.MPESA = accountPhone;
+    }
+    setContacts(next);
   }
 
   useEffect(() => {
     if (!session) return;
     void refresh();
-    fetchJson<{ user?: { phone?: string | null } }>("/api/profile")
-      .then(({ data }) => {
-        const saved = data?.user?.phone ?? "";
-        if (saved) {
-          setPhone((prev) => prev || saved);
-        }
-      })
-      .catch(() => undefined);
   }, [session]);
+
+  useEffect(() => {
+    if (tab !== "someone" || query.trim().length < 2) {
+      setRecipients([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      fetch(`/api/wallet/recipients?q=${encodeURIComponent(query.trim())}`)
+        .then((r) => r.json())
+        .then((json) => setRecipients(json.recipients ?? []))
+        .catch(() => setRecipients([]));
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [query, tab]);
 
   if (!session) {
     return (
@@ -104,11 +151,44 @@ export default function WalletPage() {
     );
   }
 
+  async function saveContacts() {
+    setSavingContacts(true);
+    const payload = PROVIDERS.map((p) => ({
+      provider: p.id,
+      phone: contacts[p.id],
+    })).filter((c) => c.phone.trim());
+    const { res, data } = await fetchJson<{
+      error?: string;
+      contacts?: Contact[];
+    }>("/api/wallet/contacts", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contacts: payload }),
+    });
+    setSavingContacts(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Impossible d’enregistrer");
+      return;
+    }
+    toast.success("Numéros enregistrés");
+    void refresh();
+  }
+
   async function initiate() {
-    const parts = splitPhone(phone);
+    const raw = contacts[provider];
+    const parts = splitPhone(raw);
     const e164 = composePhone(parts.dial, parts.national);
     if (!isValidContactPhone(e164)) {
-      toast.error("Indiquez un numéro e-money avec l’indicatif pays");
+      toast.error("Enregistrez votre numéro sur ce réseau");
+      return;
+    }
+    if (tab === "someone" && !picked) {
+      toast.error("Choisissez un bénéficiaire");
+      return;
+    }
+    const cents = Math.round(parseFloat(amount) * 100);
+    if (!Number.isFinite(cents) || cents < 100) {
+      toast.error("Montant invalide");
       return;
     }
     setLoading(true);
@@ -119,8 +199,9 @@ export default function WalletPage() {
         action: "initiate",
         provider,
         phone: e164,
-        amountCents: Math.round(parseFloat(amount) * 100),
+        amountCents: cents,
         currency,
+        beneficiaryUserId: tab === "someone" ? picked?.id : undefined,
       }),
     });
     const json = await res.json();
@@ -130,7 +211,8 @@ export default function WalletPage() {
       return;
     }
     setPendingId(json.transactionId);
-    toast.message("Demande USSD simulée — confirmez le paiement");
+    setUssdHint(json.ussdHint ?? null);
+    toast.message(json.ussdHint ?? t("wallet.ussdHint"));
   }
 
   async function confirm() {
@@ -148,10 +230,32 @@ export default function WalletPage() {
       return;
     }
     toast.success(
-      `Compte rechargé · ${formatMoney(json.balanceCents, json.currency ?? currency)}`,
+      json.beneficiaryUserId
+        ? `${t("wallet.youRecharge")} · ${formatMoney(json.balanceCents, json.currency ?? currency)}`
+        : `Compte rechargé · ${formatMoney(json.balanceCents, json.currency ?? currency)}`,
     );
     setPendingId(null);
-    router.push("/discover");
+    setUssdHint(null);
+    window.dispatchEvent(new Event("wallet-updated"));
+    void refresh();
+  }
+
+  function txnLabel(row: Txn) {
+    if (row.type === "TRANSFER_IN") return "Reçu";
+    if (row.type === "TRANSFER_OUT") {
+      return row.metadata?.beneficiaryName
+        ? `Pour ${row.metadata.beneficiaryName}`
+        : "Envoyé";
+    }
+    if (row.type === "DEPOSIT") return t("wallet.forYou");
+    return row.type;
+  }
+
+  function providerName(id: string) {
+    if (id === "MPESA") return t("wallet.vodacom");
+    if (id === "ORANGE") return t("wallet.orange");
+    if (id === "AIRTEL") return t("wallet.airtel");
+    return id;
   }
 
   return (
@@ -174,13 +278,90 @@ export default function WalletPage() {
             </span>
           ))}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Rechargez via Mobile Money avant d&apos;acheter
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          {t("wallet.payHint")}
         </p>
       </div>
 
       <div className="mt-8 space-y-4">
         <h2 className="font-heading text-sm font-bold">{t("wallet.topUpSimulated")}</h2>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setTab("me");
+              setPicked(null);
+            }}
+            className={cn(
+              "h-10 rounded-xl text-sm font-semibold",
+              tab === "me"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-surface-2",
+            )}
+          >
+            {t("wallet.tabMe")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("someone")}
+            className={cn(
+              "h-10 rounded-xl text-sm font-semibold",
+              tab === "someone"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-surface-2",
+            )}
+          >
+            {t("wallet.tabSomeone")}
+          </button>
+        </div>
+
+        {tab === "someone" ? (
+          <div className="space-y-2">
+            <Label>{t("wallet.searchRecipient")}</Label>
+            <Input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPicked(null);
+              }}
+              placeholder={t("wallet.searchRecipient")}
+              className="h-11 bg-surface-2"
+            />
+            {picked ? (
+              <p className="text-sm">
+                {t("wallet.youRecharge")}{" "}
+                <span className="font-semibold">
+                  {picked.shopName ? `${picked.shopName} · ` : ""}
+                  {picked.name}
+                </span>
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {recipients.map((r) => (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => setPicked(r)}
+                      className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-left text-sm"
+                    >
+                      <span className="font-medium">{r.name}</span>
+                      {r.shopName ? (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          · {r.shopName}
+                        </span>
+                      ) : null}
+                      <span className="block text-[11px] text-muted-foreground">
+                        {r.phoneMasked}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-3 gap-2">
           {PROVIDERS.map((p) => (
             <button
@@ -188,20 +369,24 @@ export default function WalletPage() {
               type="button"
               onClick={() => setProvider(p.id)}
               className={cn(
-                "rounded-2xl bg-gradient-to-br p-3 text-center text-xs font-bold",
+                "rounded-2xl bg-gradient-to-br p-3 text-center text-[11px] font-bold leading-tight",
                 p.color,
-                provider === p.id && "ring-2 ring-white ring-offset-2 ring-offset-background",
+                provider === p.id &&
+                  "ring-2 ring-white ring-offset-2 ring-offset-background",
               )}
             >
-              {p.label}
+              {t(p.label)}
             </button>
           ))}
         </div>
+        <p className="text-[11px] text-muted-foreground">{t("wallet.emoneyPhone")}</p>
         <PhoneField
           id="wallet-phone"
-          label="Numéro e-money"
-          value={phone}
-          onChange={setPhone}
+          label={t(PROVIDERS.find((p) => p.id === provider)!.label)}
+          value={contacts[provider]}
+          onChange={(v) =>
+            setContacts((prev) => ({ ...prev, [provider]: v }))
+          }
         />
         <div className="space-y-2">
           <Label>{t("wallet.currency")}</Label>
@@ -226,48 +411,81 @@ export default function WalletPage() {
             disabled={loading}
             className="h-12 w-full bg-gradient-to-r from-[#ff5722] to-[#ff7a45] font-bold"
           >
-            {loading ? "Envoi…" : "Demander le paiement"}
+            {loading ? "…" : t("wallet.sendPay")}
           </Button>
         ) : (
           <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/10 p-4">
-            <p className="text-sm">
-              Composez le code USSD sur votre téléphone (simulé), puis confirmez.
-            </p>
+            <p className="text-sm">{ussdHint ?? t("wallet.ussdHint")}</p>
             <Button
               onClick={confirm}
               disabled={loading}
               className="h-12 w-full bg-gradient-to-r from-trust to-[#00b377] font-bold"
             >
-              {loading ? "Confirmation…" : "Confirmer le dépôt"}
+              {loading ? "…" : t("wallet.confirmPay")}
             </Button>
           </div>
         )}
       </div>
 
+      <div className="mt-10 space-y-3">
+        <h2 className="font-heading text-sm font-bold">{t("wallet.myNumbers")}</h2>
+        {PROVIDERS.map((p) => (
+          <PhoneField
+            key={p.id}
+            id={`contact-${p.id}`}
+            label={t(p.label)}
+            value={contacts[p.id]}
+            onChange={(v) =>
+              setContacts((prev) => ({ ...prev, [p.id]: v }))
+            }
+          />
+        ))}
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={savingContacts}
+          onClick={() => void saveContacts()}
+          className="w-full"
+        >
+          {savingContacts ? "…" : t("wallet.saveNumbers")}
+        </Button>
+      </div>
+
       <div className="mt-10">
         <h2 className="mb-3 font-heading text-sm font-bold">{t("wallet.history")}</h2>
         <ul className="space-y-2">
-          {txns.map((t) => (
+          {txns.map((row) => (
             <li
-              key={t.id}
+              key={row.id}
               className="flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-3 text-sm"
             >
               <div>
                 <p className="font-medium">
-                  {t.type} · {t.provider}
+                  {txnLabel(row)} · {providerName(row.provider)}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  {t.status} · {new Date(t.createdAt).toLocaleString("fr-FR")}
+                  {row.status} · {new Date(row.createdAt).toLocaleString("fr-FR")}
+                  {row.balanceAfterCents != null
+                    ? ` · ${formatMoney(row.balanceAfterCents, row.currency)}`
+                    : ""}
                 </p>
               </div>
               <span
                 className={cn(
                   "font-heading font-bold",
-                  t.amountCents >= 0 ? "text-trust" : "text-destructive",
+                  row.type === "PURCHASE"
+                    ? "text-destructive"
+                    : row.type === "TRANSFER_OUT"
+                      ? "text-foreground"
+                      : "text-trust",
                 )}
               >
-                {t.amountCents >= 0 ? "+" : ""}
-                {formatMoney(Math.abs(t.amountCents), t.currency)}
+                {row.type === "PURCHASE"
+                  ? "−"
+                  : row.type === "TRANSFER_OUT"
+                    ? ""
+                    : "+"}
+                {formatMoney(Math.abs(row.amountCents), row.currency)}
               </span>
             </li>
           ))}

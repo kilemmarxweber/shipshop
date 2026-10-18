@@ -65,6 +65,13 @@ export function AppShell({
   const [walletCurrency, setWalletCurrency] = useState<AppCurrency>("USD");
   const [cartCount, setCartCount] = useState(0);
   const inbox = useInboxUnread(userId, pathname);
+  const [walletTick, setWalletTick] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setWalletTick((n) => n + 1);
+    window.addEventListener("wallet-updated", bump);
+    return () => window.removeEventListener("wallet-updated", bump);
+  }, []);
 
   useEffect(() => {
     if (!userId) {
@@ -95,7 +102,7 @@ export function AppShell({
         setBalance(null);
         setCartCount(0);
       });
-  }, [userId, pathname]);
+  }, [userId, pathname, walletTick]);
 
   const hideChrome =
     pathname.startsWith("/auth") || pathname.startsWith("/onboarding");

@@ -12,6 +12,7 @@ const initiateSchema = z.object({
   provider: z.enum(["MPESA", "ORANGE", "AIRTEL"]),
   phone: z.string().min(10).max(24),
   currency: z.enum(APP_CURRENCIES).default("USD"),
+  beneficiaryUserId: z.string().min(1).optional().nullable(),
 });
 
 const confirmSchema = z.object({
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
       provider: parsed.provider,
       phone: parsed.phone,
       currency: parsed.currency,
+      beneficiaryUserId: parsed.beneficiaryUserId,
     });
     return NextResponse.json(result);
   } catch (error) {

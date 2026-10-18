@@ -125,6 +125,13 @@ AWS_SECRET_ACCESS_KEY="..."
 # ffmpeg sur le VPS : compression vidéo rapide (upload) + scan frames
 # sudo apt install -y ffmpeg && which ffmpeg
 FFMPEG_PATH=/usr/bin/ffmpeg
+
+# Caisses d’entrée e-money (Airtel / Orange / Vodacom M-Pesa)
+# Ce ne sont PAS des clés Wave Sénégal. Wave n’est pas en RDC.
+# 1 solde client ShipShop ; 3 numéros = caisses de collecte.
+SHIPSHOP_MSISDN_MPESA=+243810000100
+SHIPSHOP_MSISDN_ORANGE=+243890000100
+SHIPSHOP_MSISDN_AIRTEL=+243990000100
 ```
 
 Notes :

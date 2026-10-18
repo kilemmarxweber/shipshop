@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   Heart,
@@ -34,8 +34,13 @@ import { ShareMenu } from "@/components/share-menu";
 import {
   DEFAULT_VIDEO_SOUND,
   VideoSoundButton,
+  productHasVideo,
   type VideoSoundState,
 } from "@/components/video-sound-button";
+import {
+  requestFeedAudioFocus,
+  useFeedAudioFocus,
+} from "@/lib/feed-audio-focus";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { MediaThumb } from "@/components/media-thumb";
 import { Button } from "@/components/ui/button";
@@ -103,11 +108,31 @@ function ShopInner() {
   );
   const [commentProductId, setCommentProductId] = useState<string | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
+  const audioFocusId = useFeedAudioFocus();
+  const prevAudioFocus = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (prevAudioFocus.current === audioFocusId) return;
+    prevAudioFocus.current = audioFocusId;
+    setSoundById({});
+  }, [audioFocusId]);
 
   const isOwnShop = shop?.owner?.id === session?.user?.id;
 
   function soundFor(id: string): VideoSoundState {
-    return soundById[id] ?? DEFAULT_VIDEO_SOUND;
+    const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
+    if (audioFocusId !== id) return { ...base, muted: true };
+    return base;
+  }
+
+  function activateSound(id: string) {
+    requestFeedAudioFocus(id);
+    setSoundById((prev) =>
+      applyExclusiveVideoSound(prev, id, {
+        muted: false,
+        volume: (prev[id] ?? DEFAULT_VIDEO_SOUND).volume,
+      }),
+    );
   }
 
   const shopUrl =
@@ -542,6 +567,12 @@ function ShopInner() {
                 className="absolute inset-0"
                 muted={soundFor(p.id).muted}
                 volume={soundFor(p.id).volume}
+                audioKey={
+                  productHasVideo(p.images) || p.soundtrack?.audioUrl
+                    ? p.id
+                    : undefined
+                }
+                onActivateSound={() => activateSound(p.id)}
                 onDoubleLike={() => {
                   if (p.likedByMe) return;
                   void toggleLike(p);
@@ -558,7 +589,7 @@ function ShopInner() {
                   audioUrl={p.soundtrack.audioUrl}
                   startMs={p.soundtrackStartMs}
                   sound={soundFor(p.id)}
-                  active
+                  active={audioFocusId === p.id}
                 />
               ) : null}
 
@@ -669,11 +700,12 @@ function ShopInner() {
                   images={p.images}
                   hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                   sound={soundFor(p.id)}
-                  onChange={(next) =>
+                  onChange={(next) => {
+                    if (!next.muted) requestFeedAudioFocus(p.id);
                     setSoundById((prev) =>
                       applyExclusiveVideoSound(prev, p.id, next),
-                    )
-                  }
+                    );
+                  }}
                 />
               </div>
 

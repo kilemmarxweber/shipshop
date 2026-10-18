@@ -3,6 +3,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Heart } from "lucide-react";
 import {
+  clearFeedAudioScore,
+  requestFeedAudioFocus,
+  setFeedAudioScore,
+} from "@/lib/feed-audio-focus";
+import {
   clearFeedVideoScore,
   requestFeedVideoPlay,
   setFeedVideoScore,
@@ -21,12 +26,15 @@ type Props = {
   fit?: "cover" | "contain";
   /** Charge tout de suite (fiche produit). Sinon, seulement hors écran proche. */
   eager?: boolean;
-  /** Sons vidéo — volume 30 % par défaut. */
+  /** Sons vidéo — volume 100 % par défaut. */
   muted?: boolean;
-  /** Volume 0–1 quand unmuted (défaut 0.3). */
+  /** Volume 0–1 quand unmuted (défaut 1). */
   volume?: number;
   onDoubleLike?: () => void;
   onAutoplayBlocked?: () => void;
+  /** Id produit : un seul son (vidéo / musique) à la fois dans le feed. */
+  audioKey?: string;
+  onActivateSound?: () => void;
 };
 
 function HeartBurst() {
@@ -172,9 +180,11 @@ export function ProductImageCarousel({
   fit = "cover",
   eager = false,
   muted = false,
-  volume = 0.3,
+  volume = 1,
   onDoubleLike,
   onAutoplayBlocked,
+  audioKey,
+  onActivateSound,
 }: Props) {
   const list =
     images.length > 0
@@ -233,6 +243,12 @@ export function ProductImageCarousel({
         if (hasVideo && !eager) {
           setFeedVideoScore(feedId, ratio);
         }
+        if (audioKey) {
+          setFeedAudioScore(audioKey, {
+            ratio,
+            left: entry.boundingClientRect.left,
+          });
+        }
 
         if (ratio < LEFT_VIEW_RATIO) {
           setInView(false);
@@ -256,8 +272,9 @@ export function ProductImageCarousel({
       loadIo?.disconnect();
       playIo.disconnect();
       if (hasVideo && !eager) clearFeedVideoScore(feedId);
+      if (audioKey) clearFeedAudioScore(audioKey);
     };
-  }, [eager, feedId, hasVideo]);
+  }, [audioKey, eager, feedId, hasVideo]);
 
   useEffect(() => {
     if (list.length <= 1 || manualHold || !inView) return;
@@ -334,19 +351,25 @@ export function ProductImageCarousel({
         return;
       }
       lastTapRef.current = now;
-      if (currentIsVideo) {
-        pendingTapRef.current = setTimeout(() => {
-          pendingTapRef.current = null;
-          const slotActive = eager ? inView : feedActiveIds.has(feedId);
-          const isPlayingNow = slotActive && !userPaused;
-          if (isPlayingNow) {
-            setUserPaused(true);
-          } else {
-            setUserPaused(false);
-            if (!eager) requestFeedVideoPlay(feedId);
-          }
-        }, 280);
-      }
+      pendingTapRef.current = setTimeout(() => {
+        pendingTapRef.current = null;
+        if (audioKey) {
+          requestFeedAudioFocus(audioKey);
+          onActivateSound?.();
+        }
+        if (!currentIsVideo) return;
+        const slotActive = eager ? inView : feedActiveIds.has(feedId);
+        const isPlayingNow = slotActive && !userPaused;
+        if (isPlayingNow && audioKey) {
+          return;
+        }
+        if (isPlayingNow) {
+          setUserPaused(true);
+        } else {
+          setUserPaused(false);
+          if (!eager) requestFeedVideoPlay(feedId);
+        }
+      }, 280);
       return;
     }
 

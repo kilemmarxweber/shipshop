@@ -47,6 +47,7 @@ model User {
   moderationEvents  MediaModerationEvent[]
   wantedRequests    WantedRequest[]
   wantedOffers      WantedOffer[]
+  moneyContacts     UserMoneyContact[]
 
   @@unique([email])
   @@map("user")
@@ -634,6 +635,8 @@ enum WalletTxnType {
   PURCHASE
   REFUND
   ADJUSTMENT
+  TRANSFER_IN
+  TRANSFER_OUT
 }
 
 enum MobileMoneyProvider {
@@ -668,6 +671,22 @@ model WalletTransaction {
   @@index([walletId, createdAt])
   @@index([reference])
   @@map("wallet_transaction")
+}
+
+/// Numéros e-money par réseau (max 1 Airtel / Orange / Vodacom M-Pesa).
+model UserMoneyContact {
+  id        String               @id @default(cuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider  MobileMoneyProvider
+  phone     String
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@unique([userId, provider])
+  @@unique([phone])
+  @@index([userId])
+  @@map("user_money_contact")
 }
 
 // ─── Domain: orders & fulfillment ───────────────────────────────────

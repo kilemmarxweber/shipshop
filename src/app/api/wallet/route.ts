@@ -9,11 +9,26 @@ export async function GET() {
   }
 
   const wallet = await getOrCreateWallet(session.user.id);
-  const transactions = await prisma.walletTransaction.findMany({
-    where: { walletId: wallet.id },
-    orderBy: { createdAt: "desc" },
-    take: 30,
-  });
+  const [transactions, contacts, user] = await Promise.all([
+    prisma.walletTransaction.findMany({
+      where: { walletId: wallet.id },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+    }),
+    prisma.userMoneyContact.findMany({
+      where: { userId: session.user.id },
+      select: { provider: true, phone: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { phone: true },
+    }),
+  ]);
 
-  return NextResponse.json({ wallet, transactions });
+  return NextResponse.json({
+    wallet,
+    transactions,
+    contacts,
+    accountPhone: user?.phone ?? null,
+  });
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Heart, MessageCircle, Share2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -19,8 +19,13 @@ import { ShareMenu } from "@/components/share-menu";
 import {
   DEFAULT_VIDEO_SOUND,
   VideoSoundButton,
+  productHasVideo,
   type VideoSoundState,
 } from "@/components/video-sound-button";
+import {
+  requestFeedAudioFocus,
+  useFeedAudioFocus,
+} from "@/lib/feed-audio-focus";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { colorHex } from "@/lib/product-options";
 import { MediaThumb } from "@/components/media-thumb";
@@ -76,9 +81,33 @@ export default function FeedPage() {
     {},
   );
   const [commentProductId, setCommentProductId] = useState<string | null>(null);
+  const audioFocusId = useFeedAudioFocus();
+  const prevAudioFocus = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (prevAudioFocus.current === audioFocusId) return;
+    prevAudioFocus.current = audioFocusId;
+    setSoundById({});
+  }, [audioFocusId]);
+
+  useEffect(() => {
+    setSoundById({});
+  }, [tab]);
 
   function soundFor(id: string): VideoSoundState {
-    return soundById[id] ?? DEFAULT_VIDEO_SOUND;
+    const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
+    if (audioFocusId !== id) return { ...base, muted: true };
+    return base;
+  }
+
+  function activateSound(id: string) {
+    requestFeedAudioFocus(id);
+    setSoundById((prev) =>
+      applyExclusiveVideoSound(prev, id, {
+        muted: false,
+        volume: (prev[id] ?? DEFAULT_VIDEO_SOUND).volume,
+      }),
+    );
   }
 
   useEffect(() => {
@@ -335,6 +364,12 @@ export default function FeedPage() {
               className="absolute inset-0"
               muted={soundFor(p.id).muted}
               volume={soundFor(p.id).volume}
+              audioKey={
+                productHasVideo(p.images) || p.soundtrack?.audioUrl
+                  ? p.id
+                  : undefined
+              }
+              onActivateSound={() => activateSound(p.id)}
               onDoubleLike={() => void toggleLike(p, { forceLike: true })}
               onAutoplayBlocked={() =>
                 setSoundById((prev) => ({
@@ -348,7 +383,7 @@ export default function FeedPage() {
                 audioUrl={p.soundtrack.audioUrl}
                 startMs={p.soundtrackStartMs}
                 sound={soundFor(p.id)}
-                active
+                active={audioFocusId === p.id}
               />
             ) : null}
 
@@ -425,11 +460,12 @@ export default function FeedPage() {
                 images={p.images}
                 hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                 sound={soundFor(p.id)}
-                onChange={(next) =>
+                onChange={(next) => {
+                  if (!next.muted) requestFeedAudioFocus(p.id);
                   setSoundById((prev) =>
                     applyExclusiveVideoSound(prev, p.id, next),
-                  )
-                }
+                  );
+                }}
               />
             </div>
 

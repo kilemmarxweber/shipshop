@@ -225,6 +225,21 @@ export type Messages = {
     emptyHistory: string;
     currency: string;
     amount: string;
+    tabMe: string;
+    tabSomeone: string;
+    payHint: string;
+    searchRecipient: string;
+    youRecharge: string;
+    myNumbers: string;
+    saveNumbers: string;
+    sendPay: string;
+    confirmPay: string;
+    ussdHint: string;
+    forYou: string;
+    vodacom: string;
+    orange: string;
+    airtel: string;
+    emoneyPhone: string;
   };
   shopExtra: {
     followerOne: string;
@@ -493,11 +508,27 @@ const fr: Messages = {
   wallet: {
     title: "Mon portefeuille",
     guestHint: "Connectez-vous pour gérer votre solde",
-    topUpSimulated: "Recharger (simulé)",
+    topUpSimulated: "Recharger",
     history: "Historique",
     emptyHistory: "Aucune transaction",
     currency: "Monnaie",
     amount: "Montant",
+    tabMe: "Moi",
+    tabSomeone: "Quelqu'un",
+    payHint:
+      "Vous payez ShipShop avec votre réseau. Le bénéficiaire reçoit du e-money ShipShop — un seul solde, quel que soit Airtel, Orange ou Vodacom.",
+    searchRecipient: "Nom, boutique ou numéro",
+    youRecharge: "Vous rechargez",
+    myNumbers: "Mes numéros e-money",
+    saveNumbers: "Enregistrer les numéros",
+    sendPay: "Demander le paiement",
+    confirmPay: "Confirmer le dépôt",
+    ussdHint: "Envoyez le montant au numéro caisse ShipShop, puis confirmez.",
+    forYou: "pour toi",
+    vodacom: "Vodacom M-Pesa",
+    orange: "Orange Money",
+    airtel: "Airtel Money",
+    emoneyPhone: "Votre numéro sur ce réseau",
   },
   shopExtra: {
     followerOne: "abonné",
@@ -766,11 +797,27 @@ const en: Messages = {
   wallet: {
     title: "My wallet",
     guestHint: "Sign in to manage your balance",
-    topUpSimulated: "Top up (simulated)",
+    topUpSimulated: "Top up",
     history: "History",
     emptyHistory: "No transactions",
     currency: "Currency",
     amount: "Amount",
+    tabMe: "Me",
+    tabSomeone: "Someone",
+    payHint:
+      "You pay ShipShop on your network. The recipient gets ShipShop e-money — one balance, whether Airtel, Orange or Vodacom.",
+    searchRecipient: "Name, shop or number",
+    youRecharge: "You are topping up",
+    myNumbers: "My e-money numbers",
+    saveNumbers: "Save numbers",
+    sendPay: "Request payment",
+    confirmPay: "Confirm deposit",
+    ussdHint: "Send the amount to the ShipShop till number, then confirm.",
+    forYou: "for you",
+    vodacom: "Vodacom M-Pesa",
+    orange: "Orange Money",
+    airtel: "Airtel Money",
+    emoneyPhone: "Your number on this network",
   },
   shopExtra: {
     followerOne: "follower",
@@ -1039,11 +1086,27 @@ const pt: Messages = {
   wallet: {
     title: "A minha carteira",
     guestHint: "Entre para gerir o seu saldo",
-    topUpSimulated: "Carregar (simulado)",
+    topUpSimulated: "Carregar",
     history: "Histórico",
     emptyHistory: "Sem transações",
     currency: "Moeda",
     amount: "Montante",
+    tabMe: "Eu",
+    tabSomeone: "Alguém",
+    payHint:
+      "Paga a ShipShop na sua rede. O beneficiário recebe e-money ShipShop — um só saldo, Airtel, Orange ou Vodacom.",
+    searchRecipient: "Nome, loja ou número",
+    youRecharge: "Está a carregar",
+    myNumbers: "Os meus números e-money",
+    saveNumbers: "Guardar números",
+    sendPay: "Pedir pagamento",
+    confirmPay: "Confirmar depósito",
+    ussdHint: "Envie o montante para o número ShipShop, depois confirme.",
+    forYou: "para si",
+    vodacom: "Vodacom M-Pesa",
+    orange: "Orange Money",
+    airtel: "Airtel Money",
+    emoneyPhone: "O seu número nesta rede",
   },
   shopExtra: {
     followerOne: "seguidor",
