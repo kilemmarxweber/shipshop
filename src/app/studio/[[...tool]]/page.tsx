@@ -1,17 +1,20 @@
 import { isSanityConfigured } from "@/lib/sanity/env";
+import { StudioClient } from "./studio-client";
 
-export default async function StudioPage() {
+export const instant = false;
+
+export default function StudioPage() {
   if (!isSanityConfigured()) {
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="font-heading text-lg font-bold">Studio indisponible</p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Ajoutez NEXT_PUBLIC_SANITY_PROJECT_ID et le dataset dans
-          l’environnement, puis rouvrez cette page.
+          Mettez le vrai <code>NEXT_PUBLIC_SANITY_PROJECT_ID</code> du projet
+          (pas <code>xxxxxxxx</code>) dans <code>.env</code>, puis redémarrez
+          <code>pnpm dev</code>.
         </p>
       </div>
     );
   }
-  const { StudioClient } = await import("./studio-client");
   return <StudioClient />;
 }

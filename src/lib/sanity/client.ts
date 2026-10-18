@@ -8,9 +8,10 @@ export function getSanityClient(): SanityClient | null {
     projectId: sanityProjectId(),
     dataset: sanityDataset(),
     apiVersion: "2026-10-18",
-    useCdn: !token,
+    useCdn: false,
     token: token || undefined,
     perspective: "published",
+    stega: false,
   });
 }
 

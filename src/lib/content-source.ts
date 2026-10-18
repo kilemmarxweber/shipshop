@@ -183,7 +183,9 @@ async function fetchSanityConfig(): Promise<{
       }));
     return { doc: doc ?? null, tracks };
   } catch (error) {
-    console.error("[content-source] Sanity fetch failed:", error);
+    const message =
+      error instanceof Error ? error.message : "Sanity inaccessible";
+    console.error("[content-source] Sanity fetch failed:", message);
     return { doc: null, tracks: [] };
   }
 }

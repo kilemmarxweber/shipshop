@@ -242,40 +242,9 @@ export async function enforceCatalogModeration(opts: {
   const cfg = await getAppConfig();
   const rejectMsg = cfg.nsfwPolicy.rejectFr;
 
+  // Sans Rekognition : même règle qu’en mode système — l’annonce peut
+  // importer images/vidéos. Sanity ne remplace pas le scanner.
   if (!catalogModerationActive()) {
-    if (cfg.source === "sanity" && variant === "product") {
-      const hash = contentHash(buffer);
-      if (cfg.nsfwPolicy.humanReview) {
-        await withDbRetry(() =>
-          prisma.mediaReview.create({
-            data: {
-              userId,
-              kind,
-              variant,
-              contentHash: hash,
-              note: "Scan AWS off — file d’empreinte, fichier non stocké",
-              status: "pending",
-            },
-          }),
-        );
-        return {
-          allowed: false,
-          httpStatus: 422,
-          error: "Média en revue — pas publié (aucun fichier conservé)",
-          code: "PENDING_REVIEW",
-          decision: "REJECT",
-          banned: false,
-        };
-      }
-      return {
-        allowed: false,
-        httpStatus: 422,
-        error: "Scan NSFW requis (mode Sanity, fail-closed)",
-        code: "SCAN_REQUIRED",
-        decision: "REJECT",
-        banned: false,
-      };
-    }
     return {
       allowed: true,
       httpStatus: 200,
@@ -364,6 +333,20 @@ export async function enforceCatalogModeration(opts: {
         score: scan.score,
         contentHash: hash,
       });
+      if (cfg.nsfwPolicy.humanReview) {
+        await withDbRetry(() =>
+          prisma.mediaReview.create({
+            data: {
+              userId,
+              kind,
+              variant,
+              contentHash: hash,
+              note: "Suggestif (Rekognition) — fichier publié, file owner",
+              status: "pending",
+            },
+          }),
+        );
+      }
     }
     return {
       allowed: true,

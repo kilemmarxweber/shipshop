@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clapperboard, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import { usePageBack } from "@/components/back-nav-context";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { PageLoader } from "@/components/page-loader";
@@ -37,6 +38,7 @@ type Payload = {
 
 export default function AdminContentPage() {
   const { data: session, isPending } = authClient.useSession();
+  usePageBack({ fallbackHref: "/shops" });
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,10 +126,39 @@ export default function AdminContentPage() {
       <div>
         <h1 className="font-heading text-xl font-bold">Contenu</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Une source à la fois : constantes ShipShop, ou Sanity (règles, SEO,
-          catalogue). Rekognition reste le scanner NSFW optionnel.
+          Basculez ici entre Config système et Sanity. Rekognition reste le
+          scanner NSFW optionnel — Sanity ne le remplace pas.
         </p>
       </div>
+
+      {!sanityOk ? (
+        <section className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <p className="font-semibold">Sanity n’est pas encore branché</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-4 text-muted-foreground">
+            <li>
+              Créez un projet sur{" "}
+              <a
+                className="underline"
+                href="https://www.sanity.io/manage"
+                target="_blank"
+                rel="noreferrer"
+              >
+                sanity.io/manage
+              </a>
+            </li>
+            <li>
+              Dans <code className="text-foreground">.env</code> : le vrai
+              Project ID Sanity (8 caractères, visible dans le dashboard — pas{" "}
+              <code className="text-foreground">xxxxxxxx</code>),{" "}
+              <code className="text-foreground">NEXT_PUBLIC_SANITY_DATASET=production</code>
+              , et un token Viewer <code className="text-foreground">SANITY_API_READ_TOKEN</code>{" "}
+              si le dataset n’est pas public
+            </li>
+            <li>Redémarrez <code className="text-foreground">pnpm dev</code></li>
+            <li>Revenez sur cette page et choisissez le radio Sanity</li>
+          </ol>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold">Source des règles</h2>
@@ -190,6 +221,7 @@ export default function AdminContentPage() {
         {sanityOk ? (
           <Link
             href="/studio"
+            prefetch={false}
             target="_blank"
             rel="noreferrer"
             className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground"
@@ -223,8 +255,10 @@ export default function AdminContentPage() {
             onChange={(e) => void save(source, e.target.checked)}
           />
           <span>
-            Revue humaine si scan AWS off (mode Sanity). Pas de fichier
-            pornographique stocké — file d’empreintes seulement.
+            File owner pour les médias suggestifs détectés par Rekognition.
+            Sans clés AWS, l’import images/vidéos n’est pas bloqué (comme le
+            mode système). Le porn explicite est toujours refusé quand le
+            scanner est actif.
           </span>
         </label>
       </section>

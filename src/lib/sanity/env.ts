@@ -1,6 +1,18 @@
+const PLACEHOLDERS = new Set([
+  "unset",
+  "xxxxxxxx",
+  "your-project-id",
+  "projectid",
+  "project_id",
+]);
+
+/** Vrai projectId Sanity (ex. 3do82whm), pas un placeholder. */
 export function sanityProjectId() {
   const id = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID?.trim() ?? "";
-  if (!id || id === "unset") return "";
+  if (!id || PLACEHOLDERS.has(id.toLowerCase())) return "";
+  if (!/^[a-z0-9]{8,16}$/i.test(id)) return "";
+  const unique = new Set(id.toLowerCase());
+  if (unique.size < 3) return "";
   return id;
 }
 

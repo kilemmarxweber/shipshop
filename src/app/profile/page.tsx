@@ -718,6 +718,7 @@ export default function ProfilePage() {
                     ["/shops/admin/products", "Modération produits (tout)"],
                     ["/shops/admin/vendors", "Vendeurs & clients"],
                     ["/shops/admin/ledger", "Ledger paiements"],
+                    ["/shops/admin/content", "Contenu (Système / Sanity)"],
                     ["/shops/kyc", "Revue KYC"],
                     ["/shops/admin/moderation", "Modération NSFW"],
                   ] as const)
