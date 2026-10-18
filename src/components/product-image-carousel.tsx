@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { Heart } from "lucide-react";
 import {
   clearFeedVideoScore,
   requestFeedVideoPlay,
@@ -20,11 +21,21 @@ type Props = {
   fit?: "cover" | "contain";
   /** Charge tout de suite (fiche produit). Sinon, seulement hors écran proche. */
   eager?: boolean;
-  /** Sons vidéo — muet par défaut (autoplay). */
+  /** Sons vidéo — volume 30 % par défaut. */
   muted?: boolean;
   /** Volume 0–1 quand unmuted (défaut 0.3). */
   volume?: number;
+  onDoubleLike?: () => void;
+  onAutoplayBlocked?: () => void;
 };
+
+function HeartBurst() {
+  return (
+    <span className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
+      <Heart className="size-20 fill-white text-white drop-shadow-lg animate-in zoom-in-50 fade-in duration-200" />
+    </span>
+  );
+}
 
 const SWIPE_MIN_PX = 42;
 const TAP_MAX_PX = 12;
@@ -47,6 +58,7 @@ function SlideMedia({
   fit,
   muted,
   volume,
+  onAutoplayBlocked,
 }: {
   src: string;
   playing: boolean;
@@ -54,6 +66,7 @@ function SlideMedia({
   fit: "cover" | "contain";
   muted: boolean;
   volume: number;
+  onAutoplayBlocked?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const video = isVideoUrl(src);
@@ -78,11 +91,13 @@ function SlideMedia({
 
     // pause() / play() sans reset → reprend exactement où on s’était arrêté
     if (playing && !document.hidden) {
-      el.play().catch(() => {});
+      el.play().catch(() => {
+        onAutoplayBlocked?.();
+      });
     } else {
       el.pause();
     }
-  }, [playing, shouldLoad, src, video]);
+  }, [playing, shouldLoad, src, video, onAutoplayBlocked]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -99,7 +114,9 @@ function SlideMedia({
       if (document.hidden) {
         el.pause();
       } else if (playing && shouldLoad) {
-        el.play().catch(() => {});
+        el.play().catch(() => {
+          onAutoplayBlocked?.();
+        });
       }
     };
     document.addEventListener("visibilitychange", onVis);
@@ -154,8 +171,10 @@ export function ProductImageCarousel({
   overlay = false,
   fit = "cover",
   eager = false,
-  muted = true,
+  muted = false,
   volume = 0.3,
+  onDoubleLike,
+  onAutoplayBlocked,
 }: Props) {
   const list =
     images.length > 0
@@ -174,6 +193,9 @@ export function ProductImageCarousel({
   const rootRef = useRef<HTMLDivElement>(null);
   const startRef = useRef<{ x: number; y: number; id: number } | null>(null);
   const lockedAxis = useRef<"x" | "y" | null>(null);
+  const lastTapRef = useRef(0);
+  const pendingTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [likeBurst, setLikeBurst] = useState(false);
 
   const hasVideo = list.some((url) => isVideoUrl(url));
   const currentIsVideo = isVideoUrl(list[index] ?? "");
@@ -297,16 +319,33 @@ export function ProductImageCarousel({
       /* ignore */
     }
 
-    // Tap (pas un swipe) sur une vidéo → 1er clic pause, 2e clic lecture
     const isTap = Math.abs(dx) < TAP_MAX_PX && Math.abs(dy) < TAP_MAX_PX;
-    if (isTap && currentIsVideo) {
-      const slotActive = eager ? inView : feedActiveIds.has(feedId);
-      const isPlayingNow = slotActive && !userPaused;
-      if (isPlayingNow) {
-        setUserPaused(true);
-      } else {
-        setUserPaused(false);
-        if (!eager) requestFeedVideoPlay(feedId);
+    if (isTap) {
+      const now = Date.now();
+      if (now - lastTapRef.current < 300) {
+        if (pendingTapRef.current) {
+          clearTimeout(pendingTapRef.current);
+          pendingTapRef.current = null;
+        }
+        lastTapRef.current = 0;
+        onDoubleLike?.();
+        setLikeBurst(true);
+        window.setTimeout(() => setLikeBurst(false), 700);
+        return;
+      }
+      lastTapRef.current = now;
+      if (currentIsVideo) {
+        pendingTapRef.current = setTimeout(() => {
+          pendingTapRef.current = null;
+          const slotActive = eager ? inView : feedActiveIds.has(feedId);
+          const isPlayingNow = slotActive && !userPaused;
+          if (isPlayingNow) {
+            setUserPaused(true);
+          } else {
+            setUserPaused(false);
+            if (!eager) requestFeedVideoPlay(feedId);
+          }
+        }, 280);
       }
       return;
     }
@@ -385,6 +424,7 @@ export function ProductImageCarousel({
                 fit={fit}
                 muted={muted}
                 volume={volume}
+                onAutoplayBlocked={onAutoplayBlocked}
               />
             ) : null}
             {overlay && (
@@ -393,6 +433,9 @@ export function ProductImageCarousel({
           </div>
         );
       })}
+      {likeBurst && (
+        <HeartBurst />
+      )}
       {showDots && list.length > 1 && (
         <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
           {list.map((_, i) => (

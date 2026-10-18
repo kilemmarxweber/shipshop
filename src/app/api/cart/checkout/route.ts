@@ -5,6 +5,7 @@ import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { quoteShipping } from "@/lib/shipping";
+import { parseCurrency, walletCents } from "@/lib/money";
 
 const schema = z.object({
   fulfillmentType: z.enum(["DELIVERY", "PICKUP"]),
@@ -36,6 +37,7 @@ export async function POST(req: Request) {
             select: {
               id: true,
               priceCents: true,
+              currency: true,
               status: true,
               shopId: true,
               quantity: true,
@@ -63,7 +65,7 @@ export async function POST(req: Request) {
       );
     }
 
-    let totalNeeded = 0;
+    const neededBy = { USD: 0, CDF: 0, KW: 0 };
     for (const item of cartItems) {
       let shipping = 0;
       if (fulfillment.fulfillmentType === "DELIVERY") {
@@ -76,7 +78,8 @@ export async function POST(req: Request) {
         });
         shipping = quote.shippingCents;
       }
-      totalNeeded += item.product.priceCents + shipping;
+      const code = parseCurrency(item.product.currency);
+      neededBy[code] += item.product.priceCents + shipping;
     }
 
     const wallet = await withDbRetry(() =>
@@ -88,16 +91,20 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    if (wallet.balanceCents < totalNeeded) {
-      return NextResponse.json(
-        {
-          error: "Solde insuffisant",
-          code: "INSUFFICIENT_FUNDS",
-          needed: totalNeeded,
-          balance: wallet.balanceCents,
-        },
-        { status: 402 },
-      );
+    for (const code of ["USD", "CDF", "KW"] as const) {
+      const needed = neededBy[code];
+      if (needed > 0 && walletCents(wallet, code) < needed) {
+        return NextResponse.json(
+          {
+            error: "Solde insuffisant",
+            code: "INSUFFICIENT_FUNDS",
+            needed,
+            balance: walletCents(wallet, code),
+            currency: code,
+          },
+          { status: 402 },
+        );
+      }
     }
 
     const result = await withDbRetry(() =>

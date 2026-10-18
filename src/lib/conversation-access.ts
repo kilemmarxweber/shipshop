@@ -5,6 +5,24 @@ import { prisma, withDbRetry } from "@/lib/prisma";
  * Inbox vendeur : propriétaire de la boutique, ou collègue invité par ce
  * propriétaire. Pas l'org Chip Shop entière (tous les comptes y sont membres).
  */
+export async function shopIdsForSellerInbox(userId: string) {
+  const { isOwner } = await assertChipShopOwner(userId);
+  if (isOwner) {
+    const shops = await withDbRetry(() =>
+      prisma.shop.findMany({ select: { id: true } }),
+    );
+    return shops.map((s) => s.id);
+  }
+  const ownerIds = await shopOwnerIdsForStaff(userId);
+  const shops = await withDbRetry(() =>
+    prisma.shop.findMany({
+      where: { ownerUserId: { in: ownerIds } },
+      select: { id: true },
+    }),
+  );
+  return shops.map((s) => s.id);
+}
+
 async function shopOwnerIdsForStaff(userId: string): Promise<string[]> {
   const ids = new Set<string>([userId]);
   const user = await withDbRetry(() =>

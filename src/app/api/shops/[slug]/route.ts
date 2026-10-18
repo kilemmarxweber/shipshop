@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { isPublicUploadPath } from "@/lib/upload-url";
+
+const updateSchema = z.object({
+  logoUrl: z.string().min(1).max(500).optional().nullable(),
+  description: z.string().max(500).optional().nullable(),
+});
 
 /** Profil public boutique (par slug) + stats catégories. */
 export async function GET(
@@ -104,5 +111,65 @@ export async function GET(
     const message =
       error instanceof Error ? error.message : "Erreur boutique";
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ slug: string }> },
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  try {
+    const { slug } = await params;
+    const body = updateSchema.parse(await req.json());
+    const shop = await withDbRetry(() =>
+      prisma.shop.findFirst({ where: { slug } }),
+    );
+    if (!shop) {
+      return NextResponse.json({ error: "Boutique introuvable" }, { status: 404 });
+    }
+
+    const isOwner = shop.ownerUserId === session.user.id;
+    const member = await withDbRetry(() =>
+      prisma.member.findFirst({
+        where: { organizationId: shop.organizationId, userId: session.user.id },
+      }),
+    );
+    if (!isOwner && !member) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+
+    if (body.logoUrl && !isPublicUploadPath(body.logoUrl)) {
+      return NextResponse.json({ error: "Logo invalide" }, { status: 400 });
+    }
+
+    const updated = await withDbRetry(() =>
+      prisma.shop.update({
+        where: { id: shop.id },
+        data: {
+          ...(body.logoUrl !== undefined ? { logoUrl: body.logoUrl } : {}),
+          ...(body.description !== undefined
+            ? { description: body.description }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          logoUrl: true,
+        },
+      }),
+    );
+
+    return NextResponse.json({ shop: updated });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Mise à jour impossible";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

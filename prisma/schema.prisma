@@ -42,6 +42,8 @@ model User {
   ownedShops        Shop[]          @relation("ShopOwner")
   shopFollows       ShopFollow[]
   productShares     ProductShare[]
+  comments          ProductComment[]
+  commentReads      ProductCommentRead[]
   moderationEvents  MediaModerationEvent[]
   wantedRequests    WantedRequest[]
   wantedOffers      WantedOffer[]
@@ -162,6 +164,8 @@ model Shop {
   slug           String
   description    String?
   logoUrl        String?
+  /// Monnaie d’affichage boutique : CDF, USD ou KW
+  currency       String   @default("USD")
   lat            Float    @default(-4.305)
   lng            Float    @default(15.311)
   isActive       Boolean  @default(true)
@@ -250,12 +254,16 @@ model Product {
   /// Snapshot créé quand une demande « Je cherche » est acceptée
   wantedRequestId String? @unique
   wantedRequest   WantedRequest? @relation(fields: [wantedRequestId], references: [id], onDelete: SetNull)
+  soundtrackId      String?
+  soundtrack        Soundtrack? @relation(fields: [soundtrackId], references: [id], onDelete: SetNull)
+  soundtrackStartMs Int         @default(0)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   orders        Order[]
   cartItems     CartItem[]
   likes         ProductLike[]
+  comments      ProductComment[]
   conversations Conversation[]
   shares        ProductShare[]
   wantedOffer   WantedOffer?
@@ -289,6 +297,48 @@ model ProductShare {
   @@unique([userId, productId])
   @@index([productId])
   @@map("product_share")
+}
+
+model ProductComment {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+  reads     ProductCommentRead[]
+
+  @@index([productId, createdAt])
+  @@index([userId])
+  @@map("product_comment")
+}
+
+model ProductCommentRead {
+  id        String         @id @default(cuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commentId String
+  comment   ProductComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([userId, commentId])
+  @@index([userId])
+  @@map("product_comment_read")
+}
+
+model Soundtrack {
+  id         String    @id @default(cuid())
+  title      String
+  artist     String
+  mood       String
+  durationMs Int
+  audioUrl   String
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  products   Product[]
+
+  @@map("soundtrack")
 }
 
 enum WantedCondition {
@@ -568,6 +618,9 @@ model Wallet {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   balanceCents Int      @default(0)
   currency     String   @default("USD")
+  usdCents     Int      @default(0)
+  cdfCents     Int      @default(0)
+  kwCents      Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -602,6 +655,7 @@ model WalletTransaction {
   wallet           Wallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
   type             WalletTxnType
   amountCents      Int
+  currency         String              @default("USD")
   balanceAfterCents Int?
   provider         MobileMoneyProvider @default(INTERNAL)
   phone            String?

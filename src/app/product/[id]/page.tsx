@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import {
   Archive,
@@ -19,12 +19,16 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
+import { parseCurrency } from "@/lib/money";
 import { formatMoney, cn } from "@/lib/utils";
+import { CurrencyPicker } from "@/components/currency-picker";
 import { colorHex } from "@/lib/product-options";
 import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
+import { ProductCommentsSheet } from "@/components/product-comments-sheet";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
+import { ShopBrand } from "@/components/shop-brand";
 import { FulfillmentForm } from "@/components/fulfillment-form";
 import { MediaUploader } from "@/components/media-uploader";
 import { ShareMenu } from "@/components/share-menu";
@@ -44,6 +48,7 @@ type Product = {
   title: string;
   description: string | null;
   priceCents: number;
+  currency?: string;
   quantity: number;
   category: string;
   images: string[];
@@ -52,18 +57,21 @@ type Product = {
   location: string | null;
   status: string;
   likesCount: number;
+  commentsCount: number;
   likedByMe: boolean;
   canDelete?: boolean;
   shop: {
     id: string;
     name: string;
     slug: string;
+    logoUrl?: string | null;
     ownerUserId?: string | null;
   };
 };
 
 function ProductInner() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { t } = useI18n();
   const { data: session } = authClient.useSession();
@@ -92,6 +100,9 @@ function ProductInner() {
     distanceKm: null as number | null,
   });
   const [profilePhone, setProfilePhone] = useState("");
+  const [commentsOpen, setCommentsOpen] = useState(
+    searchParams.get("comments") === "1",
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -173,30 +184,6 @@ function ProductInner() {
     }
   }
 
-  async function messageSeller() {
-    if (!product) return;
-    if (!session) {
-      router.push("/auth/login");
-      return;
-    }
-    const { res, data } = await fetchJson<{
-      conversation?: { id: string };
-      error?: string;
-    }>("/api/conversations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shopId: product.shop.id,
-        productId: product.id,
-      }),
-    });
-    if (!res.ok || !data?.conversation) {
-      toast.error(data?.error ?? "Impossible d'ouvrir la conversation");
-      return;
-    }
-    router.push(`/messages/${data.conversation.id}`);
-  }
-
   const isOwner =
     Boolean(session?.user?.id) &&
     product?.shop.ownerUserId === session?.user?.id;
@@ -263,6 +250,7 @@ function ProductInner() {
         title: editing.title,
         description: editing.description,
         priceCents: editing.priceCents,
+        currency: editing.currency,
         quantity: editing.quantity,
         category: editing.category,
         images: editing.images,
@@ -391,12 +379,14 @@ function ProductInner() {
           <p className="truncate font-heading text-sm font-bold leading-none">
             {product.title}
           </p>
-          <Link
-            href={`/shop/${product.shop.slug}`}
-            className="mt-0.5 truncate text-[11px] leading-none text-muted-foreground hover:text-primary hover:underline"
-          >
-            @{product.shop.name}
-          </Link>
+          <ShopBrand
+            name={product.shop.name}
+            slug={product.shop.slug}
+            logoUrl={product.shop.logoUrl}
+            className="mt-1"
+            avatarClassName="size-5 ring-1 ring-border"
+            nameClassName="text-[11px] font-semibold text-muted-foreground hover:text-primary"
+          />
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -420,7 +410,7 @@ function ProductInner() {
           <ShareMenu
             title={product.title}
             productId={product.id}
-            text={`${product.title} — ${formatMoney(product.priceCents)} ${t("product.onShipShop")}`}
+            text={`${product.title} — ${formatMoney(product.priceCents, product.currency)} ${t("product.onShipShop")}`}
             url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${product.id}`}
             triggerClassName="grid size-8 place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 hover:bg-muted active:scale-95"
           >
@@ -428,9 +418,9 @@ function ProductInner() {
           </ShareMenu>
           <button
             type="button"
-            onClick={messageSeller}
+            onClick={() => setCommentsOpen(true)}
             className="grid size-8 cursor-pointer place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 active:scale-95"
-            aria-label={t("product.messageAria")}
+            aria-label={t("product.commentAria")}
           >
             <MessageCircle className="size-3.5" />
           </button>
@@ -445,6 +435,9 @@ function ProductInner() {
             eager
             className="aspect-[4/3.6] w-full"
             intervalMs={2800}
+            onDoubleLike={() => {
+              if (!product.likedByMe) void toggleLike();
+            }}
           />
         </div>
       </div>
@@ -457,6 +450,15 @@ function ProductInner() {
             <span className="text-muted-foreground">
               · {product.likesCount} {t("product.likes")}
             </span>
+          )}
+          {(product.commentsCount ?? 0) > 0 && (
+            <button
+              type="button"
+              onClick={() => setCommentsOpen(true)}
+              className="text-muted-foreground hover:underline"
+            >
+              · {product.commentsCount} {t("product.comments")}
+            </button>
           )}
         </div>
 
@@ -519,18 +521,20 @@ function ProductInner() {
 
         <h1 className="font-heading text-2xl font-bold">{product.title}</h1>
         <p className="mt-1 font-heading text-3xl font-extrabold text-trust">
-          {formatMoney(product.priceCents)}
+          {formatMoney(product.priceCents, product.currency)}
         </p>
         <p className="mt-2 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
           <MapPin className="size-3.5 shrink-0" />
           <span>
             {product.location} · {product.category} ·{" "}
-            <Link
-              href={`/shop/${product.shop.slug}`}
-              className="font-semibold text-foreground hover:text-primary hover:underline"
-            >
-              @{product.shop.name}
-            </Link>
+            <ShopBrand
+              name={product.shop.name}
+              slug={product.shop.slug}
+              logoUrl={product.shop.logoUrl}
+              className="inline-flex"
+              avatarClassName="size-5 ring-1 ring-border"
+              nameClassName="text-sm font-semibold text-foreground hover:text-primary"
+            />
           </span>
         </p>
 
@@ -602,6 +606,7 @@ function ProductInner() {
             <FulfillmentForm
               shopId={product.shop.id}
               productCents={product.priceCents}
+              currency={product.currency}
               defaultPhone={profilePhone}
               value={fulfillment}
               onChange={setFulfillment}
@@ -623,12 +628,12 @@ function ProductInner() {
               {loading === "buy" ? t("product.processing") : t("product.payNow")}
             </Button>
             <Button
-              onClick={messageSeller}
+              onClick={() => setCommentsOpen(true)}
               variant="outline"
               className="h-11 w-full cursor-pointer gap-2 text-sm font-semibold"
             >
               <MessageCircle className="size-4" />
-              {t("product.contactSeller")}
+              {t("feed.commentsTitle")}
             </Button>
           </div>
         )}
@@ -651,9 +656,18 @@ function ProductInner() {
                   className="bg-surface-2"
                 />
               </div>
+              <div className="space-y-1">
+                <Label>Monnaie</Label>
+                <CurrencyPicker
+                  value={parseCurrency(editing.currency)}
+                  onChange={(next) =>
+                    setEditing({ ...editing, currency: next })
+                  }
+                />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label>Prix ($)</Label>
+                  <Label>Prix ({editing.currency ?? "USD"})</Label>
                   <Input
                     type="number"
                     value={(editing.priceCents / 100).toString()}
@@ -737,6 +751,17 @@ function ProductInner() {
         </div>
       )}
 
+      <ProductCommentsSheet
+        productId={product.id}
+        open={commentsOpen}
+        onOpenChange={setCommentsOpen}
+        onCountChange={(_id, count) =>
+          setProduct((prev) =>
+            prev ? { ...prev, commentsCount: count } : prev,
+          )
+        }
+      />
+
       <Sheet open={showTopUp} onOpenChange={setShowTopUp}>
         <SheetContent side="bottom" className="rounded-t-3xl bg-surface">
           <SheetHeader>
@@ -746,8 +771,8 @@ function ProductInner() {
           </SheetHeader>
           <div className="space-y-4 p-4">
             <p className="text-sm text-muted-foreground">
-              Solde actuel : {formatMoney(balance)}. Il vous faut{" "}
-              {formatMoney(needed)} pour cet achat.
+              Solde actuel : {formatMoney(balance, product.currency)}. Il vous faut{" "}
+              {formatMoney(needed, product.currency)} pour cet achat.
             </p>
             <Link
               href="/wallet"

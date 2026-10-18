@@ -4,11 +4,13 @@ import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { assertUniqueShopName } from "@/lib/shop-name";
 import { ensureSellerMembership } from "@/lib/system-org";
+import { APP_CURRENCIES } from "@/lib/money";
 import { slugify } from "@/lib/utils";
 
 const schema = z.object({
   shopName: z.string().min(2).max(80),
   description: z.string().max(500).optional(),
+  currency: z.enum(APP_CURRENCIES).default("USD"),
 });
 
 /** Devenir vendeur : le compte est déjà member Chip Shop ; crée la boutique. */
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
           name,
           slug,
           description: body.description,
+          currency: body.currency,
         },
       }),
     );

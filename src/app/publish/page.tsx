@@ -23,16 +23,24 @@ import {
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
 import { MediaUploader } from "@/components/media-uploader";
+import { PublishMontage } from "@/components/publish-montage";
 import {
   KinshasaAddressForm,
   type AddressState,
 } from "@/components/kinshasa-address-form";
 import { composeAddress } from "@/lib/address";
+import { type AppCurrency, parseCurrency } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { CurrencyPicker } from "@/components/currency-picker";
 import { useI18n } from "@/components/i18n-provider";
 import { PackagePlus, Search } from "lucide-react";
 
-type Shop = { id: string; name: string };
+type Shop = {
+  id: string;
+  name: string;
+  logoUrl?: string | null;
+  currency?: string;
+};
 
 function PublishInner() {
   const router = useRouter();
@@ -46,6 +54,7 @@ function PublishInner() {
   const [title, setTitle] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState<AppCurrency>("USD");
   const [quantity, setQuantity] = useState("1");
   const [category, setCategory] = useState("Tech");
   const [description, setDescription] = useState("");
@@ -58,6 +67,7 @@ function PublishInner() {
   });
   const [colors, setColors] = useState<string[]>([]);
   const [sizes, setSizes] = useState<string[]>([]);
+  const [soundtrackId, setSoundtrackId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   usePageBack({
@@ -71,6 +81,8 @@ function PublishInner() {
       const list = data?.shops ?? [];
       setShops(list);
       if (!shopId && list[0]) setShopId(list[0].id);
+      const selected = list.find((s) => s.id === (shopId || list[0]?.id));
+      if (selected?.currency) setCurrency(parseCurrency(selected.currency));
     }
     if (session) load();
   }, [session, shopId]);
@@ -175,7 +187,7 @@ function PublishInner() {
     const priceCents = Math.round(parseFloat(price || "0") * 100);
     if (!priceCents || priceCents < 100) {
       setLoading(false);
-      toast.error("Prix minimum 1$");
+      toast.error(`Prix minimum 1 ${currency}`);
       return;
     }
     if (!title.trim()) {
@@ -204,12 +216,14 @@ function PublishInner() {
           title: publishedTitle,
           description,
           priceCents,
+          currency,
           quantity: qty,
           category,
           images,
           colors,
           sizes,
           location,
+          soundtrackId,
           status: as,
         }),
       });
@@ -265,7 +279,15 @@ function PublishInner() {
           <h1 className="font-heading text-xl font-bold">Médias & titre</h1>
           <div className="space-y-2">
             <Label>Boutique</Label>
-            <Select value={shopId} onValueChange={(v) => v && setShopId(v)}>
+            <Select
+              value={shopId}
+              onValueChange={(v) => {
+                if (!v) return;
+                setShopId(v);
+                const shop = shops.find((s) => s.id === v);
+                if (shop?.currency) setCurrency(parseCurrency(shop.currency));
+              }}
+            >
               <SelectTrigger className="bg-surface-2">
                 <SelectValue />
               </SelectTrigger>
@@ -283,6 +305,21 @@ function PublishInner() {
             <Label>Images / vidéos</Label>
             <MediaUploader urls={images} onChange={setImages} max={12} />
           </div>
+          {images.length > 0 && (
+            <PublishMontage
+              images={images}
+              onImagesChange={setImages}
+              soundtrackId={soundtrackId}
+              onSoundtrackId={setSoundtrackId}
+              shopLogoUrl={shops.find((s) => s.id === shopId)?.logoUrl}
+              priceCents={
+                Number.parseFloat(price) > 0
+                  ? Math.round(Number.parseFloat(price) * 100)
+                  : undefined
+              }
+              currency={currency}
+            />
+          )}
 
           <div className="space-y-2">
             <Label>Titre</Label>
@@ -311,9 +348,13 @@ function PublishInner() {
           <h1 className="font-heading text-xl font-bold">
             Prix, stock & options
           </h1>
+          <div className="space-y-2">
+            <Label>Monnaie</Label>
+            <CurrencyPicker value={currency} onChange={setCurrency} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Prix (USD)</Label>
+              <Label>Prix ({currency})</Label>
               <div className="flex items-center rounded-xl border border-border bg-surface-2 px-3">
                 <Input
                   type="number"
@@ -323,7 +364,7 @@ function PublishInner() {
                   onChange={(e) => setPrice(e.target.value)}
                   className="border-0 bg-transparent font-heading text-lg font-bold shadow-none focus-visible:ring-0"
                 />
-                <span className="text-sm text-muted-foreground">$</span>
+                <span className="text-sm text-muted-foreground">{currency}</span>
               </div>
             </div>
             <div className="space-y-2">

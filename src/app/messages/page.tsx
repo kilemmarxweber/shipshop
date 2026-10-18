@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AlertTriangle, Shield } from "lucide-react";
+import { ShopBrand } from "@/components/shop-brand";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { cn } from "@/lib/utils";
@@ -15,10 +16,10 @@ type Conversation = {
   updatedAt: string;
   urgentPending?: boolean;
   unreadCount?: number;
-  shop: { id: string; name: string };
+  shop: { id: string; name: string; logoUrl?: string | null };
   product: { id: string; title: string; images: string[] } | null;
   wantedRequest?: { id: string; title: string } | null;
-  buyer: { id: string; name: string };
+  buyer: { id: string; name: string; image?: string | null };
   messages: {
     body: string;
     createdAt: string;
@@ -104,8 +105,29 @@ export default function MessagesPage() {
                     unread && !urgent && "bg-primary/5",
                   )}
                 >
-                  <div className="relative grid size-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-sm font-bold">
-                    {title.slice(0, 1)}
+                  <div className="relative shrink-0">
+                    {c.buyer.id === session.user.id ? (
+                      <ShopBrand
+                        name={c.shop.name}
+                        logoUrl={c.shop.logoUrl}
+                        showAt={false}
+                        avatarClassName="size-11 ring-1 ring-border"
+                        nameClassName="sr-only"
+                      />
+                    ) : (
+                      <div className="grid size-11 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-violet-500 text-sm font-bold">
+                        {c.buyer.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.buyer.image}
+                            alt=""
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          title.slice(0, 1)
+                        )}
+                      </div>
+                    )}
                     {urgent && (
                       <span className="absolute -right-0.5 -top-0.5 grid size-5 place-items-center rounded-full bg-amber-500 text-black shadow">
                         <AlertTriangle className="size-3" />

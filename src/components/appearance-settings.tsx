@@ -50,7 +50,7 @@ export function AppearanceSettings() {
     <section className="mt-8 mb-6 space-y-4 rounded-2xl border border-border bg-card p-4">
       <div>
         <h2 className="font-heading text-base font-semibold">
-          {t("settings.appearance")}
+          {t("settings.languageAndTheme")}
         </h2>
         <p className="text-sm text-muted-foreground">
           {t("settings.appearanceHint")}

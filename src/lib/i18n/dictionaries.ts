@@ -41,6 +41,7 @@ export type Messages = {
   settings: {
     appearance: string;
     appearanceHint: string;
+    languageAndTheme: string;
     language: string;
     languageHint: string;
     theme: string;
@@ -76,12 +77,19 @@ export type Messages = {
     moneyProtected: string;
     like: string;
     msg: string;
+    comments: string;
+    commentsTitle: string;
+    commentPlaceholder: string;
+    commentEmpty: string;
+    commentFailed: string;
+    commentSend: string;
     share: string;
     messageSeller: string;
     likeFailed: string;
     likeSent: string;
     likeRemoved: string;
     conversationFailed: string;
+    newListing: string;
   };
   discover: {
     searchPlaceholder: string;
@@ -100,6 +108,12 @@ export type Messages = {
     copyLink: string;
     share: string;
     message: string;
+    logo: string;
+    logoHint: string;
+    logoSaved: string;
+    changeLogo: string;
+    currency: string;
+    currencyHint: string;
     linkCopied: string;
     coordinates: string;
     openInMaps: string;
@@ -115,6 +129,8 @@ export type Messages = {
   product: {
     payFromWallet: string;
     likes: string;
+    comments: string;
+    commentAria: string;
     color: string;
     size: string;
     sold: string;
@@ -183,6 +199,7 @@ export type Messages = {
   messages: {
     title: string;
     empty: string;
+    emptyHint: string;
     urgent: string;
     writePlaceholder: string;
     ackPlaceholder: string;
@@ -195,6 +212,10 @@ export type Messages = {
     seeAll: string;
     hint: string;
     noPreview: string;
+    tabMessages: string;
+    tabComments: string;
+    commentsEmpty: string;
+    commentsHint: string;
   };
   wallet: {
     title: string;
@@ -202,6 +223,8 @@ export type Messages = {
     topUpSimulated: string;
     history: string;
     emptyHistory: string;
+    currency: string;
+    amount: string;
   };
   shopExtra: {
     followerOne: string;
@@ -229,6 +252,22 @@ export type Messages = {
     removeProduct: string;
     productN: string;
     publishMany: string;
+  };
+  montage: {
+    title: string;
+    hint: string;
+    music: string;
+    none: string;
+    analyze: string;
+    analyzing: string;
+    blur: string;
+    stampLogo: string;
+    stampPrice: string;
+    eraser: string;
+    apply: string;
+    skip: string;
+    needLogo: string;
+    noSuggestions: string;
   };
 };
 
@@ -273,6 +312,7 @@ const fr: Messages = {
   settings: {
     appearance: "Apparence",
     appearanceHint: "Thème et langue de l'application",
+    languageAndTheme: "Langue et thème",
     language: "Langue",
     languageHint: "Français, English ou Português",
     theme: "Thème",
@@ -310,12 +350,19 @@ const fr: Messages = {
     moneyProtected: "Argent protégé",
     like: "Like",
     msg: "Msg",
+    comments: "Commentaires",
+    commentsTitle: "Commentaires",
+    commentPlaceholder: "Écrire un commentaire…",
+    commentEmpty: "Soyez le premier à commenter",
+    commentFailed: "Impossible de commenter",
+    commentSend: "Envoyer",
     share: "Partager",
     messageSeller: "Message au vendeur",
     likeFailed: "Impossible d'aimer",
     likeSent: "Like envoyé au vendeur",
     likeRemoved: "Like retiré — message vendeur annulé",
     conversationFailed: "Impossible d'ouvrir la conversation",
+    newListing: "Nouveau",
   },
   discover: {
     searchPlaceholder: "Rechercher un produit, vendeur…",
@@ -334,6 +381,12 @@ const fr: Messages = {
     copyLink: "Copier le lien",
     share: "Partager",
     message: "Message",
+    logo: "Logo boutique",
+    logoHint: "Image carrée — visible partout avec le nom de la boutique",
+    logoSaved: "Logo enregistré",
+    changeLogo: "Changer le logo",
+    currency: "Monnaie",
+    currencyHint: "Monnaie affichée pour cette boutique",
     linkCopied: "Lien boutique copié",
     coordinates: "Coordonnées",
     openInMaps: "Ouvrir dans Maps →",
@@ -349,6 +402,8 @@ const fr: Messages = {
   product: {
     payFromWallet: "Paiement depuis solde prépayé",
     likes: "j'aime",
+    comments: "commentaires",
+    commentAria: "Commentaires",
     color: "Couleur",
     size: "Taille",
     sold: "Déjà vendu",
@@ -416,7 +471,8 @@ const fr: Messages = {
   },
   messages: {
     title: "Messages",
-    empty: "Aucune conversation. Touchez l'icône message sur un produit.",
+    empty: "Aucune conversation. Ouvrez une boutique et touchez l'icône Messages.",
+    emptyHint: "Pour écrire à un nouveau vendeur, ouvrez sa boutique.",
     urgent: "Urgent",
     writePlaceholder: "Écrire un message…",
     ackPlaceholder: "Répondre pour acquitter l'urgence…",
@@ -429,6 +485,10 @@ const fr: Messages = {
     seeAll: "Voir tous les messages",
     hint: "Nouveaux messages — actualisation auto toutes les 25 s",
     noPreview: "Nouvelle conversation",
+    tabMessages: "Messages",
+    tabComments: "Commentaires",
+    commentsEmpty: "Aucun commentaire sur vos produits",
+    commentsHint: "Messages et commentaires non lus",
   },
   wallet: {
     title: "Mon portefeuille",
@@ -436,6 +496,8 @@ const fr: Messages = {
     topUpSimulated: "Recharger (simulé)",
     history: "Historique",
     emptyHistory: "Aucune transaction",
+    currency: "Monnaie",
+    amount: "Montant",
   },
   shopExtra: {
     followerOne: "abonné",
@@ -463,6 +525,22 @@ const fr: Messages = {
     removeProduct: "Retirer",
     productN: "Produit",
     publishMany: "Publier les demandes",
+  },
+  montage: {
+    title: "Montage",
+    hint: "Musique optionnelle et nettoyage visuel avant publication",
+    music: "Musique actualités",
+    none: "Sans musique",
+    analyze: "Détecter logos, textes, prix",
+    analyzing: "Analyse…",
+    blur: "Masquer",
+    stampLogo: "Logo boutique",
+    stampPrice: "Coller le prix",
+    eraser: "Gomme sticker",
+    apply: "Appliquer sur l'image",
+    skip: "Passer",
+    needLogo: "Ajoutez d'abord le logo de votre boutique",
+    noSuggestions: "Rien de détecté — utilisez la gomme ou tamponnez le logo",
   },
 };
 
@@ -507,6 +585,7 @@ const en: Messages = {
   settings: {
     appearance: "Appearance",
     appearanceHint: "App theme and language",
+    languageAndTheme: "Language and theme",
     language: "Language",
     languageHint: "French, English or Portuguese",
     theme: "Theme",
@@ -544,12 +623,19 @@ const en: Messages = {
     moneyProtected: "Money protected",
     like: "Like",
     msg: "Msg",
+    comments: "Comments",
+    commentsTitle: "Comments",
+    commentPlaceholder: "Write a comment…",
+    commentEmpty: "Be the first to comment",
+    commentFailed: "Could not comment",
+    commentSend: "Send",
     share: "Share",
     messageSeller: "Message seller",
     likeFailed: "Could not like",
     likeSent: "Like sent to seller",
     likeRemoved: "Like removed — seller message cancelled",
     conversationFailed: "Could not open conversation",
+    newListing: "New",
   },
   discover: {
     searchPlaceholder: "Search a product, seller…",
@@ -568,6 +654,12 @@ const en: Messages = {
     copyLink: "Copy link",
     share: "Share",
     message: "Message",
+    logo: "Shop logo",
+    logoHint: "Square image — shown wherever the shop name appears",
+    logoSaved: "Logo saved",
+    changeLogo: "Change logo",
+    currency: "Currency",
+    currencyHint: "Display currency for this shop",
     linkCopied: "Shop link copied",
     coordinates: "Coordinates",
     openInMaps: "Open in Maps →",
@@ -583,6 +675,8 @@ const en: Messages = {
   product: {
     payFromWallet: "Pay from prepaid balance",
     likes: "likes",
+    comments: "comments",
+    commentAria: "Comments",
     color: "Color",
     size: "Size",
     sold: "Sold out",
@@ -650,7 +744,8 @@ const en: Messages = {
   },
   messages: {
     title: "Messages",
-    empty: "No conversations yet. Tap the message icon on a product.",
+    empty: "No conversations yet. Open a shop and tap the Messages icon.",
+    emptyHint: "To write to a new seller, open their shop.",
     urgent: "Urgent",
     writePlaceholder: "Write a message…",
     ackPlaceholder: "Reply to acknowledge the urgent alert…",
@@ -663,6 +758,10 @@ const en: Messages = {
     seeAll: "See all messages",
     hint: "New messages — auto-refresh every 25s",
     noPreview: "New conversation",
+    tabMessages: "Messages",
+    tabComments: "Comments",
+    commentsEmpty: "No comments on your products",
+    commentsHint: "Unread messages and comments",
   },
   wallet: {
     title: "My wallet",
@@ -670,6 +769,8 @@ const en: Messages = {
     topUpSimulated: "Top up (simulated)",
     history: "History",
     emptyHistory: "No transactions",
+    currency: "Currency",
+    amount: "Amount",
   },
   shopExtra: {
     followerOne: "follower",
@@ -697,6 +798,22 @@ const en: Messages = {
     removeProduct: "Remove",
     productN: "Product",
     publishMany: "Publish requests",
+  },
+  montage: {
+    title: "Edit",
+    hint: "Optional music and visual cleanup before publishing",
+    music: "News music",
+    none: "No music",
+    analyze: "Detect logos, text, prices",
+    analyzing: "Analyzing…",
+    blur: "Hide",
+    stampLogo: "Shop logo",
+    stampPrice: "Stamp price",
+    eraser: "Sticker eraser",
+    apply: "Apply to image",
+    skip: "Skip",
+    needLogo: "Add your shop logo first",
+    noSuggestions: "Nothing detected — use the eraser or stamp the logo",
   },
 };
 
@@ -740,6 +857,7 @@ const pt: Messages = {
   },
   settings: {
     appearance: "Aparência",
+    languageAndTheme: "Idioma e tema",
     appearanceHint: "Tema e idioma da aplicação",
     language: "Idioma",
     languageHint: "Francês, inglês ou português",
@@ -778,12 +896,19 @@ const pt: Messages = {
     moneyProtected: "Dinheiro protegido",
     like: "Gosto",
     msg: "Msg",
+    comments: "Comentários",
+    commentsTitle: "Comentários",
+    commentPlaceholder: "Escrever um comentário…",
+    commentEmpty: "Seja o primeiro a comentar",
+    commentFailed: "Não foi possível comentar",
+    commentSend: "Enviar",
     share: "Partilhar",
     messageSeller: "Mensagem ao vendedor",
     likeFailed: "Não foi possível gostar",
     likeSent: "Gosto enviado ao vendedor",
     likeRemoved: "Gosto removido — mensagem ao vendedor cancelada",
     conversationFailed: "Não foi possível abrir a conversa",
+    newListing: "Novo",
   },
   discover: {
     searchPlaceholder: "Pesquisar produto, vendedor…",
@@ -802,6 +927,12 @@ const pt: Messages = {
     copyLink: "Copiar link",
     share: "Partilhar",
     message: "Mensagem",
+    logo: "Logótipo da loja",
+    logoHint: "Imagem quadrada — visível com o nome da loja",
+    logoSaved: "Logótipo guardado",
+    changeLogo: "Alterar logótipo",
+    currency: "Moeda",
+    currencyHint: "Moeda apresentada nesta loja",
     linkCopied: "Link da loja copiado",
     coordinates: "Coordenadas",
     openInMaps: "Abrir no Maps →",
@@ -817,6 +948,8 @@ const pt: Messages = {
   product: {
     payFromWallet: "Pagamento a partir do saldo pré-pago",
     likes: "gostos",
+    comments: "comentários",
+    commentAria: "Comentários",
     color: "Cor",
     size: "Tamanho",
     sold: "Esgotado",
@@ -884,7 +1017,8 @@ const pt: Messages = {
   },
   messages: {
     title: "Mensagens",
-    empty: "Sem conversas. Toque no ícone de mensagem num produto.",
+    empty: "Sem conversas. Abra uma loja e toque no ícone Mensagens.",
+    emptyHint: "Para escrever a um novo vendedor, abra a loja.",
     urgent: "Urgente",
     writePlaceholder: "Escrever uma mensagem…",
     ackPlaceholder: "Responder para acusar a urgência…",
@@ -897,6 +1031,10 @@ const pt: Messages = {
     seeAll: "Ver todas as mensagens",
     hint: "Novas mensagens — atualização automática a cada 25 s",
     noPreview: "Nova conversa",
+    tabMessages: "Mensagens",
+    tabComments: "Comentários",
+    commentsEmpty: "Sem comentários nos seus produtos",
+    commentsHint: "Mensagens e comentários não lidos",
   },
   wallet: {
     title: "A minha carteira",
@@ -904,6 +1042,8 @@ const pt: Messages = {
     topUpSimulated: "Carregar (simulado)",
     history: "Histórico",
     emptyHistory: "Sem transações",
+    currency: "Moeda",
+    amount: "Montante",
   },
   shopExtra: {
     followerOne: "seguidor",
@@ -931,6 +1071,22 @@ const pt: Messages = {
     removeProduct: "Remover",
     productN: "Produto",
     publishMany: "Publicar os pedidos",
+  },
+  montage: {
+    title: "Montagem",
+    hint: "Música opcional e limpeza visual antes de publicar",
+    music: "Música de atualidades",
+    none: "Sem música",
+    analyze: "Detetar logos, textos, preços",
+    analyzing: "A analisar…",
+    blur: "Ocultar",
+    stampLogo: "Logótipo da loja",
+    stampPrice: "Colar o preço",
+    eraser: "Borracha de sticker",
+    apply: "Aplicar na imagem",
+    skip: "Saltar",
+    needLogo: "Adicione primeiro o logótipo da loja",
+    noSuggestions: "Nada detetado — use a borracha ou o logótipo",
   },
 };
 

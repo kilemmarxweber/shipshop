@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { DM_Sans, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageLoader } from "@/components/page-loader";
 import { Providers } from "@/components/providers";
@@ -9,18 +9,22 @@ import { getAppName } from "@/lib/app-name";
 import { USER_LOCALE_COOKIE, normalizeUserLocale } from "@/lib/user-locale";
 import "./globals.css";
 
-const dmSans = DM_Sans({
+const dmSans = localFont({
+  src: "./fonts/dm-sans-latin-wght.woff2",
   variable: "--font-dm-sans",
-  subsets: ["latin"],
+  weight: "100 1000",
+  display: "swap",
 });
 
-const spaceGrotesk = Space_Grotesk({
+const spaceGrotesk = localFont({
+  src: "./fonts/space-grotesk-latin-wght.woff2",
   variable: "--font-space-grotesk",
-  subsets: ["latin"],
+  weight: "300 700",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "ShipShop — Marketplace de confiance RDC",
+  title: "ShipShop — Marketplace de confiance",
   description:
     "Achetez et vendez en sécurité avec portefeuille Mobile Money prépayé.",
   icons: {

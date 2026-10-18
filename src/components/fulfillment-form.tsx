@@ -41,6 +41,7 @@ type CourierPreview = {
 type Props = {
   shopId: string;
   productCents: number;
+  currency?: string;
   defaultPhone?: string;
   value: FulfillmentState;
   onChange: (v: FulfillmentState) => void;
@@ -49,6 +50,7 @@ type Props = {
 export function FulfillmentForm({
   shopId,
   productCents,
+  currency,
   defaultPhone = "",
   value,
   onChange,
@@ -203,7 +205,7 @@ export function FulfillmentForm({
             <p className="text-xs text-muted-foreground">
               {quoting
                 ? "Calcul du transport…"
-                : `Transport ≈ ${formatMoney(value.shippingCents)}${
+                : `Transport ≈ ${formatMoney(value.shippingCents, currency)}${
                     value.distanceKm != null
                       ? ` · ${value.distanceKm} km`
                       : ""
@@ -223,12 +225,14 @@ export function FulfillmentForm({
       <div className="rounded-xl border border-border bg-black/30 p-3 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Produit</span>
-          <span>{formatMoney(productCents)}</span>
+          <span>{formatMoney(productCents, currency)}</span>
         </div>
         <div className="mt-1 flex items-start justify-between gap-3">
           <span className="shrink-0 text-muted-foreground">Transport</span>
           <div className="min-w-0 text-right">
-            <p className="font-medium">{formatMoney(value.shippingCents)}</p>
+            <p className="font-medium">
+              {formatMoney(value.shippingCents, currency)}
+            </p>
             {value.fulfillmentType === "DELIVERY" && hasPosition && (
               <div className="mt-1.5 space-y-0.5 text-left sm:text-right">
                 {quoting && !courier ? (
@@ -261,7 +265,7 @@ export function FulfillmentForm({
         </div>
         <div className="mt-2 flex justify-between font-heading text-base font-bold text-trust">
           <span>Total à débiter</span>
-          <span>{formatMoney(total)}</span>
+          <span>{formatMoney(total, currency)}</span>
         </div>
       </div>
     </div>

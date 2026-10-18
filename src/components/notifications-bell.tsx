@@ -10,8 +10,10 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { fetchJson } from "@/lib/fetch-json";
 import {
   useInboxUnread,
+  type InboxComment,
   type InboxConversation,
 } from "@/hooks/use-inbox-unread";
 import { useI18n } from "@/components/i18n-provider";
@@ -24,14 +26,18 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { ShopBrand } from "@/components/shop-brand";
 
 type Props = {
   unreadMessages: number;
+  unreadComments: number;
   urgentCount: number;
   conversations: InboxConversation[];
+  comments: InboxComment[];
   refreshing: boolean;
   onRefresh: () => void;
   onOpenConversation: (id: string) => void;
+  onCommentsSeen: (ids?: string[]) => void;
   userId?: string;
 };
 
@@ -45,20 +51,38 @@ function previewTitle(
 
 export function NotificationsBell({
   unreadMessages,
+  unreadComments,
   urgentCount,
   conversations,
+  comments,
   refreshing,
   onRefresh,
   onOpenConversation,
+  onCommentsSeen,
   userId,
 }: Props) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const badge = urgentCount > 0 ? urgentCount : unreadMessages;
-  const hasBadge = urgentCount > 0 || unreadMessages > 0;
+  const [tab, setTab] = useState<"messages" | "comments">("messages");
+  const combined = unreadMessages + unreadComments;
+  const badge = urgentCount > 0 ? urgentCount : combined;
+  const hasBadge = urgentCount > 0 || combined > 0;
 
   const recent = conversations.slice(0, 12);
+
+  async function openCommentsTab() {
+    setTab("comments");
+    const unreadIds = comments.filter((c) => c.unread).map((c) => c.id);
+    if (unreadIds.length) {
+      await fetchJson("/api/comments/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentIds: unreadIds }),
+      });
+      onCommentsSeen(unreadIds);
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -107,110 +131,207 @@ export function NotificationsBell({
             </button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            {t("notifications.hint")}
+            {t("notifications.commentsHint")}
           </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTab("messages")}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-semibold",
+                tab === "messages"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {t("notifications.tabMessages")}
+              {unreadMessages > 0 ? ` · ${unreadMessages}` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => void openCommentsTab()}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-semibold",
+                tab === "comments"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {t("notifications.tabComments")}
+              {unreadComments > 0 ? ` · ${unreadComments}` : ""}
+            </button>
+          </div>
         </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {recent.length === 0 ? (
+          {tab === "messages" ? (
+            recent.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                {t("notifications.empty")}
+              </p>
+            ) : (
+              <ul>
+                {recent.map((c) => {
+                  const last = c.messages[0];
+                  const title = previewTitle(c, userId);
+                  const urgent = Boolean(c.urgentPending);
+                  const unread = (c.unreadCount ?? 0) > 0;
+                  const isBuyer = userId === c.buyer.id;
+                  return (
+                    <li key={c.id} className="border-b border-border">
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-muted/50",
+                          unread && !urgent && "bg-primary/5",
+                          urgent && "bg-amber-500/10",
+                        )}
+                        onClick={() => {
+                          onOpenConversation(c.id);
+                          setOpen(false);
+                          router.push(`/messages/${c.id}`);
+                        }}
+                      >
+                        {isBuyer ? (
+                          <ShopBrand
+                            name={c.shop.name}
+                            logoUrl={c.shop.logoUrl}
+                            showAt={false}
+                            className="mt-0.5"
+                            avatarClassName="size-9 ring-1 ring-border"
+                            nameClassName="sr-only"
+                          />
+                        ) : (
+                          <span
+                            className={cn(
+                              "mt-0.5 grid size-9 shrink-0 place-items-center overflow-hidden rounded-full border",
+                              urgent
+                                ? "border-amber-500/40 bg-amber-500/15 text-amber-600"
+                                : unread
+                                  ? "border-primary/30 bg-primary/10 text-primary"
+                                  : "border-border bg-muted/40 text-muted-foreground",
+                            )}
+                          >
+                            {c.buyer.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={c.buyer.image}
+                                alt=""
+                                className="size-full object-cover"
+                              />
+                            ) : urgent ? (
+                              <AlertTriangle className="size-4" />
+                            ) : (
+                              <MessageCircle className="size-4" />
+                            )}
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "truncate text-sm",
+                                unread || urgent
+                                  ? "font-bold"
+                                  : "font-semibold",
+                              )}
+                            >
+                              {title}
+                            </span>
+                            {urgent && (
+                              <span className="shrink-0 rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold text-black">
+                                {t("messages.urgent")}
+                              </span>
+                            )}
+                            {unread && !urgent && (
+                              <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-primary-foreground">
+                                {(c.unreadCount ?? 0) > 9
+                                  ? "9+"
+                                  : c.unreadCount}
+                              </span>
+                            )}
+                          </span>
+                          <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                            {last?.body || t("notifications.noPreview")}
+                          </span>
+                          {last?.createdAt && (
+                            <span className="mt-1 block text-[10px] text-muted-foreground/80">
+                              {new Date(last.createdAt).toLocaleString(
+                                intlLocaleFromUserLocale(locale),
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          ) : comments.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-              {t("notifications.empty")}
+              {t("notifications.commentsEmpty")}
             </p>
           ) : (
             <ul>
-              {recent.map((c) => {
-                const last = c.messages[0];
-                const title = previewTitle(c, userId);
-                const urgent = Boolean(c.urgentPending);
-                const unread = (c.unreadCount ?? 0) > 0;
-                return (
-                  <li key={c.id} className="border-b border-border">
-                    <button
-                      type="button"
-                      className={cn(
-                        "flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-muted/50",
-                        unread && !urgent && "bg-primary/5",
-                        urgent && "bg-amber-500/10",
+              {comments.map((c) => (
+                <li key={c.id} className="border-b border-border">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-muted/50",
+                      c.unread && "bg-primary/5",
+                    )}
+                    onClick={() => {
+                      setOpen(false);
+                      router.push(`/product/${c.product.id}?comments=1`);
+                    }}
+                  >
+                    <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-muted text-xs font-bold">
+                      {c.user.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={c.user.image}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        c.user.name.slice(0, 1).toUpperCase()
                       )}
-                      onClick={() => {
-                        onOpenConversation(c.id);
-                        setOpen(false);
-                        router.push(`/messages/${c.id}`);
-                      }}
-                    >
-                      <span
-                        className={cn(
-                          "mt-0.5 grid size-9 shrink-0 place-items-center rounded-full border",
-                          urgent
-                            ? "border-amber-500/40 bg-amber-500/15 text-amber-600"
-                            : unread
-                              ? "border-primary/30 bg-primary/10 text-primary"
-                              : "border-border bg-muted/40 text-muted-foreground",
-                        )}
-                      >
-                        {urgent ? (
-                          <AlertTriangle className="size-4" />
-                        ) : (
-                          <MessageCircle className="size-4" />
-                        )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">
+                        {c.user.name}
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "truncate text-sm",
-                              unread || urgent
-                                ? "font-bold"
-                                : "font-semibold",
-                            )}
-                          >
-                            {title}
-                          </span>
-                          {urgent && (
-                            <span className="shrink-0 rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold text-black">
-                              {t("messages.urgent")}
-                            </span>
-                          )}
-                          {unread && !urgent && (
-                            <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-primary-foreground">
-                              {(c.unreadCount ?? 0) > 9
-                                ? "9+"
-                                : c.unreadCount}
-                            </span>
-                          )}
-                        </span>
-                        <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                          {last?.body || t("notifications.noPreview")}
-                        </span>
-                        {last?.createdAt && (
-                          <span className="mt-1 block text-[10px] text-muted-foreground/80">
-                            {new Date(last.createdAt).toLocaleString(
-                              intlLocaleFromUserLocale(locale),
-                              {
-                                day: "numeric",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              },
-                            )}
-                          </span>
-                        )}
+                      <span className="line-clamp-2 text-xs text-muted-foreground">
+                        {c.body}
                       </span>
-                    </button>
-                  </li>
-                );
-              })}
+                      <span className="mt-1 block truncate text-[10px] text-primary">
+                        {c.product.title}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
             </ul>
           )}
         </div>
 
         <div className="border-t border-border p-3">
           <Link
-            href="/messages"
+            href={tab === "comments" ? "/" : "/messages"}
             onClick={() => setOpen(false)}
             className="flex h-10 w-full items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground"
           >
-            {t("notifications.seeAll")}
+            {tab === "comments"
+              ? t("feed.tabForYou")
+              : t("notifications.seeAll")}
           </Link>
         </div>
       </SheetContent>
@@ -239,11 +360,14 @@ export function NotificationsBellConnected() {
     <NotificationsBell
       userId={session.user.id}
       unreadMessages={inbox.unreadMessages}
+      unreadComments={inbox.unreadComments}
       urgentCount={inbox.urgentCount}
       conversations={inbox.conversations}
+      comments={inbox.comments}
       refreshing={inbox.refreshing}
       onRefresh={() => void inbox.refresh({ silent: true })}
       onOpenConversation={inbox.markConversationSeen}
+      onCommentsSeen={inbox.markCommentsSeen}
     />
   );
 }

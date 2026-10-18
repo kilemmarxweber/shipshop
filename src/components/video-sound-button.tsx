@@ -11,7 +11,7 @@ export type VideoSoundState = {
 };
 
 export const DEFAULT_VIDEO_SOUND: VideoSoundState = {
-  muted: true,
+  muted: false,
   volume: 0.3,
 };
 
@@ -42,16 +42,18 @@ type Props = {
   sound: VideoSoundState;
   onChange: (next: VideoSoundState) => void;
   className?: string;
+  hasSoundtrack?: boolean;
 };
 
-/** Visible uniquement si la card a au moins une vidéo. */
+/** Visible si la card a une vidéo ou une musique catalogue. */
 export function VideoSoundButton({
   images,
   sound,
   onChange,
   className,
+  hasSoundtrack = false,
 }: Props) {
-  if (!productHasVideo(images)) return null;
+  if (!productHasVideo(images) && !hasSoundtrack) return null;
 
   return (
     <button

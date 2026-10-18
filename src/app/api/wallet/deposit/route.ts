@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/session";
+import { APP_CURRENCIES } from "@/lib/money";
 import {
   confirmSimulatedDeposit,
   initiateDeposit,
@@ -10,6 +11,7 @@ const initiateSchema = z.object({
   amountCents: z.number().int().min(100),
   provider: z.enum(["MPESA", "ORANGE", "AIRTEL"]),
   phone: z.string().min(10).max(24),
+  currency: z.enum(APP_CURRENCIES).default("USD"),
 });
 
 const confirmSchema = z.object({
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
       amountCents: parsed.amountCents,
       provider: parsed.provider,
       phone: parsed.phone,
+      currency: parsed.currency,
     });
     return NextResponse.json(result);
   } catch (error) {

@@ -17,6 +17,7 @@ async function loadCart(userId: string) {
             id: true,
             title: true,
             priceCents: true,
+            currency: true,
             images: true,
             status: true,
             location: true,

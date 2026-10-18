@@ -1,11 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import type { MobileMoneyProvider } from "@/generated/prisma/client";
+import {
+  parseCurrency,
+  type AppCurrency,
+  walletCents,
+  walletCreditData,
+} from "@/lib/money";
 
 export type DepositInput = {
   userId: string;
   amountCents: number;
   provider: Exclude<MobileMoneyProvider, "INTERNAL">;
   phone: string;
+  currency?: AppCurrency;
 };
 
 /**
@@ -14,8 +21,9 @@ export type DepositInput = {
  */
 export async function initiateDeposit(input: DepositInput) {
   if (input.amountCents < 100) {
-    throw new Error("Montant minimum: 1 USD");
+    throw new Error("Montant minimum: 1");
   }
+  const currency = parseCurrency(input.currency);
   if (!/^\+?\d{9,15}$/.test(input.phone.replace(/\s/g, ""))) {
     throw new Error("Numéro Mobile Money invalide");
   }
@@ -32,6 +40,7 @@ export async function initiateDeposit(input: DepositInput) {
       walletId: wallet.id,
       type: "DEPOSIT",
       amountCents: input.amountCents,
+      currency,
       provider: input.provider,
       phone: input.phone.replace(/\s/g, ""),
       reference,
@@ -61,11 +70,12 @@ export async function confirmSimulatedDeposit(transactionId: string, userId: str
     });
     if (!pending) throw new Error("Transaction introuvable ou déjà traitée");
 
-    const newBalance = wallet.balanceCents + pending.amountCents;
+    const currency = parseCurrency(pending.currency);
+    const newBalance = walletCents(wallet, currency) + pending.amountCents;
 
     await tx.wallet.update({
       where: { id: wallet.id },
-      data: { balanceCents: newBalance },
+      data: walletCreditData(wallet, currency, newBalance, { setDisplay: true }),
     });
 
     const updated = await tx.walletTransaction.update({
@@ -85,6 +95,7 @@ export async function confirmSimulatedDeposit(transactionId: string, userId: str
 
     return {
       balanceCents: newBalance,
+      currency,
       transaction: updated,
     };
   });

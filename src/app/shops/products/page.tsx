@@ -26,6 +26,7 @@ type Product = {
   title: string;
   description: string | null;
   priceCents: number;
+  currency?: string;
   quantity: number;
   status: string;
   category: string;
@@ -289,7 +290,7 @@ export default function SellerProductsPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{p.title}</p>
                 <p className="text-[11px] text-muted-foreground">
-                  {formatMoney(p.priceCents)} · stock {p.quantity} ·{" "}
+                  {formatMoney(p.priceCents, p.currency)} · stock {p.quantity} ·{" "}
                   <span
                     className={cn(
                       "font-bold",
@@ -543,7 +544,7 @@ export default function SellerProductsPage() {
                             {p.title}
                           </span>
                           <span className="text-[11px] text-muted-foreground">
-                            {formatMoney(p.priceCents)} ·{" "}
+                            {formatMoney(p.priceCents, p.currency)} ·{" "}
                             {STATUS_LABEL[p.status] ?? p.status}
                             {p.shop?.name ? ` · @${p.shop.name}` : ""}
                           </span>

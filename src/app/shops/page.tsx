@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { KeyRound, Plus, Store, Users } from "lucide-react";
+import { KeyRound, Plus, Users } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { uploadCompressedMedia } from "@/lib/compress-media";
+import { ShopBrand } from "@/components/shop-brand";
+import { CurrencyPicker } from "@/components/currency-picker";
+import { type AppCurrency, parseCurrency } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
 import { Button } from "@/components/ui/button";
@@ -31,6 +35,8 @@ type Shop = {
   name: string;
   slug: string;
   description: string | null;
+  logoUrl?: string | null;
+  currency?: string;
   _count?: { products: number };
 };
 
@@ -53,6 +59,8 @@ export default function ShopsPage() {
   const [activeOrgId, setActiveOrgId] = useState<string>("");
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopName, setShopName] = useState("");
+  const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
+  const [shopCurrency, setShopCurrency] = useState<AppCurrency>("USD");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [members, setMembers] = useState<OrgMember[]>([]);
@@ -128,6 +136,8 @@ export default function ShopsPage() {
       body: JSON.stringify({
         organizationId: activeOrgId || undefined,
         name: shopName,
+        logoUrl: shopLogoUrl || undefined,
+        currency: shopCurrency,
       }),
     });
     const json = await res.json();
@@ -137,6 +147,8 @@ export default function ShopsPage() {
     }
     toast.success("Boutique créée");
     setShopName("");
+    setShopLogoUrl(null);
+    setShopCurrency("USD");
     loadSeller();
   }
 
@@ -338,6 +350,38 @@ export default function ShopsPage() {
                 placeholder="Nom de la boutique"
                 className="bg-surface-2"
               />
+              <div className="space-y-1">
+                <Label>Monnaie</Label>
+                <CurrencyPicker value={shopCurrency} onChange={setShopCurrency} />
+              </div>
+              <div className="space-y-1">
+                <Label>Logo</Label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    try {
+                      const uploaded = await uploadCompressedMedia(file, "avatar");
+                      setShopLogoUrl(uploaded.url);
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error ? error.message : "Logo impossible",
+                      );
+                    }
+                  }}
+                />
+                {shopLogoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={shopLogoUrl}
+                    alt=""
+                    className="mt-2 size-14 rounded-xl object-cover"
+                  />
+                )}
+              </div>
               <Button onClick={createShop} className="w-full">
                 Créer
               </Button>
@@ -353,13 +397,19 @@ export default function ShopsPage() {
             className="rounded-2xl border border-border bg-surface p-4"
           >
             <div className="flex items-start gap-3">
-              <div className="grid size-10 place-items-center rounded-xl bg-primary/15 text-primary">
-                <Store className="size-5" />
-              </div>
+              <ShopBrand
+                name={shop.name}
+                slug={shop.slug}
+                logoUrl={shop.logoUrl}
+                showAt={false}
+                avatarClassName="size-10 rounded-xl ring-1 ring-border"
+                nameClassName="sr-only"
+              />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{shop.name}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  /{shop.slug} · {shop._count?.products ?? 0} produits
+                  /{shop.slug} · {parseCurrency(shop.currency)} ·{" "}
+                  {shop._count?.products ?? 0} produits
                 </p>
               </div>
             </div>

@@ -3,18 +3,22 @@ import { z } from "zod";
 import { collectFollowingProductIds } from "@/lib/following-feed";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
 
 const createSchema = z.object({
   shopId: z.string().min(1),
   title: z.string().min(2).max(120),
   description: z.string().max(2000).optional(),
   priceCents: z.number().int().min(100),
+  currency: z.enum(APP_CURRENCIES).optional(),
   quantity: z.number().int().min(1).max(100_000).default(1),
   category: z.string().min(1),
   images: z.array(z.string().min(1)).max(12).default([]),
   colors: z.array(z.string().min(1).max(40)).max(12).default([]),
   sizes: z.array(z.string().min(1).max(20)).max(20).default([]),
   location: z.string().max(200).optional(),
+  soundtrackId: z.string().min(1).optional().nullable(),
+  soundtrackStartMs: z.number().int().min(0).max(600_000).optional(),
   status: z.enum(["DRAFT", "ACTIVE"]).default("DRAFT"),
 });
 
@@ -64,7 +68,15 @@ export async function GET(req: Request) {
                 ownerUserId: true,
               },
             },
-            _count: { select: { likes: true, orders: true } },
+            _count: { select: { likes: true, orders: true, comments: true } },
+            soundtrack: {
+              select: {
+                id: true,
+                title: true,
+                audioUrl: true,
+                durationMs: true,
+              },
+            },
           },
           orderBy: { createdAt: "desc" },
           take: 100,
@@ -74,6 +86,7 @@ export async function GET(req: Request) {
         products: products.map(({ _count, ...rest }) => ({
           ...rest,
           likesCount: _count.likes,
+          commentsCount: _count.comments,
           ordersCount: _count.orders,
           canDelete: _count.orders === 0,
           likedByMe: false,
@@ -149,7 +162,15 @@ export async function GET(req: Request) {
               ownerUserId: true,
             },
           },
-          _count: { select: { likes: true } },
+          _count: { select: { likes: true, comments: true } },
+          soundtrack: {
+            select: {
+              id: true,
+              title: true,
+              audioUrl: true,
+              durationMs: true,
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
         take: 80,
@@ -204,6 +225,7 @@ export async function GET(req: Request) {
       return {
         ...rest,
         likesCount: _count.likes,
+        commentsCount: _count.comments,
         likedByMe: likedIds.has(p.id),
         shop: {
           ...p.shop,
@@ -255,6 +277,7 @@ export async function POST(req: Request) {
         title: body.title,
         description: body.description,
         priceCents: body.priceCents,
+        currency: body.currency ?? parseCurrency(shop.currency),
         quantity: body.quantity,
         category: body.category,
         images: images.length
@@ -265,6 +288,8 @@ export async function POST(req: Request) {
         colors: body.colors,
         sizes: body.sizes,
         location: body.location ?? "Kinshasa",
+        soundtrackId: body.soundtrackId ?? null,
+        soundtrackStartMs: body.soundtrackStartMs ?? 0,
         status: body.status,
       },
       include: { shop: true },

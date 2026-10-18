@@ -13,6 +13,13 @@ import {
   splitPhone,
 } from "@/lib/phone";
 import { formatMoney, cn } from "@/lib/utils";
+import {
+  APP_CURRENCIES,
+  type AppCurrency,
+  parseCurrency,
+  walletCents,
+} from "@/lib/money";
+import { CurrencyPicker } from "@/components/currency-picker";
 import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 import { PhoneField } from "@/components/phone-field";
@@ -30,6 +37,7 @@ type Txn = {
   id: string;
   type: string;
   amountCents: number;
+  currency?: string;
   status: string;
   provider: string;
   phone: string | null;
@@ -43,10 +51,13 @@ export default function WalletPage() {
   const { t } = useI18n();
   usePageBack({ fallbackHref: "/profile" });
   const [balance, setBalance] = useState(0);
+  const [displayCurrency, setDisplayCurrency] = useState<AppCurrency>("USD");
+  const [balances, setBalances] = useState({ USD: 0, CDF: 0, KW: 0 });
   const [txns, setTxns] = useState<Txn[]>([]);
   const [provider, setProvider] = useState<"MPESA" | "ORANGE" | "AIRTEL">("MPESA");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("50");
+  const [currency, setCurrency] = useState<AppCurrency>("USD");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -54,7 +65,15 @@ export default function WalletPage() {
     const res = await fetch("/api/wallet");
     if (!res.ok) return;
     const json = await res.json();
-    setBalance(json.wallet?.balanceCents ?? 0);
+    const wallet = json.wallet ?? {};
+    const code = parseCurrency(wallet.currency);
+    setDisplayCurrency(code);
+    setBalances({
+      USD: walletCents(wallet, "USD"),
+      CDF: walletCents(wallet, "CDF"),
+      KW: walletCents(wallet, "KW"),
+    });
+    setBalance(walletCents(wallet, code));
     setTxns(json.transactions ?? []);
   }
 
@@ -101,6 +120,7 @@ export default function WalletPage() {
         provider,
         phone: e164,
         amountCents: Math.round(parseFloat(amount) * 100),
+        currency,
       }),
     });
     const json = await res.json();
@@ -127,7 +147,9 @@ export default function WalletPage() {
       toast.error(json.error);
       return;
     }
-    toast.success(`Compte rechargé · ${formatMoney(json.balanceCents)}`);
+    toast.success(
+      `Compte rechargé · ${formatMoney(json.balanceCents, json.currency ?? currency)}`,
+    );
     setPendingId(null);
     router.push("/discover");
   }
@@ -140,9 +162,19 @@ export default function WalletPage() {
           {t("wallet.title")}
         </div>
         <p className="mt-2 font-heading text-4xl font-extrabold text-trust">
-          {formatMoney(balance)}
+          {formatMoney(balance, displayCurrency)}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {APP_CURRENCIES.map((code) => (
+            <span
+              key={code}
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/80"
+            >
+              {formatMoney(balances[code], code)}
+            </span>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
           Rechargez via Mobile Money avant d&apos;acheter
         </p>
       </div>
@@ -172,7 +204,13 @@ export default function WalletPage() {
           onChange={setPhone}
         />
         <div className="space-y-2">
-          <Label>Montant (USD)</Label>
+          <Label>{t("wallet.currency")}</Label>
+          <CurrencyPicker value={currency} onChange={setCurrency} />
+        </div>
+        <div className="space-y-2">
+          <Label>
+            {t("wallet.amount")} ({currency})
+          </Label>
           <Input
             type="number"
             min="1"
@@ -229,7 +267,7 @@ export default function WalletPage() {
                 )}
               >
                 {t.amountCents >= 0 ? "+" : ""}
-                {formatMoney(Math.abs(t.amountCents))}
+                {formatMoney(Math.abs(t.amountCents), t.currency)}
               </span>
             </li>
           ))}

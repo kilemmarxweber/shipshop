@@ -27,6 +27,7 @@ type CartItem = {
     id: string;
     title: string;
     priceCents: number;
+    currency?: string;
     images: string[];
     status: string;
     shop: { id: string; name: string; slug: string };
@@ -274,7 +275,7 @@ export default function CartPage() {
                     @{item.product.shop.name}
                   </Link>
                   <p className="font-heading text-sm font-bold text-trust">
-                    {formatMoney(item.product.priceCents)}
+                    {formatMoney(item.product.priceCents, item.product.currency)}
                   </p>
                   {item.product.status !== "ACTIVE" && (
                     <p className="text-[11px] text-destructive">

@@ -3,6 +3,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "better-auth/crypto";
 import { KINSHASA_COMMUNES } from "../src/lib/kinshasa-geo";
+import { writeSeedSoundtracks } from "../src/lib/write-soundtrack-wav";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
@@ -359,6 +360,54 @@ async function main() {
         },
       });
     }
+  }
+
+  const tracks = await writeSeedSoundtracks();
+  const soundtrackSeed = [
+    {
+      id: "st-news",
+      title: "Flash actualités",
+      artist: "Chip Shop",
+      mood: "news",
+      durationMs: tracks[0]!.durationMs,
+      audioUrl: tracks[0]!.url,
+    },
+    {
+      id: "st-market",
+      title: "Marché Kin",
+      artist: "Chip Shop",
+      mood: "upbeat",
+      durationMs: tracks[1]!.durationMs,
+      audioUrl: tracks[1]!.url,
+    },
+    {
+      id: "st-soft",
+      title: "Doux matin",
+      artist: "Chip Shop",
+      mood: "calm",
+      durationMs: tracks[2]!.durationMs,
+      audioUrl: tracks[2]!.url,
+    },
+  ];
+  for (const track of soundtrackSeed) {
+    await prisma.soundtrack.upsert({
+      where: { id: track.id },
+      create: {
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        mood: track.mood,
+        durationMs: track.durationMs,
+        audioUrl: track.audioUrl,
+        isActive: true,
+      },
+      update: {
+        title: track.title,
+        audioUrl: track.audioUrl,
+        durationMs: track.durationMs,
+        isActive: true,
+      },
+    });
   }
 
   // Messaging templates (owner) — lazy via ensureMessagingSetup at runtime;

@@ -36,7 +36,8 @@ export type MessagePath =
   | `notifications.${keyof Messages["notifications"]}`
   | `wallet.${keyof Messages["wallet"]}`
   | `shopExtra.${keyof Messages["shopExtra"]}`
-  | `wanted.${keyof Messages["wanted"]}`;
+  | `wanted.${keyof Messages["wanted"]}`
+  | `montage.${keyof Messages["montage"]}`;
 
 type I18nContextValue = {
   locale: UserLocale;

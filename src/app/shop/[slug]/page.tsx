@@ -20,12 +20,15 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { CATEGORIES } from "@/lib/categories";
 import { fetchJson } from "@/lib/fetch-json";
+import { uploadCompressedMedia } from "@/lib/compress-media";
 import { colorHex } from "@/lib/product-options";
 import { formatMoney, cn } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { FollowShopButton } from "@/components/follow-shop-button";
+import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
 import { PageLoader } from "@/components/page-loader";
+import { ProductCommentsSheet } from "@/components/product-comments-sheet";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
 import {
@@ -62,13 +65,17 @@ type Product = {
   title: string;
   description: string | null;
   priceCents: number;
+  currency?: string;
   category: string;
   images: string[];
   colors: string[];
   sizes: string[];
   location: string | null;
   likesCount: number;
+  commentsCount: number;
   likedByMe: boolean;
+  soundtrackStartMs?: number;
+  soundtrack?: { id: string; title: string; audioUrl: string } | null;
   canDelete?: boolean;
   shop: {
     id: string;
@@ -94,6 +101,8 @@ function ShopInner() {
   const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
     {},
   );
+  const [commentProductId, setCommentProductId] = useState<string | null>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
 
   const isOwnShop = shop?.owner?.id === session?.user?.id;
 
@@ -257,6 +266,34 @@ function ShopInner() {
     router.push(`/messages/${data.conversation.id}`);
   }
 
+  async function uploadLogo(file: File) {
+    if (!shop) return;
+    setLogoBusy(true);
+    try {
+      const uploaded = await uploadCompressedMedia(file, "avatar");
+      const { res, data } = await fetchJson<{
+        shop?: { logoUrl: string | null };
+        error?: string;
+      }>(`/api/shops/${shop.slug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logoUrl: uploaded.url }),
+      });
+      if (!res.ok) {
+        toast.error(data?.error ?? t("media.moderationUnavailable"));
+        return;
+      }
+      setShop((prev) =>
+        prev ? { ...prev, logoUrl: data?.shop?.logoUrl ?? uploaded.url } : prev,
+      );
+      toast.success(t("shop.logoSaved"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("shop.logo"));
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
   function copyShopLink() {
     void navigator.clipboard.writeText(shopUrl).then(
       () => toast.success(t("shop.linkCopied")),
@@ -285,7 +322,12 @@ function ShopInner() {
       {/* En-tête boutique */}
       <header className="shrink-0 border-b border-border bg-background/95 px-4 pb-3 pt-1 backdrop-blur">
         <div className="flex items-start gap-3">
-          <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary to-violet-600 text-xl font-bold text-white">
+          <label
+            className={cn(
+              "relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary to-violet-600 text-xl font-bold text-white",
+              isOwnShop && "cursor-pointer",
+            )}
+          >
             {shop.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -296,7 +338,20 @@ function ShopInner() {
             ) : (
               shop.name.slice(0, 1).toUpperCase()
             )}
-          </div>
+            {isOwnShop && (
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={logoBusy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void uploadLogo(file);
+                }}
+              />
+            )}
+          </label>
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-lg font-bold">
               {shop.name}
@@ -487,7 +542,25 @@ function ShopInner() {
                 className="absolute inset-0"
                 muted={soundFor(p.id).muted}
                 volume={soundFor(p.id).volume}
+                onDoubleLike={() => {
+                  if (p.likedByMe) return;
+                  void toggleLike(p);
+                }}
+                onAutoplayBlocked={() =>
+                  setSoundById((prev) => ({
+                    ...prev,
+                    [p.id]: { ...soundFor(p.id), muted: true },
+                  }))
+                }
               />
+              {p.soundtrack?.audioUrl ? (
+                <FeedSoundtrackPlayer
+                  audioUrl={p.soundtrack.audioUrl}
+                  startMs={p.soundtrackStartMs}
+                  sound={soundFor(p.id)}
+                  active
+                />
+              ) : null}
 
               <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
                 <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
@@ -559,11 +632,27 @@ function ShopInner() {
                       )}
                     />
                   </span>
+                  <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+                    {p.likesCount || 0}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCommentProductId(p.id)}
+                  className="grid cursor-pointer place-items-center"
+                  aria-label={t("feed.comments")}
+                >
+                  <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95">
+                    <MessageCircle className="size-5 text-white" />
+                  </span>
+                  <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+                    {p.commentsCount || 0}
+                  </span>
                 </button>
                 <ShareMenu
                   title={p.title}
                   productId={p.id}
-                  text={`${p.title} — ${formatMoney(p.priceCents)}`}
+                  text={`${p.title} — ${formatMoney(p.priceCents, p.currency)}`}
                   url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
                   align="end"
                   side="left"
@@ -578,6 +667,7 @@ function ShopInner() {
                 </ShareMenu>
                 <VideoSoundButton
                   images={p.images}
+                  hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                   sound={soundFor(p.id)}
                   onChange={(next) =>
                     setSoundById((prev) =>
@@ -588,12 +678,6 @@ function ShopInner() {
               </div>
 
               <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
-                {p.location && (
-                  <p className="mb-2 flex items-center gap-1 text-[10px] text-white/70">
-                    <MapPin className="size-3 shrink-0" />
-                    <span className="truncate">{p.location}</span>
-                  </p>
-                )}
                 {(p.colors.length > 0 || p.sizes.length > 0) && (
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     {p.colors.slice(0, 5).map((c) => (
@@ -632,7 +716,7 @@ function ShopInner() {
                       {p.title}
                     </p>
                     <p className="font-heading text-sm font-bold text-trust">
-                      {formatMoney(p.priceCents)}
+                      {formatMoney(p.priceCents, p.currency)}
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-primary px-3.5 py-2 text-[11px] font-bold text-white">
@@ -644,6 +728,20 @@ function ShopInner() {
           ))}
         </div>
       )}
+      <ProductCommentsSheet
+        productId={commentProductId}
+        open={Boolean(commentProductId)}
+        onOpenChange={(open) => {
+          if (!open) setCommentProductId(null);
+        }}
+        onCountChange={(id, count) =>
+          setProducts((prev) =>
+            prev.map((item) =>
+              item.id === id ? { ...item, commentsCount: count } : item,
+            ),
+          )
+        }
+      />
     </div>
   );
 }

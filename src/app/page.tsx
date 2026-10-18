@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Heart, MapPin, MessageCircle, Share2, ShieldCheck } from "lucide-react";
+import { Heart, MessageCircle, Share2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
@@ -11,7 +11,10 @@ import { formatMoney, cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { FollowShopButton } from "@/components/follow-shop-button";
+import { ProductCommentsSheet } from "@/components/product-comments-sheet";
+import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
+import { ShopBrand } from "@/components/shop-brand";
 import { ShareMenu } from "@/components/share-menu";
 import {
   DEFAULT_VIDEO_SOUND,
@@ -29,13 +32,17 @@ type Product = {
   title: string;
   description: string | null;
   priceCents: number;
+  currency?: string;
   category: string;
   images: string[];
   colors: string[];
   sizes: string[];
   location: string | null;
   likesCount: number;
+  commentsCount: number;
   likedByMe: boolean;
+  soundtrackStartMs?: number;
+  soundtrack?: { id: string; title: string; audioUrl: string } | null;
   shop: {
     id: string;
     name: string;
@@ -68,6 +75,7 @@ export default function FeedPage() {
   const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
     {},
   );
+  const [commentProductId, setCommentProductId] = useState<string | null>(null);
 
   function soundFor(id: string): VideoSoundState {
     return soundById[id] ?? DEFAULT_VIDEO_SOUND;
@@ -111,11 +119,12 @@ export default function FeedPage() {
     });
   }
 
-  async function toggleLike(product: Product) {
+  async function toggleLike(product: Product, opts?: { forceLike?: boolean }) {
     if (!session) {
       router.push("/auth/login");
       return;
     }
+    if (opts?.forceLike && product.likedByMe) return;
     const wasLiked = product.likedByMe;
     const nextLiked = !wasLiked;
     setProducts((prev) =>
@@ -172,29 +181,6 @@ export default function FeedPage() {
     } else if (data && !data.liked && data.messageRemoved) {
       toast.success(t("feed.likeRemoved"));
     }
-  }
-
-  async function messageSeller(product: Product) {
-    if (!session) {
-      router.push("/auth/login");
-      return;
-    }
-    const { res, data } = await fetchJson<{
-      conversation?: { id: string };
-      error?: string;
-    }>("/api/conversations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shopId: product.shop.id,
-        productId: product.id,
-      }),
-    });
-    if (!res.ok || !data?.conversation) {
-      toast.error(data?.error ?? t("feed.conversationFailed"));
-      return;
-    }
-    router.push(`/messages/${data.conversation.id}`);
   }
 
   const tabs = (
@@ -349,7 +335,22 @@ export default function FeedPage() {
               className="absolute inset-0"
               muted={soundFor(p.id).muted}
               volume={soundFor(p.id).volume}
+              onDoubleLike={() => void toggleLike(p, { forceLike: true })}
+              onAutoplayBlocked={() =>
+                setSoundById((prev) => ({
+                  ...prev,
+                  [p.id]: { ...soundFor(p.id), muted: true },
+                }))
+              }
             />
+            {p.soundtrack?.audioUrl ? (
+              <FeedSoundtrackPlayer
+                audioUrl={p.soundtrack.audioUrl}
+                startMs={p.soundtrackStartMs}
+                sound={soundFor(p.id)}
+                active
+              />
+            ) : null}
 
             <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
               <span className="w-fit rounded-full border border-trust/30 bg-trust/15 px-2.5 py-1 text-[10px] font-semibold text-trust backdrop-blur">
@@ -387,21 +388,27 @@ export default function FeedPage() {
                     )}
                   />
                 </span>
+                <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+                  {p.likesCount || 0}
+                </span>
               </button>
               <button
                 type="button"
-                onClick={() => messageSeller(p)}
+                onClick={() => setCommentProductId(p.id)}
                 className="grid cursor-pointer place-items-center"
-                aria-label={t("feed.messageSeller")}
+                aria-label={t("feed.comments")}
               >
                 <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95">
                   <MessageCircle className="size-5" />
+                </span>
+                <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+                  {p.commentsCount || 0}
                 </span>
               </button>
               <ShareMenu
                 title={p.title}
                 productId={p.id}
-                text={`${p.title} — ${formatMoney(p.priceCents)} ${t("product.onShipShop")}`}
+                text={`${p.title} — ${formatMoney(p.priceCents, p.currency)} ${t("product.onShipShop")}`}
                 url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
                 align="end"
                 side="left"
@@ -416,6 +423,7 @@ export default function FeedPage() {
               </ShareMenu>
               <VideoSoundButton
                 images={p.images}
+                hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                 sound={soundFor(p.id)}
                 onChange={(next) =>
                   setSoundById((prev) =>
@@ -427,35 +435,14 @@ export default function FeedPage() {
 
             <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
               <div className="mb-2 flex items-center gap-2">
-                <Link
-                  href={`/shop/${p.shop.slug}`}
+                <ShopBrand
+                  name={p.shop.name}
+                  slug={p.shop.slug}
+                  logoUrl={p.shop.logoUrl}
+                  className="min-w-0 flex-1"
+                  nameClassName="text-sm text-white underline-offset-2 hover:underline"
                   onClick={(e) => e.stopPropagation()}
-                  className="flex min-w-0 flex-1 items-center gap-2"
-                >
-                  <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-bold text-white ring-2 ring-white/20">
-                    {p.shop.logoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={p.shop.logoUrl}
-                        alt=""
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      p.shop.name.slice(0, 1)
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-white underline-offset-2 hover:underline">
-                      @{p.shop.name}
-                    </p>
-                    <p className="flex items-center gap-1 text-[10px] text-white/70">
-                      <MapPin className="size-3 shrink-0" />
-                      <span className="truncate">
-                        {p.location ?? t("common.kinshasa")}
-                      </span>
-                    </p>
-                  </div>
-                </Link>
+                />
                 <FollowShopButton
                   slug={p.shop.slug}
                   followedByMe={Boolean(p.shop.followedByMe)}
@@ -505,7 +492,7 @@ export default function FeedPage() {
                     {p.title}
                   </p>
                   <p className="font-heading text-sm font-bold text-trust">
-                    {formatMoney(p.priceCents)}
+                    {formatMoney(p.priceCents, p.currency)}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-primary px-3.5 py-2 text-[11px] font-bold text-white">
@@ -516,6 +503,20 @@ export default function FeedPage() {
           </article>
         ))}
       </div>
+      <ProductCommentsSheet
+        productId={commentProductId}
+        open={Boolean(commentProductId)}
+        onOpenChange={(open) => {
+          if (!open) setCommentProductId(null);
+        }}
+        onCountChange={(id, count) =>
+          setProducts((prev) =>
+            prev.map((p) =>
+              p.id === id ? { ...p, commentsCount: count } : p,
+            ),
+          )
+        }
+      />
     </div>
   );
 }

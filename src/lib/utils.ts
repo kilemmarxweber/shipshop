@@ -5,13 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatMoney(cents: number, currency = "USD") {
-  return new Intl.NumberFormat("fr-CD", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(cents / 100);
-}
+export { formatMoney } from "@/lib/money";
 
 export function slugify(value: string) {
   return value

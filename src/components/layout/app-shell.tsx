@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   MessageCircle,
 } from "lucide-react";
+import { parseCurrency, walletCents, type AppCurrency } from "@/lib/money";
 import { cn, formatMoney } from "@/lib/utils";
 import { fetchJson } from "@/lib/fetch-json";
 import { useEffect, useState } from "react";
@@ -20,7 +21,7 @@ import { authClient } from "@/lib/auth-client";
 import { BackButton } from "@/components/back-button";
 import { BackNavProvider } from "@/components/back-nav-context";
 import { LocaleToggle } from "@/components/locale-toggle";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { NewListingFlash } from "@/components/new-listing-flash";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useInboxUnread } from "@/hooks/use-inbox-unread";
 import { useI18n } from "@/components/i18n-provider";
@@ -61,6 +62,7 @@ export function AppShell({
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
   const [balance, setBalance] = useState<number | null>(null);
+  const [walletCurrency, setWalletCurrency] = useState<AppCurrency>("USD");
   const [cartCount, setCartCount] = useState(0);
   const inbox = useInboxUnread(userId, pathname);
 
@@ -71,11 +73,22 @@ export function AppShell({
       return;
     }
     Promise.all([
-      fetchJson<{ wallet?: { balanceCents?: number } }>("/api/wallet"),
+      fetchJson<{
+        wallet?: {
+          balanceCents?: number;
+          currency?: string;
+          usdCents?: number;
+          cdfCents?: number;
+          kwCents?: number;
+        };
+      }>("/api/wallet"),
       fetchJson<{ count?: number }>("/api/cart"),
     ])
       .then(([wallet, cart]) => {
-        setBalance(wallet.data?.wallet?.balanceCents ?? 0);
+        const w = wallet.data?.wallet;
+        const code = parseCurrency(w?.currency);
+        setWalletCurrency(code);
+        setBalance(w ? walletCents(w, code) : 0);
         setCartCount(cart.data?.count ?? 0);
       })
       .catch(() => {
@@ -103,12 +116,12 @@ export function AppShell({
       <div className="app-viewport">
         <div className="app-shell">
           {!hideChrome && (
-            <header className="z-40 shrink-0 border-b border-border bg-background/90 px-4 pb-1.5 pt-2.5 backdrop-blur-xl">
-              <div className="flex items-center justify-between gap-3">
+            <header className="z-40 shrink-0 border-b border-border bg-background/90 px-3 pb-1.5 pt-2.5 backdrop-blur-xl sm:px-4">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
                 <Link
                   href="/"
                   aria-label={appName}
-                  className="flex min-w-0 shrink items-center gap-1.5 md:gap-2"
+                  className="flex min-w-0 items-center gap-1.5 justify-self-start md:gap-2"
                 >
                   <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-transparent">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -122,42 +135,33 @@ export function AppShell({
                     <BrandLabel name={appName} />
                   </span>
                 </Link>
-                <div className="flex items-center gap-2">
-                  {session && (
-                    <>
-                      <Link
-                        href="/wallet"
-                        className="flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-semibold text-trust transition hover:bg-muted"
-                      >
-                        <Wallet className="size-3.5" />
-                        {balance === null ? "…" : formatMoney(balance)}
-                      </Link>
-                      <Link
-                        href="/cart"
-                        className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50"
-                        aria-label={t("nav.cart")}
-                      >
-                        <ShoppingCart className="size-4" />
-                        {cartCount > 0 && (
-                          <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-bold">
-                            {cartCount > 9 ? "9+" : cartCount}
-                          </span>
-                        )}
-                      </Link>
-                      <NotificationsBell
-                        userId={userId}
-                        unreadMessages={unreadMessages}
-                        urgentCount={urgentCount}
-                        conversations={inbox.conversations}
-                        refreshing={inbox.refreshing}
-                        onRefresh={() => void inbox.refresh({ silent: true })}
-                        onOpenConversation={inbox.markConversationSeen}
-                      />
-                    </>
-                  )}
+                {session ? (
+                  <Link
+                    href="/wallet"
+                    className="flex items-center gap-1.5 justify-self-center rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-semibold text-trust transition hover:bg-muted"
+                  >
+                    <Wallet className="size-3.5" />
+                    {balance === null ? "…" : formatMoney(balance, walletCurrency)}
+                  </Link>
+                ) : (
+                  <span />
+                )}
+                <div className="flex items-center justify-end gap-2 justify-self-end">
                   <LocaleToggle />
-                  <ThemeToggle />
-                  {!session && (
+                  {session ? (
+                    <NotificationsBell
+                      userId={userId}
+                      unreadMessages={unreadMessages}
+                      unreadComments={inbox.unreadComments}
+                      urgentCount={urgentCount}
+                      conversations={inbox.conversations}
+                      comments={inbox.comments}
+                      refreshing={inbox.refreshing}
+                      onRefresh={() => void inbox.refresh({ silent: true })}
+                      onOpenConversation={inbox.markConversationSeen}
+                      onCommentsSeen={inbox.markCommentsSeen}
+                    />
+                  ) : (
                     <Link
                       href="/auth/login"
                       className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50 text-foreground"
@@ -187,6 +191,7 @@ export function AppShell({
               </div>
             </header>
           )}
+          {!hideChrome && <NewListingFlash />}
 
           <main
             className={cn(

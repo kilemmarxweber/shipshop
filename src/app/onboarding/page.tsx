@@ -9,12 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CurrencyPicker } from "@/components/currency-picker";
+import type { AppCurrency } from "@/lib/money";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
   const [shopName, setShopName] = useState("");
   const [description, setDescription] = useState("");
+  const [currency, setCurrency] = useState<AppCurrency>("USD");
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
@@ -31,6 +34,7 @@ export default function OnboardingPage() {
       body: JSON.stringify({
         shopName,
         description,
+        currency,
       }),
     });
     const json = await res.json();
@@ -70,6 +74,10 @@ export default function OnboardingPage() {
             placeholder="TechKinshasa Store"
             className="h-11 bg-surface-2"
           />
+        </div>
+        <div className="space-y-2">
+          <Label>Monnaie d&apos;affichage</Label>
+          <CurrencyPicker value={currency} onChange={setCurrency} />
         </div>
         <div className="space-y-2">
           <Label>Description</Label>

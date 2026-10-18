@@ -12,6 +12,7 @@ import {
   isOrderCancellable,
 } from "@/lib/order-cancel";
 import { generatePickupCode, quoteShipping } from "@/lib/shipping";
+import { parseCurrency, walletCents, walletCreditData } from "@/lib/money";
 
 type Tx = Prisma.TransactionClient;
 
@@ -138,25 +139,27 @@ export async function purchaseProduct(
 
   const productCents = product.priceCents;
   const totalCents = productCents + shippingCents;
+  const currency = parseCurrency(product.currency);
 
   const wallet = await tx.wallet.findUnique({
     where: { userId: buyerId },
   });
   if (!wallet) throw new Error("Portefeuille introuvable");
 
-  if (wallet.balanceCents < totalCents) {
+  const available = walletCents(wallet, currency);
+  if (available < totalCents) {
     const err = new Error("Solde insuffisant") as InsufficientFundsError;
     err.code = "INSUFFICIENT_FUNDS";
     err.needed = totalCents;
-    err.balance = wallet.balanceCents;
+    err.balance = available;
     throw err;
   }
 
-  const newBalance = wallet.balanceCents - totalCents;
+  const newBalance = available - totalCents;
 
   await tx.wallet.update({
     where: { id: wallet.id },
-    data: { balanceCents: newBalance },
+    data: walletCreditData(wallet, currency, newBalance, { setDisplay: false }),
   });
 
   await tx.walletTransaction.create({
@@ -164,6 +167,7 @@ export async function purchaseProduct(
       walletId: wallet.id,
       type: "PURCHASE",
       amountCents: -totalCents,
+      currency,
       balanceAfterCents: newBalance,
       provider: "INTERNAL",
       status: "SUCCESS",
@@ -173,6 +177,7 @@ export async function purchaseProduct(
         shopId: product.shopId,
         productCents,
         shippingCents,
+        currency,
         fulfillmentType: fulfillment.fulfillmentType,
       },
     },
@@ -323,16 +328,17 @@ async function refundOrderInternal(
   }
 
   const refundCents = order.totalCents || order.amountCents;
+  const currency = parseCurrency(order.product.currency);
   const wallet = await tx.wallet.findUnique({
     where: { userId: opts.buyerId },
   });
   if (!wallet) throw new Error("Portefeuille introuvable");
 
-  const newBalance = wallet.balanceCents + refundCents;
+  const newBalance = walletCents(wallet, currency) + refundCents;
 
   await tx.wallet.update({
     where: { id: wallet.id },
-    data: { balanceCents: newBalance },
+    data: walletCreditData(wallet, currency, newBalance, { setDisplay: false }),
   });
 
   await tx.walletTransaction.create({
@@ -340,6 +346,7 @@ async function refundOrderInternal(
       walletId: wallet.id,
       type: "REFUND",
       amountCents: refundCents,
+      currency,
       balanceAfterCents: newBalance,
       provider: "INTERNAL",
       status: "SUCCESS",

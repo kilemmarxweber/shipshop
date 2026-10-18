@@ -20,10 +20,26 @@ export type InboxConversation = {
   }[];
 };
 
+export type InboxComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  unread: boolean;
+  user: { id: string; name: string; image: string | null };
+  product: {
+    id: string;
+    title: string;
+    images: string[];
+    shop: { id: string; name: string; logoUrl: string | null };
+  };
+};
+
 const POLL_MS = 25_000;
 
 export function useInboxUnread(userId: string | undefined, pathname?: string) {
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
+  const [comments, setComments] = useState<InboxComment[]>([]);
+  const [unreadComments, setUnreadComments] = useState(0);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -31,14 +47,24 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
     async (opts?: { silent?: boolean }) => {
       if (!userId) {
         setConversations([]);
+        setComments([]);
+        setUnreadComments(0);
         return;
       }
       if (opts?.silent) setRefreshing(true);
       else setLoading(true);
       try {
-        const { data } = await fetchJson<{
-          conversations?: InboxConversation[];
-        }>("/api/conversations");
+        const [{ data }, commentsRes] = await Promise.all([
+          fetchJson<{
+            conversations?: InboxConversation[];
+          }>("/api/conversations"),
+          fetchJson<{
+            unreadComments?: number;
+            comments?: InboxComment[];
+          }>("/api/inbox/summary"),
+        ]);
+        setComments(commentsRes.data?.comments ?? []);
+        setUnreadComments(commentsRes.data?.unreadComments ?? 0);
         const list = data?.conversations ?? [];
         list.sort((a, b) => {
           const au = a.urgentPending ? 2 : (a.unreadCount ?? 0) > 0 ? 1 : 0;
@@ -62,6 +88,8 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
   useEffect(() => {
     if (!userId) {
       setConversations([]);
+      setComments([]);
+      setUnreadComments(0);
       return;
     }
     void refresh();
@@ -88,13 +116,27 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
     );
   }
 
+  function markCommentsSeen(ids?: string[]) {
+    setComments((prev) =>
+      prev.map((c) =>
+        !ids || ids.includes(c.id) ? { ...c, unread: false } : c,
+      ),
+    );
+    setUnreadComments((n) =>
+      ids ? Math.max(0, n - ids.length) : 0,
+    );
+  }
+
   return {
     conversations,
+    comments,
     unreadMessages,
+    unreadComments,
     urgentCount,
     loading,
     refreshing,
     refresh,
     markConversationSeen,
+    markCommentsSeen,
   };
 }

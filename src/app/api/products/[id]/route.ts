@@ -3,17 +3,21 @@ import { z } from "zod";
 import { assertChipShopOwner } from "@/lib/kyc";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { APP_CURRENCIES } from "@/lib/money";
 
 const updateSchema = z.object({
   title: z.string().min(2).max(120).optional(),
   description: z.string().max(2000).optional().nullable(),
   priceCents: z.number().int().min(100).optional(),
+  currency: z.enum(APP_CURRENCIES).optional(),
   quantity: z.number().int().min(0).max(100_000).optional(),
   category: z.string().min(1).optional(),
   images: z.array(z.string().min(1)).max(12).optional(),
   colors: z.array(z.string().min(1).max(40)).max(12).optional(),
   sizes: z.array(z.string().min(1).max(20)).max(20).optional(),
   location: z.string().max(200).optional().nullable(),
+  soundtrackId: z.string().min(1).optional().nullable(),
+  soundtrackStartMs: z.number().int().min(0).max(600_000).optional(),
   status: z.enum(["DRAFT", "ACTIVE", "SOLD", "HIDDEN"]).optional(),
 });
 
@@ -44,7 +48,17 @@ export async function GET(
     const product = await withDbRetry(() =>
       prisma.product.findUnique({
         where: { id },
-        include: { _count: { select: { orders: true } } },
+        include: {
+          _count: { select: { orders: true, comments: true } },
+          soundtrack: {
+            select: {
+              id: true,
+              title: true,
+              audioUrl: true,
+              durationMs: true,
+            },
+          },
+        },
       }),
     );
 
@@ -83,6 +97,7 @@ export async function GET(
     const likesCount = await withDbRetry(() =>
       prisma.productLike.count({ where: { productId: id } }),
     );
+    const commentsCount = product._count.comments;
     let likedByMe = false;
     if (session) {
       const like = await withDbRetry(() =>
@@ -101,6 +116,7 @@ export async function GET(
         ...rest,
         shop,
         likesCount,
+        commentsCount,
         likedByMe,
         ordersCount: _count.orders,
         canDelete: _count.orders === 0,
@@ -160,12 +176,19 @@ export async function PATCH(
           ...(body.priceCents !== undefined
             ? { priceCents: body.priceCents }
             : {}),
+          ...(body.currency !== undefined ? { currency: body.currency } : {}),
           ...(body.quantity !== undefined ? { quantity: body.quantity } : {}),
           ...(body.category !== undefined ? { category: body.category } : {}),
           ...(body.images !== undefined ? { images: body.images } : {}),
           ...(body.colors !== undefined ? { colors: body.colors } : {}),
           ...(body.sizes !== undefined ? { sizes: body.sizes } : {}),
           ...(body.location !== undefined ? { location: body.location } : {}),
+          ...(body.soundtrackId !== undefined
+            ? { soundtrackId: body.soundtrackId }
+            : {}),
+          ...(body.soundtrackStartMs !== undefined
+            ? { soundtrackStartMs: body.soundtrackStartMs }
+            : {}),
           ...(status !== undefined ? { status } : {}),
         },
         include: {
