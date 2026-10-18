@@ -11,7 +11,7 @@ PostgreSQL **local** sur le port **5432** (pas Docker). Photos dans **`chipshop-
 |---|---|
 | OS | Ubuntu 22.04 ou 24.04 |
 | RAM | 2 Go minimum, **4 Go recommandé** (`next build` est lourd) |
-| Swap | 2 Go si le VPS a 2 Go de RAM |
+| Swap | **4 Go** si le VPS a 2 Go de RAM (sinon `next build` = exit **137**) |
 | Node | **20+** |
 | Package manager | **pnpm** |
 | PostgreSQL | **16** en local, `127.0.0.1:5432` seulement |
@@ -235,8 +235,23 @@ Après un `git pull` :
 cd /var/www/shop/shipshop
 pnpm install --frozen-lockfile
 pnpm prisma migrate deploy
-pnpm build
-pm2 restart shipshop
+pm2 stop shipshop
+NODE_OPTIONS='--max-old-space-size=2048' pnpm build
+pm2 start shipshop
+```
+
+**Exit 137** = le kernel a tué le build (OOM). Ce n’est pas une erreur TypeScript.
+
+- Ne pas mettre `--max-old-space-size=3072` sur un VPS **2 Go** : le heap Node dépasse la RAM → 137.
+- Arrêter PM2 pendant le build (l’app + le compilateur se battent pour la RAM).
+- Ajouter du swap si `free -h` montre `Swap: 0` :
+
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
 Si `pnpm install` affiche `ERR_PNPM_IGNORED_BUILDS` (`@prisma/engines`, `prisma`, `esbuild`, `unrs-resolver`) : le VPS tourne en pnpm 10/11, qui **bloque** ces scripts tant qu’ils ne sont pas dans `pnpm-workspace.yaml`. Vérifier que ce fichier est bien déployé, puis :
@@ -245,6 +260,8 @@ Si `pnpm install` affiche `ERR_PNPM_IGNORED_BUILDS` (`@prisma/engines`, `prisma`
 pnpm install
 pnpm rebuild @prisma/engines prisma esbuild unrs-resolver sharp
 ```
+
+Si `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` : pnpm 11 refuse les paquets publiés depuis moins de 24 h. Les overrides dans `pnpm-workspace.yaml` figent les versions trop neuves. Après un `git pull`, relancer `pnpm install` (pas besoin de `pnpm clean --lockfile` ni de relâcher la politique).
 
 Ne pas mettre `ignore-scripts=true` dans un `.npmrc` global du VPS (`pnpm config list`).
 
@@ -260,7 +277,7 @@ Si le process démarre sans les variables : `pm2 restart shipshop --update-env`.
 3. Dossier `/var/www/chipshop-uploads` + droits
 4. `pnpm install --frozen-lockfile`
 5. `pnpm prisma migrate deploy`
-6. `pnpm build`
+6. `pm2 stop shipshop` puis `NODE_OPTIONS='--max-old-space-size=2048' pnpm build`
 7. PM2 + Nginx + SSL
 8. Créer le **vrai owner** (pas `demo@chipshop.cd`)
 9. Configurer SMS / WhatsApp dans `/shops/messaging` (clés Infobip / Klambo dans l’UI, pas dans `.env`)

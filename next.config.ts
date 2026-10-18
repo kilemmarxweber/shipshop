@@ -19,6 +19,9 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "100mb",
     },
+    // Moins de pics RAM sur VPS (Studio Sanity + next build)
+    turbopackGc: true,
+    turbopackPluginRuntimeStrategy: "workerThreads",
   },
   async rewrites() {
     return {

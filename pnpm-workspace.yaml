@@ -1,6 +1,18 @@
 # pnpm 10+ n’exécute plus les scripts de build des dépendances sans allowlist.
 # pnpm 11 ne lit plus package.json#pnpm — tout passe ici.
 # Sans ça : ERR_PNPM_IGNORED_BUILDS (@prisma/engines, prisma, esbuild, unrs-resolver).
+#
+# pnpm 11 : 24 h de délai (minimumReleaseAge=1440). Les versions trop neuves
+# cassent `pnpm install` sur le VPS (ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION).
+minimumReleaseAge: 1440
+overrides:
+  execa@10.2.0: 10.1.1
+  i18next@26.5.2: 26.4.7
+  kysely@0.29.7: 0.29.6
+  react-i18next@17.1.0: 17.0.21
+  ret@0.5.1: 0.5.0
+  xstate@5.33.3: 5.33.2
+
 onlyBuiltDependencies:
   - "@prisma/engines"
   - esbuild
