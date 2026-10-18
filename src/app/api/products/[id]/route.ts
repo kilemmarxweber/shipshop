@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertChipShopOwner } from "@/lib/kyc";
@@ -173,6 +174,15 @@ export async function PATCH(
       body.images !== undefined
         ? body.images.slice(0, cfg.maxImages)
         : undefined;
+    const motionCount = (nextImages ?? existing.images).length;
+    const nextMotions =
+      nextImages !== undefined || body.imageMotions !== undefined
+        ? normalizeMotions(
+            motionCount,
+            body.imageMotions ?? existing.imageMotions,
+            cfg.maxImages,
+          )
+        : undefined;
     const product = await withDbRetry(() =>
       prisma.product.update({
         where: { id },
@@ -197,15 +207,7 @@ export async function PATCH(
           ...(body.soundtrackStartMs !== undefined
             ? { soundtrackStartMs: body.soundtrackStartMs }
             : {}),
-          ...(body.imageMotions !== undefined
-            ? {
-                imageMotions: normalizeMotions(
-                  (nextImages ?? existing.images).length,
-                  body.imageMotions,
-                  cfg.maxImages,
-                ),
-              }
-            : {}),
+          ...(nextMotions !== undefined ? { imageMotions: nextMotions } : {}),
           ...(status !== undefined ? { status } : {}),
         },
         include: {
@@ -216,6 +218,9 @@ export async function PATCH(
     );
 
     const { _count, ...rest } = product;
+    revalidatePath(`/product/${id}`);
+    revalidatePath("/");
+    if (product.shop.slug) revalidatePath(`/shop/${product.shop.slug}`);
     return NextResponse.json({
       product: {
         ...rest,

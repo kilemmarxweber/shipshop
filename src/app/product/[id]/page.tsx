@@ -114,7 +114,9 @@ function ProductInner() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchJson<{ product?: Product; error?: string }>(`/api/products/${id}`)
+    fetchJson<{ product?: Product; error?: string }>(`/api/products/${id}`, {
+      cache: "no-store",
+    })
       .then(({ res, data }) => {
         if (cancelled) return;
         if (!res.ok || !data?.product) {
@@ -247,6 +249,10 @@ function ProductInner() {
 
   async function saveEdit() {
     if (!editing) return;
+    if (editing.images.length === 0) {
+      toast.error("Ajoutez au moins une image ou une vidéo");
+      return;
+    }
     setManageBusy(true);
     const { res, data } = await fetchJson<{
       product?: Product;
@@ -273,9 +279,13 @@ function ProductInner() {
     }
     toast.success(t("product.updated"));
     setEditing(null);
+    const { data: fresh } = await fetchJson<{ product?: Product }>(
+      `/api/products/${id}`,
+      { cache: "no-store" },
+    );
     setProduct((prev) => {
       if (!prev) return prev;
-      const next = data?.product;
+      const next = fresh?.product ?? data?.product;
       if (!next) return { ...editing, shop: prev.shop };
       return {
         ...prev,
@@ -286,10 +296,11 @@ function ProductInner() {
           ownerUserId: prev.shop.ownerUserId,
         },
         canDelete: next.canDelete ?? prev.canDelete,
-        likesCount: prev.likesCount,
-        likedByMe: prev.likedByMe,
+        likesCount: next.likesCount ?? prev.likesCount,
+        likedByMe: next.likedByMe ?? prev.likedByMe,
       };
     });
+    router.refresh();
   }
 
   async function addToCart() {
@@ -439,6 +450,7 @@ function ProductInner() {
       <div className="relative mx-auto w-full max-w-2xl px-2 md:px-3">
         <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_8px_32px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
           <ProductImageCarousel
+            key={product.images.join("|")}
             images={product.images}
             fit="cover"
             eager

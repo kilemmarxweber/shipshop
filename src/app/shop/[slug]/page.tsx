@@ -117,7 +117,16 @@ function ShopInner() {
   useEffect(() => {
     if (prevAudioFocus.current === audioFocusId) return;
     prevAudioFocus.current = audioFocusId;
-    setSoundById({});
+    if (!audioFocusId) {
+      setSoundById({});
+      return;
+    }
+    setSoundById((prev) =>
+      applyExclusiveVideoSound(prev, audioFocusId, {
+        muted: false,
+        volume: 1,
+      }),
+    );
   }, [audioFocusId]);
 
   const isOwnShop = shop?.owner?.id === session?.user?.id;
@@ -583,12 +592,6 @@ function ShopInner() {
                   if (p.likedByMe) return;
                   void toggleLike(p);
                 }}
-                onAutoplayBlocked={() =>
-                  setSoundById((prev) => ({
-                    ...prev,
-                    [p.id]: { ...soundFor(p.id), muted: true },
-                  }))
-                }
               />
               {p.soundtrack?.audioUrl ? (
                 <FeedSoundtrackPlayer

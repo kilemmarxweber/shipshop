@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Archive, Eye, Pencil, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +47,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 function AdminProductsInner() {
   const { data: session } = authClient.useSession();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const shopIdFilter = searchParams.get("shopId");
   const [allowed, setAllowed] = useState<boolean | null>(null);
@@ -64,7 +65,7 @@ function AdminProductsInner() {
     const { res, data } = await fetchJson<{
       products?: Product[];
       error?: string;
-    }>(`/api/admin/products?${params}`);
+    }>(`/api/admin/products?${params}`, { cache: "no-store" });
     if (res.status === 403) {
       setAllowed(false);
       setProducts([]);
@@ -90,6 +91,10 @@ function AdminProductsInner() {
 
   async function save() {
     if (!editing) return;
+    if (editing.images.length === 0) {
+      toast.error("Ajoutez au moins une image ou une vidéo");
+      return;
+    }
     setBusy(true);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/products/${editing.id}`,
@@ -115,7 +120,8 @@ function AdminProductsInner() {
     }
     toast.success("Produit mis à jour");
     setEditing(null);
-    load();
+    await load();
+    router.refresh();
   }
 
   async function setStatus(id: string, status: string) {

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { VideoSoundState } from "@/components/video-sound-button";
 import { useAppConfig } from "@/lib/use-app-config";
 import { usePageMediaLive } from "@/lib/page-media-session";
+import { tryPlayMedia } from "@/lib/try-play-media";
 
 type Props = {
   audioUrl: string;
@@ -35,32 +36,32 @@ export function FeedSoundtrackPlayer({
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        inViewRef.current = (entry?.intersectionRatio ?? 0) >= 0.45;
+        inViewRef.current = (entry?.intersectionRatio ?? 0) >= 0.08;
         const audio = ref.current;
         if (!audio) return;
-        if (inViewRef.current && canPlay) {
-          audio.play().catch(() => {});
+        if (canPlay) {
+          void tryPlayMedia(audio, !sound.muted);
         } else {
           audio.pause();
         }
       },
-      { threshold: [0, 0.45, 1] },
+      { threshold: [0, 0.08, 0.45, 1] },
     );
     io.observe(el);
     return () => {
       io.disconnect();
       ref.current?.pause();
     };
-  }, [canPlay]);
+  }, [canPlay, sound.muted]);
 
   useEffect(() => {
     const audio = ref.current;
     if (!audio) return;
     audio.volume = Math.min(1, Math.max(0, sound.volume));
-    audio.muted = !canPlay || sound.muted;
-    if (canPlay && inViewRef.current) {
-      audio.play().catch(() => {});
+    if (canPlay) {
+      void tryPlayMedia(audio, !sound.muted);
     } else {
+      audio.muted = true;
       audio.pause();
     }
     return () => {
@@ -97,8 +98,8 @@ export function FeedSoundtrackPlayer({
     const onEnded = () => {
       if (loop) {
         audio.currentTime = start;
-        if (canPlay && inViewRef.current) {
-          audio.play().catch(() => {});
+        if (canPlay) {
+          void tryPlayMedia(audio, !sound.muted);
         }
         return;
       }
@@ -116,7 +117,7 @@ export function FeedSoundtrackPlayer({
 
   return (
     <div ref={rootRef} className="pointer-events-none absolute size-0 overflow-hidden">
-      {canPlay ? <audio ref={ref} src={audioUrl} preload="metadata" /> : null}
+      <audio ref={ref} src={audioUrl} preload="metadata" />
     </div>
   );
 }

@@ -139,7 +139,16 @@ export default function FeedPage() {
   useEffect(() => {
     if (prevAudioFocus.current === audioFocusId) return;
     prevAudioFocus.current = audioFocusId;
-    setSoundById({});
+    if (!audioFocusId) {
+      setSoundById({});
+      return;
+    }
+    setSoundById((prev) =>
+      applyExclusiveVideoSound(prev, audioFocusId, {
+        muted: false,
+        volume: 1,
+      }),
+    );
   }, [audioFocusId]);
 
   useEffect(() => {
@@ -427,19 +436,13 @@ export default function FeedPage() {
               }
               onActivateSound={() => activateSound(p.id)}
               onDoubleLike={() => void toggleLike(p, { forceLike: true })}
-              onAutoplayBlocked={() =>
-                setSoundById((prev) => ({
-                  ...prev,
-                  [p.id]: { ...soundFor(p.id), muted: true },
-                }))
-              }
             />
-            {p.soundtrack?.audioUrl && audioFocusId === p.id ? (
+            {p.soundtrack?.audioUrl ? (
               <FeedSoundtrackPlayer
                 audioUrl={p.soundtrack.audioUrl}
                 startMs={p.soundtrackStartMs}
                 sound={soundFor(p.id)}
-                active
+                active={audioFocusId === p.id}
               />
             ) : null}
             {index === prefetchAt || index === products.length - 1 ? (

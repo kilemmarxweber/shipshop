@@ -31,6 +31,10 @@ export function MediaUploader({ urls, onChange, max }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
+  function removeAt(index: number) {
+    onChange(urls.filter((_, i) => i !== index));
+  }
+
   async function onFiles(files: FileList | null) {
     if (!files?.length) return;
     const remaining = cap - urls.length;
@@ -51,11 +55,7 @@ export function MediaUploader({ urls, onChange, max }: Props) {
 
       try {
         const uploaded = await uploadCompressedMedia(file, "product");
-        // Poster JPEG en premier → miniatures / cover non vides
-        if (
-          uploaded.posterUrl &&
-          !next.includes(uploaded.posterUrl)
-        ) {
+        if (uploaded.posterUrl && !next.includes(uploaded.posterUrl)) {
           next.push(uploaded.posterUrl);
         }
         if (uploaded.url && !next.includes(uploaded.url)) {
@@ -87,7 +87,7 @@ export function MediaUploader({ urls, onChange, max }: Props) {
         disabled={uploading || urls.length >= cap}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-surface-2 text-sm font-semibold",
+          "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-surface-2 text-sm font-semibold transition hover:border-primary/40 hover:bg-muted/40",
           (uploading || urls.length >= cap) && "opacity-50",
         )}
       >
@@ -101,51 +101,71 @@ export function MediaUploader({ urls, onChange, max }: Props) {
 
       <p className="text-[11px] text-muted-foreground">
         {urls.length}/{cap}
+        {urls.length > 0
+          ? " — touchez × pour retirer. La 1re image est la couverture."
+          : " — au moins une image pour publier."}
       </p>
 
-      {urls.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 pt-1">
-          {urls.map((src) => (
-            <div
-              key={src}
-              className="relative aspect-square overflow-hidden rounded-xl bg-surface-2"
-            >
-              {isVideoUrl(src) ? (
-                <div className="relative size-full bg-black">
-                  <video
-                    src={src}
-                    className="size-full object-cover"
-                    controls
-                    playsInline
-                    preload="metadata"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <Film className="pointer-events-none absolute top-1.5 left-1.5 size-4 text-white/90 drop-shadow" />
-                </div>
-              ) : (
-                <div className="size-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={src}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    className="size-full object-cover"
-                  />
-                  <ImageIcon className="sr-only" />
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => onChange(urls.filter((u) => u !== src))}
-                className="absolute top-1 right-1 grid size-6 place-items-center rounded-full bg-black/60"
+      {urls.length > 0 ? (
+        <ul className="grid grid-cols-3 gap-2 pt-1">
+          {urls.map((src, index) => {
+            const video = isVideoUrl(src);
+            return (
+              <li
+                key={`${src}-${index}`}
+                className="relative aspect-square overflow-hidden rounded-xl bg-surface-2 ring-1 ring-border"
               >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
-        </div>
+                {video ? (
+                  <div className="relative size-full bg-black">
+                    <video
+                      src={src}
+                      className="pointer-events-none size-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                    <Film className="pointer-events-none absolute bottom-1.5 left-1.5 size-4 text-white drop-shadow" />
+                  </div>
+                ) : (
+                  <div className="size-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="size-full object-cover"
+                    />
+                    <ImageIcon className="sr-only" />
+                  </div>
+                )}
+                {index === 0 ? (
+                  <span className="pointer-events-none absolute bottom-1.5 left-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                    Couverture
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeAt(index);
+                  }}
+                  className="absolute top-0 right-0 z-20 grid size-11 place-items-center text-white"
+                  aria-label={`Retirer le média ${index + 1}`}
+                >
+                  <span className="grid size-8 place-items-center rounded-full bg-black/80 shadow-md ring-1 ring-white/25 transition hover:bg-destructive">
+                    <X className="size-3.5" strokeWidth={2.5} />
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+          Aucun média. Ajoutez une photo ou une vidéo.
+        </p>
       )}
     </div>
   );

@@ -43,6 +43,10 @@ function hasAudio(p: Product) {
   return Boolean(p.soundtrack?.audioUrl) || productHasVideo(p.images);
 }
 
+function hasCoverVideo(p: Product) {
+  return productHasVideo(p.images.slice(0, 1));
+}
+
 export default function DiscoverPage() {
   const { t } = useI18n();
   const appConfig = useAppConfig();
@@ -56,6 +60,7 @@ export default function DiscoverPage() {
   const [audioOff, setAudioOff] = useState(false);
   const audioFocusId = useFeedAudioFocus();
   const prevAudioFocus = useRef<string | null>(null);
+  const audioFocusRef = useRef<string | null>(null);
   const userPinnedRef = useRef<string | null>(null);
   const audioOffRef = useRef(false);
   const visibleRef = useRef(new Set<string>());
@@ -90,6 +95,22 @@ export default function DiscoverPage() {
   productsRef.current = products;
   userPinnedRef.current = userPinned;
   audioOffRef.current = audioOff;
+  audioFocusRef.current = audioFocusId;
+
+  const assignVisibleAudio = useCallback(() => {
+    if (audioOffRef.current || userPinnedRef.current) return;
+    const list = productsRef.current;
+    const visible = visibleRef.current;
+    const visibleCover = list.filter((p) => hasCoverVideo(p) && visible.has(p.id));
+    const target =
+      visibleCover[0] ??
+      list.find((p) => hasCoverVideo(p)) ??
+      list.find((p) => productHasVideo(p.images)) ??
+      list.find((p) => hasAudio(p));
+    if (!target) return;
+    if (audioFocusRef.current === target.id) return;
+    requestFeedAudioFocus(target.id);
+  }, []);
 
   useEffect(() => {
     const root = document.querySelector(".app-main");
@@ -102,7 +123,16 @@ export default function DiscoverPage() {
   useEffect(() => {
     if (prevAudioFocus.current === audioFocusId) return;
     prevAudioFocus.current = audioFocusId;
-    setSoundById({});
+    if (!audioFocusId) {
+      setSoundById({});
+      return;
+    }
+    setSoundById((prev) =>
+      applyExclusiveVideoSound(prev, audioFocusId, {
+        muted: false,
+        volume: 1,
+      }),
+    );
   }, [audioFocusId]);
 
   useEffect(() => {
@@ -110,7 +140,13 @@ export default function DiscoverPage() {
     setAudioOff(false);
     resetFeedAudioFocus();
     setSoundById({});
+    visibleRef.current.clear();
   }, [debouncedQ, category]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(assignVisibleAudio, 120);
+    return () => window.clearTimeout(timer);
+  }, [products, category, debouncedQ, assignVisibleAudio]);
 
   function soundFor(id: string): VideoSoundState {
     const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
@@ -140,10 +176,14 @@ export default function DiscoverPage() {
     if (next) requestFeedAudioFocus(next);
   }, []);
 
-  const onTileVisible = useCallback((id: string, visible: boolean) => {
-    if (visible) visibleRef.current.add(id);
-    else visibleRef.current.delete(id);
-  }, []);
+  const onTileVisible = useCallback(
+    (id: string, visible: boolean) => {
+      if (visible) visibleRef.current.add(id);
+      else visibleRef.current.delete(id);
+      assignVisibleAudio();
+    },
+    [assignVisibleAudio],
+  );
 
   function onTileActivate(id: string) {
     setAudioOff(false);
@@ -232,7 +272,7 @@ export default function DiscoverPage() {
             >
               <ProductImageCarousel
                 images={
-                  p.soundtrack?.audioUrl
+                  audio
                     ? p.images.slice(0, appConfig.maxImages)
                     : cover
                 }
@@ -244,19 +284,19 @@ export default function DiscoverPage() {
                 hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                 clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
                 motions={p.imageMotions}
-                audioKey={audio ? p.id : undefined}
+                forcePlay={focused}
                 loop={userPinned === p.id}
                 onActivateSound={audio ? () => onTileActivate(p.id) : undefined}
                 onPlaybackEnded={
                   p.soundtrack?.audioUrl ? undefined : () => playNext(p.id)
                 }
               />
-              {p.soundtrack?.audioUrl && focused ? (
+              {p.soundtrack?.audioUrl ? (
                 <FeedSoundtrackPlayer
                   audioUrl={p.soundtrack.audioUrl}
                   startMs={p.soundtrackStartMs}
                   sound={soundFor(p.id)}
-                  active
+                  active={focused}
                   loop={userPinned === p.id}
                   onCycleEnd={() => playNext(p.id)}
                 />
@@ -331,9 +371,13 @@ function DiscoverTile({
     const root = document.querySelector(".app-main");
     const io = new IntersectionObserver(
       ([entry]) => {
-        onVisible(id, (entry?.intersectionRatio ?? 0) >= 0.35);
+        onVisible(id, (entry?.intersectionRatio ?? 0) >= 0.08);
       },
-      { root, threshold: [0, 0.35, 0.6, 1] },
+      {
+        root,
+        rootMargin: "120px 0px 80px 0px",
+        threshold: [0, 0.08, 0.2, 0.35, 0.6, 1],
+      },
     );
     io.observe(el);
     return () => {

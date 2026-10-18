@@ -230,15 +230,23 @@ export function AppShell({
                     <Link
                       key={item.href}
                       href={item.href}
-                      prefetch={item.href === "/publish" ? false : undefined}
-                      scroll={false}
+                      prefetch={false}
                       onClick={(e) => {
                         if (
-                          item.href === "/publish" &&
-                          pathname.startsWith("/publish")
+                          e.metaKey ||
+                          e.ctrlKey ||
+                          e.shiftKey ||
+                          e.altKey ||
+                          e.button !== 0
                         ) {
-                          e.preventDefault();
+                          return;
                         }
+                        e.preventDefault();
+                        if (pathname === item.href) {
+                          window.location.reload();
+                          return;
+                        }
+                        window.location.assign(item.href);
                       }}
                       className={cn(
                         "flex flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition",

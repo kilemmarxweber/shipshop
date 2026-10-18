@@ -36,18 +36,42 @@ function pickWinner(): string | null {
   const visible = [...scores.entries()].filter(
     ([, s]) => s.page === page && s.ratio >= VISIBLE_RATIO,
   );
-  const pin = pinnedId ? scores.get(pinnedId) : undefined;
-  if (pin && pin.page === page && pin.ratio >= KEEP_PIN_RATIO) {
-    return pinnedId;
+  if (visible.length === 0) {
+    const pin = pinnedId ? scores.get(pinnedId) : undefined;
+    if (pin && pin.page === page && pin.ratio >= KEEP_PIN_RATIO) {
+      return pinnedId;
+    }
+    pinnedId = null;
+    return null;
   }
-  pinnedId = null;
-  if (visible.length === 0) return null;
   visible.sort((a, b) => {
     const dx = a[1].left - b[1].left;
     if (Math.abs(dx) > 8) return dx;
     return b[1].ratio - a[1].ratio;
   });
-  return visible[0]![0];
+  const bestId = visible[0]![0];
+  const best = visible[0]![1];
+  const pin = pinnedId ? scores.get(pinnedId) : undefined;
+  // Pin seulement si la card tapée est encore celle au premier plan.
+  // En remontant le fil, une autre card plus visible reprend le son.
+  if (
+    pin &&
+    pin.page === page &&
+    pin.ratio >= KEEP_PIN_RATIO &&
+    pinnedId === bestId
+  ) {
+    return pinnedId;
+  }
+  if (
+    pin &&
+    pin.page === page &&
+    pin.ratio >= KEEP_PIN_RATIO &&
+    pin.ratio + 0.12 >= best.ratio
+  ) {
+    return pinnedId;
+  }
+  pinnedId = null;
+  return bestId;
 }
 
 function commit() {

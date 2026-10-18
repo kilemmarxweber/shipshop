@@ -14,6 +14,7 @@ import {
   subscribeFeedVideoActive,
 } from "@/lib/feed-video-playback";
 import { isVideoUrl } from "@/lib/media";
+import { tryPlayMedia } from "@/lib/try-play-media";
 import {
   defaultSlideMotion,
   slideshowSlotMs,
@@ -53,6 +54,8 @@ type Props = {
   motions?: string[];
   /** Minute de son : le diaporama couvre toute la fenêtre (lent s’il y a peu d’images). */
   clipMs?: number;
+  /** Découvrir : la tuile choisie joue même si elle n’est pas la 1re de la grille. */
+  forcePlay?: boolean;
 };
 
 function HeartBurst() {
@@ -125,10 +128,9 @@ function SlideMedia({
       el.load();
     }
 
-    // pause() / play() sans reset → reprend exactement où on s’était arrêté
     if (playing && !document.hidden) {
-      el.play().catch(() => {
-        onAutoplayBlocked?.();
+      void tryPlayMedia(el, !muted).then((ok) => {
+        if (!ok) onAutoplayBlocked?.();
       });
     } else {
       el.pause();
@@ -136,7 +138,7 @@ function SlideMedia({
     return () => {
       el.pause();
     };
-  }, [playing, shouldLoad, src, video, onAutoplayBlocked]);
+  }, [playing, shouldLoad, src, video, muted, onAutoplayBlocked]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -152,15 +154,13 @@ function SlideMedia({
       if (!el) return;
       if (document.hidden) {
         el.pause();
-      } else if (playing && shouldLoad) {
-        el.play().catch(() => {
-          onAutoplayBlocked?.();
-        });
+        } else if (playing && shouldLoad) {
+        void tryPlayMedia(el, !muted);
       }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [playing, shouldLoad, video]);
+  }, [playing, shouldLoad, video, muted]);
 
   const ken = Boolean(motion && animate);
   const kenStyle = {
@@ -232,6 +232,7 @@ export function ProductImageCarousel({
   onPlaybackEnded,
   motions,
   clipMs,
+  forcePlay = false,
 }: Props) {
   const videoMuted = hasSoundtrack || muted;
   const list =
@@ -260,6 +261,21 @@ export function ProductImageCarousel({
   const hasVideo = list.some((url) => isVideoUrl(url));
   const currentIsVideo = isVideoUrl(list[index] ?? "");
   const coverSrc = list[0];
+  const imagesKey = list.join("\n");
+
+  useEffect(() => {
+    const urls = imagesKey.split("\n");
+    const firstVideo = urls.findIndex((url) => isVideoUrl(url));
+    setIndex(firstVideo >= 0 ? firstVideo : 0);
+    setManualHold(false);
+    setUserPaused(false);
+  }, [imagesKey]);
+
+  const wasInView = useRef(inView);
+  useEffect(() => {
+    if (inView && !wasInView.current) setUserPaused(false);
+    wasInView.current = inView;
+  }, [inView]);
 
   useEffect(() => {
     if (!nearView || !coverSrc) return;
@@ -466,7 +482,7 @@ export function ProductImageCarousel({
     : hasVideo
       ? feedActiveIds.has(feedId)
       : inView;
-  const cardMayPlay = pageLive && slotActive && !userPaused;
+  const cardMayPlay = pageLive && !userPaused && (forcePlay || slotActive);
 
   return (
     <div
@@ -499,11 +515,14 @@ export function ProductImageCarousel({
         })();
 
         const playing = active && cardMayPlay;
-        // Garder le média chargé pendant une pause user (sinon currentTime = 0)
+        // Garder la source tant que la card est proche — sinon play()+son
+        // est refusé en remontant le fil.
         const shouldLoad = isVid
           ? Boolean(
-              mount &&
-                (slotActive || userPaused || (eager && (nearView || inView))),
+              mount ||
+                (nearView && active) ||
+                (forcePlay && active) ||
+                userPaused,
             )
           : Boolean(mount);
 

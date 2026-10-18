@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Archive, CheckCircle2, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,6 +49,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function SellerProductsPage() {
   const { data: session } = authClient.useSession();
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [tab, setTab] = useState<Tab>("all");
   const [editing, setEditing] = useState<Product | null>(null);
@@ -58,6 +60,7 @@ export default function SellerProductsPage() {
   async function load() {
     const { data } = await fetchJson<{ products?: Product[] }>(
       "/api/products?mine=1",
+      { cache: "no-store" },
     );
     setProducts(data?.products ?? []);
   }
@@ -73,6 +76,10 @@ export default function SellerProductsPage() {
 
   async function save() {
     if (!editing) return;
+    if (editing.images.length === 0) {
+      toast.error("Ajoutez au moins une image ou une vidéo");
+      return;
+    }
     setBusy(true);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/products/${editing.id}`,
@@ -98,7 +105,8 @@ export default function SellerProductsPage() {
     }
     toast.success("Produit mis à jour");
     setEditing(null);
-    load();
+    await load();
+    router.refresh();
   }
 
   async function setStatus(id: string, status: string) {
