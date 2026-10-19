@@ -111,10 +111,11 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
       setCartHasItems(false);
       return;
     }
+    const productId = product.id;
     function applyCart(items: { productId?: string }[], count?: number) {
       const list = items ?? [];
       setCartHasItems((count ?? list.length) > 0);
-      setInCart(list.some((item) => item.productId === product.id));
+      setInCart(list.some((item) => item.productId === productId));
     }
     fetchJson<{
       items?: { productId?: string }[];
