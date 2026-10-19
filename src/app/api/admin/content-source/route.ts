@@ -68,7 +68,19 @@ const patchSchema = z.object({
   scrollAdDelaySeconds: z.number().int().min(0).max(3600).optional(),
   scrollAdStartsAt: isoOrEmpty,
   scrollAdEndsAt: isoOrEmpty,
-  scrollAdVideos: z.array(z.string().max(500)).max(8).optional(),
+  scrollAdVideos: z
+    .array(
+      z.union([
+        z.string().max(500),
+        z.object({
+          url: z.string().max(500),
+          enabled: z.boolean().optional(),
+          priority: z.number().int().min(1).max(99).optional(),
+        }),
+      ]),
+    )
+    .max(8)
+    .optional(),
 });
 
 export async function POST(req: Request) {

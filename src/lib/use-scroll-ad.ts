@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { isVideoUrl } from "@/lib/media";
 import { authClient } from "@/lib/auth-client";
 import { useAppConfig } from "@/lib/use-app-config";
 import {
@@ -83,10 +84,21 @@ export function useScrollAd() {
   }, []);
 
   useEffect(() => {
+    if (firstMs <= 0) return;
+    if (!new URLSearchParams(window.location.search).has("flash")) return;
+    persist({
+      day: localDayKey(),
+      seen: [],
+      shownAt: 0,
+      engagedMs: Math.max(0, firstMs - 1500),
+    });
+  }, [firstMs]);
+
+  useEffect(() => {
     if (!enabled || open) return;
     const day = dayRef.current ?? loadScrollAdDay();
     const next = nextUnseenVideo(videos, day.seen);
-    if (!next) return;
+    if (!next || !isVideoUrl(next)) return;
     const el = document.createElement("video");
     el.preload = "auto";
     el.src = next;

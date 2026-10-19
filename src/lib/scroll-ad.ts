@@ -2,15 +2,30 @@ export const SCROLL_AD_MAX_VIDEOS = 8;
 export const SCROLL_AD_DEFAULT_VIDEO = "/renard.mp4";
 export const SCROLL_AD_DEFAULT_DELAY = 120;
 export const SCROLL_AD_CLOCK_COOLDOWN_MS = 8 * 60 * 1000;
+/** Durée d’un flash image (jpeg, png, webp, gif…). */
+export const SCROLL_AD_IMAGE_SECONDS = 8;
 export const SCROLL_AD_DAY_STORAGE_KEY = "chipshop.scrollAd.day.v1";
+
+export type ScrollAdClip = {
+  url: string;
+  enabled: boolean;
+  /** 1 = passe en premier. */
+  priority: number;
+};
 
 export type ScrollAdCampaign = {
   enabled: boolean;
   delaySeconds: number;
   startsAt: string | null;
   endsAt: string | null;
-  videos: string[];
+  videos: ScrollAdClip[];
 };
+
+export function clampScrollAdPriority(value: unknown, fallback = 1) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(99, Math.max(1, Math.round(n)));
+}
 
 export function clampScrollAdDelay(value: unknown) {
   const n = typeof value === "number" ? value : Number(value);
@@ -27,16 +42,32 @@ export function isAllowedAdVideoUrl(url: string) {
   return /^https?:\/\//i.test(u);
 }
 
-export function parseScrollAdVideos(raw: unknown, fallbackDefault = true) {
+export function parseScrollAdVideos(raw: unknown, fallbackDefault = true): ScrollAdClip[] {
   if (!Array.isArray(raw)) {
-    return fallbackDefault ? [SCROLL_AD_DEFAULT_VIDEO] : [];
+    return fallbackDefault
+      ? [{ url: SCROLL_AD_DEFAULT_VIDEO, enabled: true, priority: 1 }]
+      : [];
   }
-  const urls = raw
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(isAllowedAdVideoUrl)
-    .slice(0, SCROLL_AD_MAX_VIDEOS);
-  return urls;
+  const clips: ScrollAdClip[] = [];
+  for (const [index, item] of raw.entries()) {
+    if (clips.length >= SCROLL_AD_MAX_VIDEOS) break;
+    if (typeof item === "string") {
+      const url = item.trim();
+      if (!isAllowedAdVideoUrl(url)) continue;
+      clips.push({ url, enabled: true, priority: index + 1 });
+      continue;
+    }
+    if (!item || typeof item !== "object" || !("url" in item)) continue;
+    const url = String((item as { url: unknown }).url).trim();
+    if (!isAllowedAdVideoUrl(url)) continue;
+    const rec = item as { enabled?: unknown; priority?: unknown };
+    clips.push({
+      url,
+      enabled: rec.enabled !== false,
+      priority: clampScrollAdPriority(rec.priority, clips.length + 1),
+    });
+  }
+  return clips;
 }
 
 export function scrollAdPeriodActive(startsAt: string | null, endsAt: string | null) {
@@ -60,7 +91,10 @@ export function scrollAdLiveVideos(campaign: ScrollAdCampaign) {
   ) {
     return [];
   }
-  return campaign.videos;
+  return [...campaign.videos]
+    .filter((clip) => clip.enabled)
+    .sort((a, b) => a.priority - b.priority)
+    .map((clip) => clip.url);
 }
 
 export function localDayKey(now = Date.now()) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Clapperboard, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Clapperboard, ImageIcon, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,9 +13,13 @@ import {
 import {
   SCROLL_AD_DEFAULT_DELAY,
   SCROLL_AD_DEFAULT_VIDEO,
+  SCROLL_AD_IMAGE_SECONDS,
   SCROLL_AD_MAX_VIDEOS,
+  clampScrollAdPriority,
+  parseScrollAdVideos,
+  type ScrollAdClip,
 } from "@/lib/scroll-ad";
-import { looksLikeVideoFile } from "@/lib/media";
+import { isVideoUrl, looksLikeImageFile, looksLikeVideoFile } from "@/lib/media";
 import { clearPublicAppConfigCache } from "@/lib/use-app-config";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n-provider";
@@ -25,7 +29,7 @@ type Payload = {
   scrollAdDelaySeconds?: number;
   scrollAdStartsAt?: string | null;
   scrollAdEndsAt?: string | null;
-  scrollAdVideos?: string[];
+  scrollAdVideos?: unknown;
   error?: string;
 };
 
@@ -44,6 +48,11 @@ function fromLocalInput(value: string) {
   return d.toISOString();
 }
 
+function nextPriority(clips: ScrollAdClip[]) {
+  const max = clips.reduce((acc, clip) => Math.max(acc, clip.priority), 0);
+  return clampScrollAdPriority(max + 1, clips.length + 1);
+}
+
 function clipName(url: string) {
   try {
     const path = url.split("?")[0] ?? url;
@@ -60,7 +69,9 @@ export function ScrollAdSettings() {
   const [delay, setDelay] = useState(SCROLL_AD_DEFAULT_DELAY);
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
-  const [videos, setVideos] = useState<string[]>([SCROLL_AD_DEFAULT_VIDEO]);
+  const [videos, setVideos] = useState<ScrollAdClip[]>([
+    { url: SCROLL_AD_DEFAULT_VIDEO, enabled: true, priority: 1 },
+  ]);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -71,11 +82,7 @@ export function ScrollAdSettings() {
     setDelay(data.scrollAdDelaySeconds ?? SCROLL_AD_DEFAULT_DELAY);
     setStartsAt(toLocalInput(data.scrollAdStartsAt));
     setEndsAt(toLocalInput(data.scrollAdEndsAt));
-    setVideos(
-      Array.isArray(data.scrollAdVideos) && data.scrollAdVideos.length
-        ? data.scrollAdVideos
-        : [],
-    );
+    setVideos(parseScrollAdVideos(data.scrollAdVideos, false));
     setLoaded(true);
   }
 
@@ -119,19 +126,26 @@ export function ScrollAdSettings() {
 
   async function onPick(file: File | undefined) {
     if (!file) return;
-    if (!looksLikeVideoFile(file)) {
-      toast.error("Choisis une vidéo");
+    if (!looksLikeVideoFile(file) && !looksLikeImageFile(file)) {
+      toast.error("Choisis une image ou une vidéo");
       return;
     }
     if (videos.length >= SCROLL_AD_MAX_VIDEOS) {
-      toast.error(`Maximum ${SCROLL_AD_MAX_VIDEOS} vidéos`);
+      toast.error(`Maximum ${SCROLL_AD_MAX_VIDEOS} médias`);
       return;
     }
     setBusy(true);
     try {
       const uploaded = await uploadCompressedMedia(file, "product");
-      setVideos((prev) => [...prev, uploaded.url]);
-      toast.success("Vidéo ajoutée — enregistre pour publier");
+      setVideos((prev) => [
+        ...prev,
+        {
+          url: uploaded.url,
+          enabled: true,
+          priority: nextPriority(prev),
+        },
+      ]);
+      toast.success("Média ajouté — enregistre pour publier");
     } catch (error) {
       toast.error(mediaUploadToastMessage(error, t));
     } finally {
@@ -148,8 +162,8 @@ export function ScrollAdSettings() {
         <div>
           <h2 className="font-heading text-base font-semibold">Flash pub</h2>
           <p className="text-sm text-muted-foreground">
-            1 fois par vidéo et par jour. Les flashes suivants s’espacent
-            tout seuls. 0 s = off.
+            Images (jpg, png, webp, gif…) ou vidéos. 1 fois par média et par
+            jour. 0 s = off.
           </p>
         </div>
         <button
@@ -214,28 +228,112 @@ export function ScrollAdSettings() {
       </p>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium">Vidéos ({videos.length}/{SCROLL_AD_MAX_VIDEOS})</p>
+        <p className="text-sm font-medium">
+          Médias ({videos.length}/{SCROLL_AD_MAX_VIDEOS})
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Une image s’affiche {SCROLL_AD_IMAGE_SECONDS} s (chrono + slider). Le
+          X apparaît vers la fin. Désactive un média sans le supprimer.
+          Priorité 1 = premier.
+        </p>
         {videos.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Aucune vidéo — le flash ne passera pas.</p>
+          <p className="text-xs text-muted-foreground">Aucun média — le flash ne passera pas.</p>
         ) : (
           <ul className="space-y-1.5">
-            {videos.map((url, i) => (
+            {videos
+              .map((clip, index) => ({ clip, index }))
+              .sort(
+                (a, b) =>
+                  a.clip.priority - b.clip.priority || a.index - b.index,
+              )
+              .map(({ clip, index }, rank) => (
               <li
-                key={`${url}-${i}`}
-                className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs"
+                key={`${clip.url}-${index}`}
+                className={cn(
+                  "flex items-center gap-2 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs",
+                  !clip.enabled && "opacity-55",
+                )}
               >
-                <Clapperboard className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">{clipName(url)}</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={clip.enabled}
+                  disabled={busy}
+                  onClick={() =>
+                    setVideos((prev) =>
+                      prev.map((item, i) =>
+                        i === index
+                          ? { ...item, enabled: !item.enabled }
+                          : item,
+                      ),
+                    )
+                  }
+                  className={cn(
+                    "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                    clip.enabled ? "bg-primary" : "bg-muted",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
+                      clip.enabled ? "translate-x-4" : "translate-x-0.5",
+                    )}
+                  />
+                  <span className="sr-only">
+                    {clip.enabled ? "Désactiver ce flash" : "Activer ce flash"}
+                  </span>
+                </button>
+                {!isVideoUrl(clip.url) ? (
+                  <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : (
+                  <Clapperboard className="size-3.5 shrink-0 text-muted-foreground" />
+                )}
+                <span className="min-w-0 flex-1 truncate">{clipName(clip.url)}</span>
+                <label className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                  Prio
+                  <Input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={clip.priority}
+                    disabled={busy}
+                    aria-label="Priorité"
+                    className="h-7 w-14 px-1.5 text-xs tabular-nums"
+                    onChange={(e) => {
+                      const priority = clampScrollAdPriority(
+                        e.target.value,
+                        clip.priority,
+                      );
+                      setVideos((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, priority } : item,
+                        ),
+                      );
+                    }}
+                  />
+                </label>
                 <button
                   type="button"
                   className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted"
-                  disabled={busy || i === 0}
+                  disabled={busy || rank === 0}
                   onClick={() =>
                     setVideos((prev) => {
-                      const copy = [...prev];
-                      const [item] = copy.splice(i, 1);
-                      copy.splice(i - 1, 0, item!);
-                      return copy;
+                      const ranked = prev
+                        .map((item, i) => ({ item, i }))
+                        .sort(
+                          (a, b) =>
+                            a.item.priority - b.item.priority || a.i - b.i,
+                        );
+                      const current = ranked[rank];
+                      const above = ranked[rank - 1];
+                      if (!current || !above) return prev;
+                      return prev.map((item, i) => {
+                        if (i === current.i)
+                          return { ...item, priority: above.item.priority };
+                        if (i === above.i)
+                          return { ...item, priority: current.item.priority };
+                        return item;
+                      });
                     })
                   }
                   aria-label="Monter"
@@ -245,13 +343,25 @@ export function ScrollAdSettings() {
                 <button
                   type="button"
                   className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted"
-                  disabled={busy || i === videos.length - 1}
+                  disabled={busy || rank === videos.length - 1}
                   onClick={() =>
                     setVideos((prev) => {
-                      const copy = [...prev];
-                      const [item] = copy.splice(i, 1);
-                      copy.splice(i + 1, 0, item!);
-                      return copy;
+                      const ranked = prev
+                        .map((item, i) => ({ item, i }))
+                        .sort(
+                          (a, b) =>
+                            a.item.priority - b.item.priority || a.i - b.i,
+                        );
+                      const current = ranked[rank];
+                      const below = ranked[rank + 1];
+                      if (!current || !below) return prev;
+                      return prev.map((item, i) => {
+                        if (i === current.i)
+                          return { ...item, priority: below.item.priority };
+                        if (i === below.i)
+                          return { ...item, priority: current.item.priority };
+                        return item;
+                      });
                     })
                   }
                   aria-label="Descendre"
@@ -263,7 +373,7 @@ export function ScrollAdSettings() {
                   className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-destructive"
                   disabled={busy}
                   onClick={() =>
-                    setVideos((prev) => prev.filter((_, idx) => idx !== i))
+                    setVideos((prev) => prev.filter((_, idx) => idx !== index))
                   }
                   aria-label="Retirer"
                 >
@@ -277,7 +387,7 @@ export function ScrollAdSettings() {
           <input
             ref={fileRef}
             type="file"
-            accept="video/*"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/*"
             className="hidden"
             onChange={(e) => void onPick(e.target.files?.[0])}
           />
@@ -289,7 +399,7 @@ export function ScrollAdSettings() {
             onClick={() => fileRef.current?.click()}
           >
             <Upload className="size-3.5" />
-            Ajouter une vidéo
+            Ajouter image / vidéo
           </Button>
           <Button
             type="button"
@@ -297,11 +407,18 @@ export function ScrollAdSettings() {
             variant="outline"
             disabled={
               busy ||
-              videos.includes(SCROLL_AD_DEFAULT_VIDEO) ||
+              videos.some((clip) => clip.url === SCROLL_AD_DEFAULT_VIDEO) ||
               videos.length >= SCROLL_AD_MAX_VIDEOS
             }
             onClick={() =>
-              setVideos((prev) => [...prev, SCROLL_AD_DEFAULT_VIDEO])
+              setVideos((prev) => [
+                ...prev,
+                {
+                  url: SCROLL_AD_DEFAULT_VIDEO,
+                  enabled: true,
+                  priority: nextPriority(prev),
+                },
+              ])
             }
           >
             Ajouter renard.mp4

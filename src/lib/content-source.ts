@@ -111,7 +111,7 @@ const DEFAULT_SCROLL_AD: ScrollAdCampaign = {
   delaySeconds: SCROLL_AD_DEFAULT_DELAY,
   startsAt: null,
   endsAt: null,
-  videos: [SCROLL_AD_DEFAULT_VIDEO],
+  videos: [{ url: SCROLL_AD_DEFAULT_VIDEO, enabled: true, priority: 1 }],
 };
 
 function parseScrollAd(row: {
@@ -372,7 +372,11 @@ export async function setScrollAdCampaign(input: Partial<ScrollAdCampaign>) {
   if (next.startsAt && next.endsAt && Date.parse(next.startsAt) > Date.parse(next.endsAt)) {
     throw new Error("La fin de période doit être après le début");
   }
-  const videosJson = next.videos as unknown as Prisma.InputJsonValue;
+  const videosJson = next.videos.map((clip) => ({
+    url: clip.url,
+    enabled: clip.enabled,
+    priority: clip.priority,
+  })) as unknown as Prisma.InputJsonValue;
   return withDbRetry(() =>
     prisma.contentSourceConfig.upsert({
       where: { id: "default" },
