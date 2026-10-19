@@ -2,30 +2,27 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { ShoppingCart, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney } from "@/lib/utils";
+import { notifyCartUpdated } from "@/lib/cart-events";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { useI18n } from "@/components/i18n-provider";
 import { AuthInline } from "@/components/auth-inline";
 import { FulfillmentForm } from "@/components/fulfillment-form";
-import { WalletInlineTopUp } from "@/components/wallet-inline-topup";
+import { InsufficientFundsSheet } from "@/components/insufficient-funds-sheet";
+import { FoxDispatchOverlay } from "@/components/fox-dispatch-overlay";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 
 type CartItem = {
   id: string;
   productId: string;
+  quantity: number;
   product: {
     id: string;
     title: string;
@@ -33,6 +30,7 @@ type CartItem = {
     currency?: string;
     images: string[];
     status: string;
+    quantity?: number;
     shop: { id: string; name: string; slug: string };
   };
 };
@@ -49,11 +47,13 @@ type CartPayload = {
 export default function CartPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   const [items, setItems] = useState<CartItem[]>([]);
   const [totalCents, setTotalCents] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [foxOpen, setFoxOpen] = useState(false);
+  const afterPayHref = useRef("/profile");
   const [showTopUp, setShowTopUp] = useState(false);
   const [needed, setNeeded] = useState(0);
   const [balance, setBalance] = useState(0);
@@ -85,6 +85,7 @@ export default function CartPage() {
   }
 
   useEffect(() => {
+    if (isPending) return;
     if (!session) {
       setLoading(false);
       return;
@@ -108,7 +109,7 @@ export default function CartPage() {
         }
       })
       .catch(() => undefined);
-  }, [session]);
+  }, [session, isPending]);
 
   async function removeItem(productId: string) {
     setBusy(true);
@@ -123,7 +124,30 @@ export default function CartPage() {
     }
     setItems(data?.items ?? []);
     setTotalCents(data?.totalCents ?? 0);
+    notifyCartUpdated(data?.count ?? data?.items?.length ?? 0);
     toast.success("Retiré du panier");
+  }
+
+  async function setQuantity(productId: string, quantity: number) {
+    const next = Number.isFinite(quantity) ? Math.trunc(quantity) : 1;
+    if (next < 1) {
+      await removeItem(productId);
+      return;
+    }
+    setBusy(true);
+    const { res, data } = await fetchJson<CartPayload>("/api/cart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId, quantity: next }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Quantité impossible");
+      return;
+    }
+    setItems(data?.items ?? []);
+    setTotalCents(data?.totalCents ?? 0);
+    notifyCartUpdated(data?.count ?? 0);
   }
 
   async function cancelCart() {
@@ -138,6 +162,7 @@ export default function CartPage() {
     }
     setItems([]);
     setTotalCents(0);
+    notifyCartUpdated(0);
     toast.success("Panier annulé");
   }
 
@@ -159,7 +184,10 @@ export default function CartPage() {
     }
     setBusy(true);
     const { res, data } = await fetchJson<
-      CartPayload & { orders?: { id: string }[] }
+      CartPayload & {
+        orders?: { id: string }[];
+        tickets?: { id: string }[];
+      }
     >("/api/cart/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -179,6 +207,7 @@ export default function CartPage() {
     setBusy(false);
 
     if (res.status === 402) {
+      toast.error(data?.error ?? t("cart.insufficient"));
       setNeeded(data?.needed ?? totalCents + fulfillment.shippingCents);
       setBalance(data?.balance ?? 0);
       setShowTopUp(true);
@@ -189,10 +218,20 @@ export default function CartPage() {
       await loadCart();
       return;
     }
-    toast.success("Achat confirmé — solde débité");
     notifyWalletUpdated();
+    notifyCartUpdated(0);
+    const ticket = data?.tickets?.[0]?.id;
     const first = data?.orders?.[0]?.id;
-    router.push(first ? `/orders/${first}` : "/profile");
+    afterPayHref.current = ticket
+      ? `/orders/ticket/${ticket}`
+      : first
+        ? `/orders/${first}`
+        : "/profile";
+    setFoxOpen(true);
+  }
+
+  if (isPending || loading) {
+    return <PageLoader className="h-[40dvh]" />;
   }
 
   if (!session) {
@@ -210,12 +249,6 @@ export default function CartPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <PageLoader className="h-[40dvh]" />
-    );
-  }
-
   return (
     <div className="px-4 pb-6 pt-3 md:px-8">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -224,6 +257,8 @@ export default function CartPage() {
           <p className="text-xs text-muted-foreground">
             {items.length}{" "}
             {items.length > 1 ? t("cart.itemOther") : t("cart.itemOne")}
+            {" · "}
+            {t("cart.perShopQr")}
           </p>
         </div>
         {items.length > 0 && (
@@ -252,47 +287,104 @@ export default function CartPage() {
         </div>
       ) : (
         <>
-          <ul className="space-y-2">
-            {items.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3"
-              >
-                <Link
-                  href={`/product/${item.product.id}`}
-                  className="size-14 shrink-0 rounded-xl bg-cover bg-center"
-                  style={{
-                    backgroundImage: `url(${item.product.images[0]})`,
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">
-                    {item.product.title}
-                  </p>
-                  <Link
-                    href={`/shop/${item.product.shop.slug}`}
-                    className="text-[11px] text-muted-foreground hover:text-primary hover:underline"
+          <ul className="space-y-4">
+            {Array.from(
+              items.reduce((map, item) => {
+                const key = item.product.shop.id;
+                const list = map.get(key) ?? [];
+                list.push(item);
+                map.set(key, list);
+                return map;
+              }, new Map<string, CartItem[]>()),
+            ).map(([shopId, shopItems]) => (
+              <li key={shopId} className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground">
+                  @{shopItems[0]?.product.shop.name} · 1 QR
+                </p>
+                {shopItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3"
                   >
-                    @{item.product.shop.name}
-                  </Link>
-                  <p className="font-heading text-sm font-bold text-trust">
-                    {formatMoney(item.product.priceCents, item.product.currency)}
-                  </p>
-                  {item.product.status !== "ACTIVE" && (
-                    <p className="text-[11px] text-destructive">
-                      {t("cart.unavailable")}
-                    </p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => removeItem(item.productId)}
-                  className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground hover:text-destructive"
-                  aria-label={t("cart.removeAria")}
-                >
-                  <Trash2 className="size-4" />
-                </button>
+                    <Link
+                      href={`/product/${item.product.id}`}
+                      className="size-14 shrink-0 rounded-xl bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(${item.product.images[0]})`,
+                      }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {item.product.title}
+                      </p>
+                      <p className="font-heading text-sm font-bold text-trust">
+                        {formatMoney(
+                          item.product.priceCents *
+                            Math.max(1, item.quantity ?? 1),
+                          item.product.currency,
+                        )}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatMoney(
+                          item.product.priceCents,
+                          item.product.currency,
+                        )}{" "}
+                        × {item.quantity ?? 1}
+                      </p>
+                      {item.product.status !== "ACTIVE" && (
+                        <p className="text-[11px] text-destructive">
+                          {t("cart.unavailable")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void setQuantity(
+                            item.productId,
+                            (item.quantity ?? 1) - 1,
+                          )
+                        }
+                        className="grid size-9 place-items-center rounded-full border border-border"
+                        aria-label="Moins"
+                      >
+                        <Minus className="size-4" />
+                      </button>
+                      <span className="min-w-7 text-center text-sm font-bold">
+                        {item.quantity ?? 1}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={
+                          busy ||
+                          (item.product.quantity != null &&
+                            (item.quantity ?? 1) >= item.product.quantity)
+                        }
+                        onClick={() =>
+                          void setQuantity(
+                            item.productId,
+                            (item.quantity ?? 1) + 1,
+                          )
+                        }
+                        className="grid size-9 place-items-center rounded-full border border-border"
+                        aria-label="Plus"
+                      >
+                        <Plus className="size-4" />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => removeItem(item.productId)}
+                      className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground hover:text-destructive"
+                      aria-label={t("cart.removeAria")}
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                ))}
               </li>
             ))}
           </ul>
@@ -312,7 +404,7 @@ export default function CartPage() {
               onClick={confirmPurchase}
               className="h-12 w-full bg-gradient-to-r from-[#ff5722] to-[#ff7a45] text-base font-bold"
             >
-              {busy ? t("product.processing") : t("cart.confirmPurchase")}
+              {busy ? t("product.processing") : t("cart.payOneClick")}
             </Button>
             <Button
               variant="ghost"
@@ -327,23 +419,23 @@ export default function CartPage() {
         </>
       )}
 
-      <Sheet open={showTopUp} onOpenChange={setShowTopUp}>
-        <SheetContent side="bottom" className="rounded-t-3xl bg-surface">
-          <SheetHeader>
-            <SheetTitle className="font-heading">Solde insuffisant</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4 p-4">
-            <WalletInlineTopUp
-              neededCents={needed}
-              balanceCents={balance}
-              onFunded={() => {
-                setShowTopUp(false);
-                void confirmPurchase();
-              }}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
+      <InsufficientFundsSheet
+        open={showTopUp}
+        onOpenChange={setShowTopUp}
+        neededCents={needed}
+        balanceCents={balance}
+        onFunded={() => {
+          setShowTopUp(false);
+          void confirmPurchase();
+        }}
+      />
+      <FoxDispatchOverlay
+        open={foxOpen}
+        onFinished={() => {
+          setFoxOpen(false);
+          router.push(afterPayHref.current);
+        }}
+      />
     </div>
   );
 }

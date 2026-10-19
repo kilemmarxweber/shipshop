@@ -91,6 +91,9 @@ export async function GET(req: Request) {
             shop: { select: { id: true, name: true, slug: true } },
             courier: true,
             pickupReceipt: true,
+            handover: {
+              select: { id: true, code: true, completedAt: true, qrPayload: true },
+            },
             buyer: { select: { id: true, name: true, phone: true, email: true } },
           },
           orderBy: { createdAt: "desc" },
@@ -114,6 +117,9 @@ export async function GET(req: Request) {
           shop: { select: { id: true, name: true, slug: true } },
           courier: true,
           pickupReceipt: true,
+          handover: {
+            select: { id: true, code: true, completedAt: true, qrPayload: true },
+          },
         },
         orderBy: { createdAt: "desc" },
         take: 80,
@@ -172,10 +178,10 @@ export async function POST(req: Request) {
     if (isInsufficientFunds(error)) {
       return NextResponse.json(
         {
-          error: error.message,
+          error: "Solde insuffisant — rechargez votre portefeuille",
           code: "INSUFFICIENT_FUNDS",
-          needed: error.needed,
-          balance: error.balance,
+          needed: error.needed ?? 0,
+          balance: error.balance ?? 0,
         },
         { status: 402 },
       );

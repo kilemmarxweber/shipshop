@@ -50,6 +50,11 @@ type Order = {
     redeemedAt: string | null;
     scannedAt: string | null;
   } | null;
+  handover?: {
+    id: string;
+    code: string;
+    completedAt: string | null;
+  } | null;
 };
 
 export default function VendorOrdersPage() {
@@ -67,6 +72,13 @@ export default function VendorOrdersPage() {
     useState<CancelReasonCode>("OUT_OF_STOCK");
   const [cancelNote, setCancelNote] = useState("");
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [pickItems, setPickItems] = useState<{
+    handoverId: string;
+    qrPayload?: string;
+    code?: string;
+    items: { id: string; title: string; images: string[] }[];
+  } | null>(null);
+  const [showFirstSale, setShowFirstSale] = useState(false);
 
   async function loadShops() {
     const res = await fetch("/api/shops?mine=1");
@@ -95,6 +107,19 @@ export default function VendorOrdersPage() {
     if (shopId) loadOrders(shopId);
   }, [shopId]);
 
+  useEffect(() => {
+    if (!shopId || orders.length === 0) return;
+    const key = `first-sale-coach:${shopId}`;
+    if (localStorage.getItem(key)) return;
+    const open = orders.filter(
+      (o) =>
+        !["CANCELLED", "REFUNDED", "DELIVERED", "PICKED_UP"].includes(o.status),
+    );
+    if (open.length > 0 && orders.length <= 3) {
+      setShowFirstSale(true);
+    }
+  }, [shopId, orders]);
+
   async function confirmHandover(input: {
     orderId?: string;
     code?: string;
@@ -105,6 +130,9 @@ export default function VendorOrdersPage() {
       error?: string;
       status?: string;
       message?: string;
+      needsItem?: boolean;
+      handoverId?: string;
+      items?: { id: string; title: string; images: string[] }[];
     }>("/api/orders/confirm-handover", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -115,9 +143,19 @@ export default function VendorOrdersPage() {
       toast.error(data?.error ?? "Validation impossible");
       return;
     }
+    if (data?.needsItem && data.handoverId && data.items) {
+      setPickItems({
+        handoverId: data.handoverId,
+        qrPayload: input.qrPayload,
+        code: input.code,
+        items: data.items,
+      });
+      return;
+    }
     toast.success(data?.message ?? `Remise → ${data?.status}`);
     setScanInput("");
     setScannerOpen(false);
+    setPickItems(null);
     if (shopId) loadOrders(shopId);
   }
 
@@ -133,10 +171,14 @@ export default function VendorOrdersPage() {
       (o) =>
         o.pickupReceipt &&
         !o.pickupReceipt.redeemedAt &&
-        o.pickupReceipt.code.toUpperCase() === value.toUpperCase(),
+        (o.pickupReceipt.code.toUpperCase() === value.toUpperCase() ||
+          o.handover?.code.toUpperCase() === value.toUpperCase()),
     );
     if (match) {
-      await confirmHandover({ orderId: match.id, code: value });
+      await confirmHandover({
+        orderId: match.handover ? undefined : match.id,
+        code: value,
+      });
       return;
     }
     toast.error("QR / code non reconnu");
@@ -155,13 +197,17 @@ export default function VendorOrdersPage() {
       (o) =>
         o.pickupReceipt &&
         !o.pickupReceipt.redeemedAt &&
-        o.pickupReceipt.code.toUpperCase() === raw.toUpperCase(),
+        (o.pickupReceipt.code.toUpperCase() === raw.toUpperCase() ||
+          o.handover?.code.toUpperCase() === raw.toUpperCase()),
     );
     if (!match) {
       toast.error("Code introuvable dans les commandes ouvertes");
       return;
     }
-    await confirmHandover({ orderId: match.id, code: raw });
+    await confirmHandover({
+      orderId: match.handover ? undefined : match.id,
+      code: raw,
+    });
   }
 
   async function setStatus(
@@ -259,17 +305,30 @@ export default function VendorOrdersPage() {
           Scan QR / code pour confirmer la remise
         </p>
       </div>
-      {orders.some(
-        (o) =>
-          o.pickupReceipt &&
-          !o.pickupReceipt.scannedAt &&
-          !["CANCELLED", "REFUNDED", "DELIVERED", "PICKED_UP"].includes(
-            o.status,
-          ),
-      ) ? (
-        <div className="mb-4 rounded-2xl border border-trust/40 bg-trust/10 p-3 text-sm text-trust">
-          Première vente : scanne le QR et remets le colis. L’argent est
-          bloqué jusqu’à confirmation de l’acheteur.
+      {showFirstSale ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
+          <div className="w-full max-w-sm rounded-3xl border border-trust/40 bg-background p-5">
+            <p className="font-heading text-lg font-bold">Première vente</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Scanne le QR du client, remets le colis. L’argent reste bloqué
+              jusqu’à sa confirmation. Un QR = ta boutique, article par
+              article.
+            </p>
+            <ol className="mt-4 list-decimal space-y-1 pl-4 text-sm">
+              <li>Scanne le QR boutique</li>
+              <li>Choisis l’article remis s’il y en a plusieurs</li>
+              <li>Le client confirme — tu es payé</li>
+            </ol>
+            <Button
+              className="mt-5 h-11 w-full font-bold"
+              onClick={() => {
+                if (shopId) localStorage.setItem(`first-sale-coach:${shopId}`, "1");
+                setShowFirstSale(false);
+              }}
+            >
+              J’ai compris — scanner
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -308,7 +367,34 @@ export default function VendorOrdersPage() {
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground">
           Après confirmation, le client ne peut plus demander de remboursement.
+          Un QR boutique reste actif jusqu’au dernier article remis ou annulé.
         </p>
+        {pickItems ? (
+          <div className="mt-3 space-y-2 rounded-xl border border-border bg-background p-3">
+            <p className="text-xs font-semibold">Quel article tu remets ?</p>
+            {pickItems.items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                disabled={scanBusy}
+                onClick={() =>
+                  void confirmHandover({
+                    orderId: item.id,
+                    qrPayload: pickItems.qrPayload,
+                    code: pickItems.code,
+                  })
+                }
+                className="flex w-full items-center gap-2 rounded-xl border border-border px-2 py-2 text-left"
+              >
+                <div
+                  className="size-10 shrink-0 rounded-lg bg-cover bg-center"
+                  style={{ backgroundImage: `url(${item.images[0] ?? ""})` }}
+                />
+                <span className="text-sm font-semibold">{item.title}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {shops.length > 0 && (

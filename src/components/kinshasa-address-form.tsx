@@ -52,6 +52,8 @@ type Props = {
   enableMap?: boolean;
   /** GPS + quartier + point de repère */
   compact?: boolean;
+  /** Lance le GPS à l’affichage (Livrer ici) */
+  autoLocate?: boolean;
 };
 
 const KINSHASA_DEFAULT = { lat: -4.325, lng: 15.322 };
@@ -94,6 +96,7 @@ export function KinshasaAddressForm({
   showPreview = true,
   enableMap = true,
   compact = false,
+  autoLocate = false,
 }: Props) {
   const [communes, setCommunes] = useState<Commune[]>([]);
   const [cityName, setCityName] = useState("Kinshasa");
@@ -214,14 +217,15 @@ export function KinshasaAddressForm({
   async function applyCoords(lat: number, lng: number, accuracy?: number) {
     try {
       const geo = await reverseGeocode(lat, lng);
-      const city = cityName || "Kinshasa";
+      const city = geo.city?.trim() || value.city || cityName || "Kinshasa";
       const matched = matchCommune(geo.commune, communes);
-      const communeName = matched?.name || geo.commune;
-      const quartier = matchInList(
-        geo.quartier,
-        matched?.quartiers ?? [],
-      );
-      const avenue = matchInList(geo.avenue, matched?.avenues ?? []);
+      const communeName = matched?.name || geo.commune || value.commune;
+      const quartier = geo.quartier
+        ? matchInList(geo.quartier, matched?.quartiers ?? [])
+        : value.quartier;
+      const avenue = geo.avenue
+        ? matchInList(geo.avenue, matched?.avenues ?? [])
+        : value.avenue;
       const parcelle = geo.houseNumber || value.parcelle;
 
       const next: AddressState = {
@@ -272,6 +276,13 @@ export function KinshasaAddressForm({
     }
   }
 
+  useEffect(() => {
+    if (!autoLocate) return;
+    if (value.lat != null && value.lng != null) return;
+    void captureGps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLocate]);
+
   function patch(partial: Partial<AddressState>) {
     onChange({
       ...value,
@@ -303,26 +314,74 @@ export function KinshasaAddressForm({
             {value.accuracyM != null
               ? ` · ~${Math.round(value.accuracyM)} m`
               : ""}
+            {value.city || value.commune
+              ? ` · ${[value.city, value.commune].filter(Boolean).join(" · ")}`
+              : ""}
           </p>
         ) : null}
         <div className="space-y-1">
-          <Label htmlFor="addr-line-c">Adresse</Label>
+          <Label htmlFor="addr-city-c">Ville</Label>
           <Input
-            id="addr-line-c"
-            value={addressLine}
-            onFocus={() => setLineFocused(true)}
-            onBlur={() => {
-              setLineFocused(false);
-              const parsed = parseAddressLine(addressLine, cityName);
-              patch(parsed);
-              void saveIfNew({ ...value, ...parsed }, true);
-            }}
+            id="addr-city-c"
+            list="addr-city-list-c"
+            value={value.city || cityName}
+            onChange={(e) => patch({ city: e.target.value })}
+            placeholder="Ex. Kinshasa"
+            className="h-11 bg-surface-2"
+          />
+          <datalist id="addr-city-list-c">
+            <option value={cityName} />
+          </datalist>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="addr-commune-c">Commune</Label>
+          <Input
+            id="addr-commune-c"
+            list="addr-commune-list-c"
+            value={value.commune}
             onChange={(e) => {
-              const next = e.target.value;
-              setAddressLine(next);
-              patch(parseAddressLine(next, cityName));
+              const commune = e.target.value;
+              const known = communes.some((c) => c.name === commune);
+              patch(
+                known && commune !== value.commune
+                  ? { commune, quartier: "", avenue: "" }
+                  : { commune },
+              );
             }}
-            placeholder="ville, commune, quartier, avenue, n°"
+            placeholder="Ex. Gombe, Kalamu…"
+            className="h-11 bg-surface-2"
+            onBlur={() => void saveIfNew(value, true)}
+          />
+          <datalist id="addr-commune-list-c">
+            {communesForSelect.map((c) => (
+              <option key={c.name} value={c.name} />
+            ))}
+          </datalist>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="addr-quartier-c">Quartier</Label>
+          <Input
+            id="addr-quartier-c"
+            list="addr-quartier-list-c"
+            value={value.quartier}
+            onChange={(e) => patch({ quartier: e.target.value })}
+            placeholder="Quartier"
+            className="h-11 bg-surface-2"
+            onBlur={() => void saveIfNew(value, true)}
+          />
+          <datalist id="addr-quartier-list-c">
+            {(selected?.quartiers ?? []).map((q) => (
+              <option key={q} value={q} />
+            ))}
+          </datalist>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="addr-repere-c">Point de repère</Label>
+          <Input
+            id="addr-repere-c"
+            value={value.parcelle || value.avenue}
+            onChange={(e) => patch({ parcelle: e.target.value })}
+            placeholder="Église, arrêt, n° parcelle…"
             className="h-11 bg-surface-2"
           />
         </div>

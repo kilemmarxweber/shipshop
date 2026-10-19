@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isInsufficientFunds, purchaseProduct } from "@/lib/checkout";
+import { createShopHandover } from "@/lib/shop-handover";
 import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -48,7 +49,14 @@ export async function POST(req: Request) {
               status: true,
               shopId: true,
               quantity: true,
-              shop: { select: { fxCdfPerUsd: true, fxKwPerUsd: true } },
+              shop: {
+                select: {
+                  id: true,
+                  name: true,
+                  fxCdfPerUsd: true,
+                  fxKwPerUsd: true,
+                },
+              },
             },
           },
         },
@@ -61,7 +69,9 @@ export async function POST(req: Request) {
     }
 
     const unavailable = cartItems.filter(
-      (item) => item.product.status !== "ACTIVE" || item.product.quantity < 1,
+      (item) =>
+        item.product.status !== "ACTIVE" ||
+        item.product.quantity < Math.max(1, item.quantity),
     );
     if (unavailable.length > 0) {
       return NextResponse.json(
@@ -73,14 +83,22 @@ export async function POST(req: Request) {
       );
     }
 
+    const byShop = new Map<string, typeof cartItems>();
+    for (const item of cartItems) {
+      const list = byShop.get(item.product.shopId) ?? [];
+      list.push(item);
+      byShop.set(item.product.shopId, list);
+    }
+
+    const shopShipping = new Map<string, number>();
     let neededUsd = 0;
     let displayCurrency = "USD";
     let checkFx = shopFxRates(cartItems[0]?.product.shop);
-    for (const item of cartItems) {
+    for (const [shopId, items] of byShop) {
       let shipping = 0;
       if (fulfillment.fulfillmentType === "DELIVERY") {
         const quote = await quoteShipping({
-          shopId: item.product.shopId,
+          shopId,
           city: fulfillment.deliveryCity,
           commune: fulfillment.deliveryCommune,
           lat: fulfillment.deliveryLat,
@@ -88,15 +106,26 @@ export async function POST(req: Request) {
         });
         shipping = quote.shippingCents;
       }
-      const code = parseCurrency(item.product.currency);
-      const itemFx = shopFxRates(item.product.shop);
-      checkFx = itemFx;
-      displayCurrency = code;
-      neededUsd += usdCentsNeeded(
-        item.product.priceCents + shipping,
-        code,
-        itemFx,
-      );
+      shopShipping.set(shopId, shipping);
+      for (const item of items) {
+        const code = parseCurrency(item.product.currency);
+        const itemFx = shopFxRates(item.product.shop);
+        checkFx = itemFx;
+        displayCurrency = code;
+        neededUsd += usdCentsNeeded(
+          item.product.priceCents * Math.max(1, item.quantity),
+          code,
+          itemFx,
+        );
+      }
+      const first = items[0];
+      if (first && shipping > 0) {
+        neededUsd += usdCentsNeeded(
+          shipping,
+          parseCurrency(first.product.currency),
+          shopFxRates(first.product.shop),
+        );
+      }
     }
 
     const wallet = await withDbRetry(() =>
@@ -108,12 +137,18 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    if (walletUsdCents(wallet, checkFx) < neededUsd) {
+    const usdBalance = walletUsdCents(wallet, checkFx);
+    const hasPricedItems = cartItems.some((item) => item.product.priceCents > 0);
+    if (usdBalance < neededUsd || (usdBalance <= 0 && hasPricedItems)) {
       return NextResponse.json(
         {
-          error: "Solde insuffisant",
+          error: "Solde insuffisant — rechargez votre portefeuille",
           code: "INSUFFICIENT_FUNDS",
-          needed: fromUsdCents(neededUsd, displayCurrency, checkFx),
+          needed: fromUsdCents(
+            Math.max(neededUsd, 1),
+            displayCurrency,
+            checkFx,
+          ),
           balance: walletEquivalentCents(wallet, displayCurrency, checkFx),
           currency: displayCurrency,
         },
@@ -124,18 +159,43 @@ export async function POST(req: Request) {
     const result = await withDbRetry(() =>
       prisma.$transaction(async (tx) => {
         const orders = [];
+        const tickets = [];
         let balanceCents = wallet.balanceCents;
-        for (const item of cartItems) {
-          const purchased = await purchaseProduct(
-            tx,
-            session.user.id,
-            item.productId,
-            fulfillment,
-          );
-          orders.push(purchased.order);
-          balanceCents = purchased.balanceCents;
+        for (const [shopId, items] of byShop) {
+          const handover = await createShopHandover(tx, session.user.id, shopId);
+          let first = true;
+          const ticketOrderIds: string[] = [];
+          for (const item of items) {
+            const units = Math.max(1, item.quantity);
+            for (let i = 0; i < units; i++) {
+              const purchased = await purchaseProduct(
+                tx,
+                session.user.id,
+                item.productId,
+                fulfillment,
+                {
+                  handoverId: handover.id,
+                  skipShippingQuote: !first,
+                  shippingCents: 0,
+                },
+              );
+              orders.push(purchased.order);
+              ticketOrderIds.push(purchased.order.id);
+              balanceCents = purchased.balanceCents;
+              first = false;
+            }
+          }
+          tickets.push({
+            id: handover.id,
+            shopId,
+            shopName: items[0]?.product.shop.name ?? "",
+            code: handover.code,
+            qrPayload: handover.qrPayload,
+            orderIds: ticketOrderIds,
+            itemCount: items.length,
+          });
         }
-        return { orders, balanceCents, count: orders.length };
+        return { orders, tickets, balanceCents, count: orders.length };
       }),
     );
 
@@ -154,10 +214,10 @@ export async function POST(req: Request) {
     if (isInsufficientFunds(error)) {
       return NextResponse.json(
         {
-          error: error.message,
+          error: "Solde insuffisant — rechargez votre portefeuille",
           code: "INSUFFICIENT_FUNDS",
-          needed: error.needed,
-          balance: error.balance,
+          needed: error.needed ?? 0,
+          balance: error.balance ?? 0,
         },
         { status: 402 },
       );

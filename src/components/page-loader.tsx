@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { FoxEmoji } from "@/components/fox-emoji";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -9,7 +9,7 @@ type Props = {
   fullScreen?: boolean;
 };
 
-/** Loader circulaire centré pour le chargement de page. */
+/** Loader mascotte centré pour le chargement de page. */
 export function PageLoader({
   className,
   label,
@@ -28,7 +28,7 @@ export function PageLoader({
       aria-live="polite"
       aria-label={aria}
     >
-      <Loader2 className="size-8 animate-spin text-primary" />
+      <FoxEmoji motion="load" className="size-16" alt="" />
       {label ? <p className="text-xs">{label}</p> : null}
     </div>
   );

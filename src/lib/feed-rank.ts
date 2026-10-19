@@ -3,6 +3,7 @@ import { haversineKm } from "@/lib/shipping";
 
 export type RankableProduct = {
   id: string;
+  shopId?: string;
   createdAt: Date;
   images: string[];
   likesCount?: number;
@@ -16,11 +17,12 @@ export function productHasVideoMedia(images: string[]) {
   return images.some((url) => isVideoUrl(url));
 }
 
-/** Score lisible : vidéo, proximité, récence, engagement. */
+/** Score lisible : vidéo, proximité, récence, engagement, légèrement following. */
 export function feedRankScore(
   product: RankableProduct,
   near?: GeoPoint | null,
   now = Date.now(),
+  followedShopIds?: Set<string> | null,
 ) {
   const ageHours = Math.max(0, (now - product.createdAt.getTime()) / 3_600_000);
   const recency = Math.exp(-ageHours / 72);
@@ -44,16 +46,21 @@ export function feedRankScore(
     );
     proximity = Math.exp(-km / 8);
   }
-  return video * 4 + proximity * 3 + recency * 2 + engagement * 0.6;
+  const following =
+    product.shopId && followedShopIds?.has(product.shopId) ? 1 : 0;
+  return video * 4 + proximity * 3 + recency * 2 + engagement * 0.6 + following * 0.8;
 }
 
 export function sortByFeedRank<T extends RankableProduct>(
   products: T[],
   near?: GeoPoint | null,
+  followedShopIds?: Set<string> | null,
 ) {
   const now = Date.now();
   return [...products].sort((a, b) => {
-    const diff = feedRankScore(b, near, now) - feedRankScore(a, near, now);
+    const diff =
+      feedRankScore(b, near, now, followedShopIds) -
+      feedRankScore(a, near, now, followedShopIds);
     if (diff !== 0) return diff;
     return b.createdAt.getTime() - a.createdAt.getTime();
   });

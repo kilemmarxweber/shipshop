@@ -22,6 +22,7 @@ export async function GET(
       where: { id },
       include: {
         pickupReceipt: true,
+        handover: true,
         product: { select: { title: true } },
         shop: { select: { name: true, organizationId: true } },
       },
@@ -45,7 +46,8 @@ export async function GET(
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
-  const qr = qrImageUrl(order.pickupReceipt.qrPayload, 280);
+  const qrPayload = order.handover?.qrPayload ?? order.pickupReceipt.qrPayload;
+  const qr = qrImageUrl(qrPayload, 280);
   const redeemed = Boolean(order.pickupReceipt.redeemedAt);
   const mode =
     order.fulfillmentType === "PICKUP" ? "Retrait boutique" : "Livraison";
@@ -76,7 +78,7 @@ export async function GET(
     <div class="qr"><img src="${qr}" alt="QR remise" width="240" height="240"/></div>
     ${
       showCode
-        ? `<div class="code">${order.pickupReceipt.code}</div><p class="hint">Code manuel (vendeur)</p>`
+        ? `<div class="code">${order.handover?.code ?? order.pickupReceipt.code}</div><p class="hint">Code boutique (vendeur)</p>`
         : `<p class="hint">Ne partagez ce QR qu'au moment de la remise</p>`
     }
     <div class="badge ${redeemed ? "ok" : "wait"}">

@@ -4,14 +4,17 @@ import {
   findBestCourier,
   formatCourierAssignNote,
 } from "@/lib/courier-match";
-import { buildHandoverQrPayload } from "@/lib/handover";
+import {
+  createShopHandover,
+  maybeCompleteShopHandover,
+} from "@/lib/shop-handover";
 import {
   buildVendorCancelMessage,
   CANCEL_REASONS,
   type CancelReasonCode,
   isOrderCancellable,
 } from "@/lib/order-cancel";
-import { generatePickupCode, quoteShipping } from "@/lib/shipping";
+import { quoteShipping } from "@/lib/shipping";
 import { lockWallet } from "@/lib/payments/ledger";
 import {
   APP_CURRENCIES,
@@ -37,10 +40,11 @@ export type InsufficientFundsError = Error & {
 export function isInsufficientFunds(
   error: unknown,
 ): error is InsufficientFundsError {
-  return (
-    error instanceof Error &&
-    (error as InsufficientFundsError).code === "INSUFFICIENT_FUNDS"
-  );
+  if (!(error instanceof Error)) return false;
+  if ((error as InsufficientFundsError).code === "INSUFFICIENT_FUNDS") {
+    return true;
+  }
+  return /solde insuffisant/i.test(error.message);
 }
 
 export type PurchaseFulfillment = {
@@ -58,12 +62,19 @@ export type PurchaseFulfillment = {
   optionSize?: string | null;
 };
 
+export type PurchaseOpts = {
+  handoverId?: string;
+  skipShippingQuote?: boolean;
+  shippingCents?: number;
+};
+
 /** Charge wallet (product + shipping) and create order with fulfillment. */
 export async function purchaseProduct(
   tx: Tx,
   buyerId: string,
   productId: string,
   fulfillment: PurchaseFulfillment,
+  opts?: PurchaseOpts,
 ) {
   const product = await tx.product.findUnique({
     where: { id: productId },
@@ -110,6 +121,9 @@ export async function purchaseProduct(
       avenue: deliveryAvenue,
       parcelle: deliveryParcelle,
     });
+    if (opts?.skipShippingQuote) {
+      shippingCents = opts.shippingCents ?? 0;
+    } else {
     const quote = await quoteShipping({
       shopId: product.shopId,
       city: deliveryCity,
@@ -146,6 +160,7 @@ export async function purchaseProduct(
         proposal.eta,
         proposal.reason,
       );
+    }
     }
   } else {
     initialStatus = "READY_FOR_PICKUP";
@@ -308,6 +323,14 @@ export async function purchaseProduct(
     },
   });
 
+  const handover =
+    opts?.handoverId
+      ? await tx.shopHandover.findUnique({ where: { id: opts.handoverId } })
+      : await createShopHandover(tx, buyerId, product.shopId);
+  if (!handover || handover.shopId !== product.shopId) {
+    throw new Error("QR boutique introuvable");
+  }
+
   const order = await tx.order.create({
     data: {
       buyerId,
@@ -329,6 +352,7 @@ export async function purchaseProduct(
       contactPhone: fulfillment.contactPhone.trim(),
       optionColor: fulfillment.optionColor?.trim() || null,
       optionSize: fulfillment.optionSize?.trim() || null,
+      handoverId: handover.id,
       zoneId,
       courierId,
       distanceKm,
@@ -360,18 +384,13 @@ export async function purchaseProduct(
     },
   });
 
-  // QR de remise pour retrait boutique ET livraison (scan vendeur / livreur)
+  // QR boutique (partagé) + reçu article pour suivre chaque remise
   {
-    const code = generatePickupCode();
     await tx.pickupReceipt.create({
       data: {
         orderId: order.id,
-        code,
-        qrPayload: buildHandoverQrPayload({
-          orderId: order.id,
-          code,
-          shopId: product.shopId,
-        }),
+        code: `${handover.code}-${order.id.slice(-4).toUpperCase()}`,
+        qrPayload: handover.qrPayload,
       },
     });
   }
@@ -402,6 +421,7 @@ export async function purchaseProduct(
       shop: { select: { id: true, name: true, slug: true } },
       courier: true,
       pickupReceipt: true,
+      handover: true,
       deliveryEvents: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -524,6 +544,8 @@ async function refundOrderInternal(
       data: { status: "HIDDEN" },
     });
   }
+
+  await maybeCompleteShopHandover(tx, order.handoverId);
 
   return {
     order: updated,
@@ -706,5 +728,6 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
     where: { id: order.id },
     data: { escrowReleasedAt: new Date() },
   });
+  await maybeCompleteShopHandover(tx, order.handoverId);
   return { credited: creditCents, sellerBalance: newBalance, currency };
 }

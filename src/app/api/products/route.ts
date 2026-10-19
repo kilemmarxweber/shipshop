@@ -213,13 +213,25 @@ export async function GET(req: Request) {
     let products = sliced.page;
 
     if (!following) {
+      let followedShopIds: Set<string> | null = null;
+      if (session) {
+        const follows = await withDbRetry(() =>
+          prisma.shopFollow.findMany({
+            where: { userId: session.user.id },
+            select: { shopId: true },
+          }),
+        );
+        followedShopIds = new Set(follows.map((f) => f.shopId));
+      }
       products = sortByFeedRank(
         products.map((p) => ({
           ...p,
+          shopId: p.shopId,
           likesCount: p._count.likes,
           commentsCount: p._count.comments,
         })),
         near,
+        followedShopIds,
       );
     }
 

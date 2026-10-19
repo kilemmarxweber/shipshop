@@ -53,6 +53,7 @@ model User {
   movementsPaid     MoneyMovement[]  @relation("MovementPayer")
   movementsReceived MoneyMovement[]  @relation("MovementBeneficiary")
   paymentAudits     PaymentAudit[]
+  shopHandovers     ShopHandover[]
 
   @@unique([email])
   @@map("user")
@@ -192,6 +193,7 @@ model Shop {
   couriers      Courier[]
   deliveryRates ShopDeliveryRate[]
   wantedOffers  WantedOffer[]
+  handovers     ShopHandover[]
 
   @@unique([organizationId, slug])
   /// Deux boutiques ne peuvent pas porter le même nom (plateforme)
@@ -558,6 +560,7 @@ model CartItem {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   productId String
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
   createdAt DateTime @default(now())
 
   @@unique([userId, productId])
@@ -838,6 +841,25 @@ enum FulfillmentType {
   PICKUP
 }
 
+/// Un QR par boutique et par paiement (N articles). Clos au dernier remis / annulé.
+model ShopHandover {
+  id          String    @id @default(cuid())
+  buyerId     String
+  buyer       User      @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  shopId      String
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  code        String    @unique
+  qrPayload   String
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  orders Order[]
+
+  @@index([shopId, completedAt])
+  @@index([buyerId, createdAt])
+  @@map("shop_handover")
+}
+
 enum OrderStatus {
   PAID
   ASSIGNED
@@ -879,6 +901,8 @@ model Order {
   optionColor        String?
   optionSize         String?
   escrowReleasedAt   DateTime?
+  handoverId         String?
+  handover           ShopHandover?   @relation(fields: [handoverId], references: [id], onDelete: SetNull)
   zoneId             String?
   zone               DeliveryZone?   @relation(fields: [zoneId], references: [id], onDelete: SetNull)
   courierId          String?
@@ -904,6 +928,7 @@ model Order {
   @@index([buyerId, createdAt])
   @@index([shopId, status])
   @@index([courierId])
+  @@index([handoverId])
   @@map("order")
 }
 

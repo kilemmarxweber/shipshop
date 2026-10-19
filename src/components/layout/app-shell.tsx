@@ -25,6 +25,7 @@ import { NewListingFlash } from "@/components/new-listing-flash";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useInboxUnread } from "@/hooks/use-inbox-unread";
 import { useI18n } from "@/components/i18n-provider";
+import { CART_UPDATED_EVENT, cartCountFromEvent } from "@/lib/cart-events";
 import { WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
 import { useBindPageMediaSession } from "@/lib/page-media-session";
 
@@ -72,9 +73,18 @@ export function AppShell({
   const [hasShop, setHasShop] = useState(false);
 
   useEffect(() => {
-    const bump = () => setWalletTick((n) => n + 1);
-    window.addEventListener(WALLET_UPDATED_EVENT, bump);
-    return () => window.removeEventListener(WALLET_UPDATED_EVENT, bump);
+    const bumpWallet = () => setWalletTick((n) => n + 1);
+    const bumpCart = (event: Event) => {
+      const count = cartCountFromEvent(event);
+      if (typeof count === "number") setCartCount(count);
+      setWalletTick((n) => n + 1);
+    };
+    window.addEventListener(WALLET_UPDATED_EVENT, bumpWallet);
+    window.addEventListener(CART_UPDATED_EVENT, bumpCart);
+    return () => {
+      window.removeEventListener(WALLET_UPDATED_EVENT, bumpWallet);
+      window.removeEventListener(CART_UPDATED_EVENT, bumpCart);
+    };
   }, []);
 
   useEffect(() => {
@@ -158,7 +168,16 @@ export function AppShell({
                     className="flex items-center gap-1.5 justify-self-center rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-semibold text-trust transition hover:bg-muted"
                   >
                     <Wallet className="size-3.5" />
-                    {balance === null ? "…" : formatMoney(balance, walletCurrency)}
+                    <span className="flex flex-col items-start leading-tight">
+                      <span>
+                        {balance === null
+                          ? "…"
+                          : formatMoney(balance, walletCurrency)}
+                      </span>
+                      <span className="text-[9px] font-medium text-trust/90">
+                        {t("wallet.heldChip")}
+                      </span>
+                    </span>
                   </Link>
                 ) : (
                   <span />

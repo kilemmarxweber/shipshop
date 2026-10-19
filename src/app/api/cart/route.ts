@@ -5,7 +5,22 @@ import { getSession } from "@/lib/session";
 
 const addSchema = z.object({
   productId: z.string().min(1),
+  quantity: z.preprocess(
+    (value) => (value === null || value === "" ? undefined : value),
+    z.number().int().min(1).max(100_000).optional(),
+  ),
 });
+
+function cartTotals(
+  items: { quantity: number; product: { priceCents: number } }[],
+) {
+  const totalCents = items.reduce(
+    (sum, item) => sum + item.product.priceCents * Math.max(1, item.quantity),
+    0,
+  );
+  const count = items.reduce((sum, item) => sum + Math.max(1, item.quantity), 0);
+  return { totalCents, count };
+}
 
 async function loadCart(userId: string) {
   return withDbRetry(() =>
@@ -20,6 +35,7 @@ async function loadCart(userId: string) {
             currency: true,
             images: true,
             status: true,
+            quantity: true,
             location: true,
             shop: { select: { id: true, name: true, slug: true } },
           },
@@ -38,11 +54,7 @@ export async function GET() {
 
   try {
     const items = await loadCart(session.user.id);
-    const totalCents = items.reduce(
-      (sum, item) => sum + (item.product.priceCents ?? 0),
-      0,
-    );
-    return NextResponse.json({ items, totalCents, count: items.length });
+    return NextResponse.json({ items, ...cartTotals(items) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erreur panier";
     console.error("[api/cart GET]", message);
@@ -60,7 +72,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { productId } = addSchema.parse(await req.json());
+    const { productId, quantity: nextQty } = addSchema.parse(await req.json());
 
     const product = await withDbRetry(() =>
       prisma.product.findUnique({ where: { id: productId } }),
@@ -68,6 +80,27 @@ export async function POST(req: Request) {
     if (!product || product.status !== "ACTIVE") {
       return NextResponse.json(
         { error: "Produit indisponible" },
+        { status: 400 },
+      );
+    }
+    const stock = Math.max(1, product.quantity);
+
+    const existing = await withDbRetry(() =>
+      prisma.cartItem.findUnique({
+        where: {
+          userId_productId: { userId: session.user.id, productId },
+        },
+      }),
+    );
+
+    const quantity =
+      typeof nextQty === "number"
+        ? nextQty
+        : (existing?.quantity ?? 0) + 1;
+
+    if (quantity > stock) {
+      return NextResponse.json(
+        { error: `Stock max : ${stock}` },
         { status: 400 },
       );
     }
@@ -83,19 +116,16 @@ export async function POST(req: Request) {
         create: {
           userId: session.user.id,
           productId,
+          quantity,
         },
-        update: {},
+        update: { quantity },
       }),
     );
 
     const items = await loadCart(session.user.id);
-    const totalCents = items.reduce(
-      (sum, item) => sum + item.product.priceCents,
-      0,
-    );
     return NextResponse.json(
-      { items, totalCents, count: items.length },
-      { status: 201 },
+      { items, ...cartTotals(items) },
+      { status: existing ? 200 : 201 },
     );
   } catch (error) {
     const message =
@@ -133,11 +163,7 @@ export async function DELETE(req: Request) {
     }
 
     const items = await loadCart(session.user.id);
-    const totalCents = items.reduce(
-      (sum, item) => sum + item.product.priceCents,
-      0,
-    );
-    return NextResponse.json({ items, totalCents, count: items.length });
+    return NextResponse.json({ items, ...cartTotals(items) });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Suppression impossible";

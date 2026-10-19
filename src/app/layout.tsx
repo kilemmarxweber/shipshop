@@ -28,8 +28,13 @@ export const metadata: Metadata = {
   description:
     "Achetez et vendez en sécurité avec portefeuille Mobile Money prépayé.",
   icons: {
-    icon: "/shipshop-logo.png",
-    apple: "/shipshop-logo.png",
+    icon: [
+      { url: "/icon.png", type: "image/png", sizes: "256x256" },
+      { url: "/icon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
 };
 

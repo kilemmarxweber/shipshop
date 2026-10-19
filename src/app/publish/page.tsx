@@ -52,7 +52,7 @@ function PublishInner() {
   const searchParams = useSearchParams();
   const { t } = useI18n();
   const appConfig = useAppConfig();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   const mode = searchParams.get("mode");
   const [step, setStep] = useState(1);
   const [shops, setShops] = useState<Shop[]>([]);
@@ -123,6 +123,10 @@ function PublishInner() {
     setSizes((prev) =>
       prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size],
     );
+  }
+
+  if (isPending) {
+    return <PageLoader className="h-[40dvh]" />;
   }
 
   if (!session) {
@@ -449,30 +453,18 @@ function PublishInner() {
             <Label>Monnaie</Label>
             <CurrencyPicker value={currency} onChange={setCurrency} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Prix ({currency})</Label>
-              <div className="flex items-center rounded-xl border border-border bg-surface-2 px-3">
-                <Input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="border-0 bg-transparent font-heading text-lg font-bold shadow-none focus-visible:ring-0"
-                />
-                <span className="text-sm text-muted-foreground">{currency}</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Quantité</Label>
+          <div className="space-y-2">
+            <Label>Prix ({currency})</Label>
+            <div className="flex items-center rounded-xl border border-border bg-surface-2 px-3">
               <Input
                 type="number"
                 min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="h-11 bg-surface-2 font-heading text-lg font-bold"
+                step="1"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="border-0 bg-transparent font-heading text-lg font-bold shadow-none focus-visible:ring-0"
               />
+              <span className="text-sm text-muted-foreground">{currency}</span>
             </div>
           </div>
           <details className="rounded-2xl border border-border bg-surface-2 p-3">
@@ -480,6 +472,16 @@ function PublishInner() {
               Plus tard (optionnel)
             </summary>
             <div className="mt-3 space-y-4">
+          <div className="space-y-2">
+            <Label>Quantité</Label>
+            <Input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="h-11 bg-surface-2 font-heading text-lg font-bold"
+            />
+          </div>
           <div>
             <Label className="mb-2 block">Catégorie</Label>
             <div className="h-scroll h-scroll-fade gap-2">

@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { colorHex } from "@/lib/product-options";
 import { formatMoney, cn } from "@/lib/utils";
+import { CART_UPDATED_EVENT, notifyCartUpdated } from "@/lib/cart-events";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
+import { qrImageUrl } from "@/lib/handover";
 import { AuthInline } from "@/components/auth-inline";
 import { FulfillmentForm, type FulfillmentState } from "@/components/fulfillment-form";
 import { WalletInlineTopUp } from "@/components/wallet-inline-topup";
+import { FoxDispatchOverlay } from "@/components/fox-dispatch-overlay";
 import { useI18n } from "@/components/i18n-provider";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -21,8 +24,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ProductImageZoom } from "@/components/product-image-zoom";
-import { productHasVideo } from "@/components/video-sound-button";
+import {
+  inspectImageUrls,
+  ProductImageZoom,
+} from "@/components/product-image-zoom";
 import { holdFeedAudio } from "@/lib/feed-audio-focus";
 
 export type BuyProductTarget = {
@@ -59,7 +64,6 @@ const emptyFulfillment = (): FulfillmentState => ({
 
 export function BuyProductSheet({ product, open, onOpenChange }: Props) {
   const { t } = useI18n();
-  const router = useRouter();
   const { data: session } = authClient.useSession();
   const [fulfillment, setFulfillment] = useState(emptyFulfillment);
   const [color, setColor] = useState<string | null>(null);
@@ -69,6 +73,22 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
     needed: number;
     balance: number;
   } | null>(null);
+  const [paid, setPaid] = useState<{
+    orderId: string;
+    qrPayload?: string;
+    handoverId?: string;
+  } | null>(null);
+  const [cartBusy, setCartBusy] = useState(false);
+  const [foxOpen, setFoxOpen] = useState(false);
+  const paidAfterFox = useRef<{
+    orderId: string;
+    qrPayload?: string;
+    handoverId?: string;
+  } | null>(null);
+  const [inCart, setInCart] = useState(false);
+  const [cartHasItems, setCartHasItems] = useState(false);
+  const [afterCart, setAfterCart] = useState(false);
+  const [cartQty, setCartQty] = useState(1);
 
   useEffect(() => {
     holdFeedAudio(open);
@@ -81,7 +101,37 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
     setColor(product.colors[0] ?? null);
     setSize(product.sizes[0] ?? null);
     setNeedFunds(null);
+    setPaid(null);
+    setAfterCart(false);
   }, [open, product]);
+
+  useEffect(() => {
+    if (!open || !session || !product) {
+      setInCart(false);
+      setCartHasItems(false);
+      return;
+    }
+    function applyCart(items: { productId?: string }[], count?: number) {
+      const list = items ?? [];
+      setCartHasItems((count ?? list.length) > 0);
+      setInCart(list.some((item) => item.productId === product.id));
+    }
+    fetchJson<{
+      items?: { productId?: string }[];
+      count?: number;
+    }>("/api/cart")
+      .then(({ data }) => applyCart(data?.items ?? [], data?.count))
+      .catch(() => undefined);
+    const onCart = (event: Event) => {
+      const count = (event as CustomEvent<{ count?: number }>).detail?.count;
+      if (typeof count === "number") {
+        setCartHasItems(count > 0);
+        if (count === 0) setInCart(false);
+      }
+    };
+    window.addEventListener(CART_UPDATED_EVENT, onCart);
+    return () => window.removeEventListener(CART_UPDATED_EVENT, onCart);
+  }, [open, session, product]);
 
   useEffect(() => {
     if (!open || !session) return;
@@ -126,7 +176,12 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
       error?: string;
       needed?: number;
       balance?: number;
-      order?: { id: string };
+      order?: {
+        id: string;
+        handoverId?: string | null;
+        pickupReceipt?: { qrPayload?: string } | null;
+        handover?: { id: string; qrPayload: string } | null;
+      };
     }>("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -148,6 +203,7 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
     });
     setLoading(false);
     if (res.status === 402) {
+      toast.error(data?.error ?? t("product.insufficientTitle"));
       setNeedFunds({
         needed: data?.needed ?? product.priceCents + fulfillment.shippingCents,
         balance: data?.balance ?? 0,
@@ -158,10 +214,43 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
       toast.error(data?.error ?? t("buy.payFailed"));
       return;
     }
-    toast.success(t("buy.buyOk"));
     notifyWalletUpdated();
-    onOpenChange(false);
-    router.push(data?.order?.id ? `/orders/${data.order.id}` : "/profile");
+    const order = data?.order;
+    paidAfterFox.current = order?.id
+      ? {
+          orderId: order.id,
+          qrPayload:
+            order.handover?.qrPayload ?? order.pickupReceipt?.qrPayload,
+          handoverId: order.handover?.id ?? order.handoverId ?? undefined,
+        }
+      : null;
+    setFoxOpen(true);
+  }
+
+  async function addToCart() {
+    if (!product || !session) return;
+    setCartBusy(true);
+    const { res, data } = await fetchJson<{
+      error?: string;
+      count?: number;
+      items?: { productId?: string; quantity?: number }[];
+    }>("/api/cart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId: product.id }),
+    });
+    setCartBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? t("buy.payFailed"));
+      return;
+    }
+    const qty =
+      data?.items?.find((item) => item.productId === product.id)?.quantity ?? 1;
+    notifyCartUpdated(data?.count);
+    setInCart(true);
+    setCartHasItems(true);
+    setCartQty(qty);
+    setAfterCart(true);
   }
 
   return (
@@ -169,50 +258,97 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
       <SheetContent
         side="bottom"
         className={cn(
-          "gap-0 overflow-hidden border-border bg-background p-0 shadow-[0_0_80px_rgba(255,87,34,0.12)]",
-          "data-[side=bottom]:inset-x-0 data-[side=bottom]:top-0 data-[side=bottom]:bottom-0",
-          "data-[side=bottom]:mx-auto data-[side=bottom]:h-[100dvh] data-[side=bottom]:max-h-[100dvh]",
-          "data-[side=bottom]:w-full data-[side=bottom]:max-w-[480px] data-[side=bottom]:rounded-none data-[side=bottom]:border-x",
-          "md:data-[side=bottom]:inset-x-3 md:data-[side=bottom]:inset-y-4 md:data-[side=bottom]:h-[calc(100dvh-2rem)] md:data-[side=bottom]:max-h-[calc(100dvh-2rem)]",
-          "md:data-[side=bottom]:max-w-[960px] md:data-[side=bottom]:rounded-[1.5rem] md:data-[side=bottom]:border",
-          "lg:data-[side=bottom]:max-w-[1024px]",
+          "app-sheet-width gap-0 overflow-hidden border-border bg-background p-0 shadow-[0_0_80px_rgba(255,87,34,0.12)]",
+          "data-[side=bottom]:inset-x-0 data-[side=bottom]:top-auto data-[side=bottom]:bottom-0",
+          "data-[side=bottom]:h-auto data-[side=bottom]:rounded-t-3xl data-[side=bottom]:border-t",
+          needFunds
+            ? "data-[side=bottom]:max-h-[min(68dvh,26rem)]"
+            : "data-[side=bottom]:max-h-[min(82dvh,36rem)]",
         )}
       >
-        <SheetHeader className="shrink-0 border-b border-border bg-background/92 px-4 py-3 pr-12 backdrop-blur-xl">
-          <SheetTitle className="truncate font-heading text-base font-bold">
-            {product ? product.title : t("buy.cta")}
-          </SheetTitle>
-          {product ? (
-            <p className="font-heading text-sm font-bold text-trust">
-              {formatMoney(product.priceCents, product.currency)}
-            </p>
-          ) : null}
-        </SheetHeader>
         {product ? (
           <>
-            <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden md:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)] md:grid-rows-1">
-              <div className="relative h-[min(42dvh,18rem)] shrink-0 overflow-hidden bg-black md:h-full md:border-r md:border-border">
+            <div className="flex min-h-[18rem] flex-1">
+              <div className="relative w-[44%] shrink-0 self-stretch overflow-hidden rounded-tl-[1.35rem] bg-black">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={inspectImageUrls(product.images)[0] ?? ""}
+                  alt=""
+                  className="absolute inset-0 size-full object-cover"
+                />
                 <ProductImageZoom
                   images={product.images}
                   alt={product.title}
-                  className="absolute inset-0 size-full"
+                  trigger="button"
+                  className="absolute right-2 bottom-2 z-10"
                   hint={t("buy.zoomHint")}
                   openLabel={t("buy.zoomOpen")}
                   closeLabel={t("buy.zoomClose")}
                 />
-                {productHasVideo(product.images) ? (
-                  <span className="absolute top-3 left-3 rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
-                    {t("buy.realVideo")}
-                  </span>
-                ) : null}
               </div>
-
-              <div className="min-h-0 overflow-y-auto overscroll-y-contain px-4 py-4">
-                {!session ? (
+              <div className="flex min-w-0 flex-1 flex-col">
+                <SheetHeader className="shrink-0 space-y-0 px-3 py-3 pr-11 text-left">
+                  <SheetTitle className="truncate font-heading text-sm font-bold leading-tight">
+                    {product.title}
+                  </SheetTitle>
+                  <p className="font-heading text-sm font-bold text-trust">
+                    {formatMoney(product.priceCents, product.currency)}
+                  </p>
+                </SheetHeader>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-3">
+                {paid ? (
+                  <div className="space-y-3 text-center">
+                    <p className="text-sm font-semibold text-trust">
+                      {t("buy.buyOk")}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {t("buy.shopQr")} — {t("buy.qrUntilLast")}
+                    </p>
+                    {paid.qrPayload ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={qrImageUrl(paid.qrPayload, 180)}
+                        alt=""
+                        width={180}
+                        height={180}
+                        className="mx-auto rounded-2xl bg-white p-2"
+                      />
+                    ) : null}
+                    <Link
+                      href={
+                        paid.handoverId
+                          ? `/orders/ticket/${paid.handoverId}`
+                          : `/orders/${paid.orderId}`
+                      }
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-bold text-white"
+                    >
+                      {t("buy.shopQr")}
+                    </Link>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      {t("buy.keepScrolling")}
+                    </Button>
+                  </div>
+                ) : !session ? (
                   <AuthInline />
                 ) : (
                   <div className="space-y-4">
-                    {product.colors.length > 0 ? (
+                    {needFunds ? (
+                      <WalletInlineTopUp
+                        neededCents={needFunds.needed}
+                        balanceCents={needFunds.balance}
+                        currency={product.currency}
+                        onFunded={() => {
+                          setNeedFunds(null);
+                          void pay();
+                        }}
+                      />
+                    ) : null}
+                    {!needFunds && product.colors.length > 0 ? (
                       <div>
                         <p className="mb-2 text-xs font-semibold">
                           {t("product.color")}
@@ -236,7 +372,7 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
                         </div>
                       </div>
                     ) : null}
-                    {product.sizes.length > 0 ? (
+                    {!needFunds && product.sizes.length > 0 ? (
                       <div>
                         <p className="mb-2 text-xs font-semibold">
                           {t("product.size")}
@@ -261,45 +397,111 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
                       </div>
                     ) : null}
 
-                    <FulfillmentForm
-                      compact
-                      shopId={product.shop.id}
-                      productCents={product.priceCents}
-                      currency={product.currency}
-                      value={fulfillment}
-                      onChange={setFulfillment}
-                    />
-
-                    {needFunds ? (
-                      <WalletInlineTopUp
-                        neededCents={needFunds.needed}
-                        balanceCents={needFunds.balance}
+                    {!needFunds ? (
+                      <FulfillmentForm
+                        compact
+                        shopId={product.shop.id}
+                        productCents={product.priceCents}
                         currency={product.currency}
-                        onFunded={() => {
-                          setNeedFunds(null);
-                          void pay();
-                        }}
+                        value={fulfillment}
+                        onChange={setFulfillment}
                       />
                     ) : null}
                   </div>
                 )}
+                </div>
               </div>
             </div>
-            {session && !needFunds ? (
-              <SheetFooter className="shrink-0 border-t border-border bg-background/92 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
-                <Button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => void pay()}
-                  className="h-12 w-full text-base font-bold"
-                >
-                  {loading ? t("product.processing") : t("buy.payPhone")}
-                </Button>
+            {session && !needFunds && !paid ? (
+              <SheetFooter className="flex shrink-0 flex-col gap-2 border-t border-border bg-background/92 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:flex-col">
+                {afterCart ? (
+                  <>
+                    <p className="text-center text-sm font-semibold">
+                      {cartQty > 1
+                        ? `${t("buy.alreadyInCart")} · ×${cartQty}`
+                        : t("buy.addedCart")}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-11 w-full font-semibold"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      {t("buy.keepScrolling")}
+                    </Button>
+                    <Link
+                      href="/cart"
+                      className={cn(
+                        buttonVariants({ variant: "default" }),
+                        "h-12 w-full text-base font-bold",
+                      )}
+                    >
+                      {t("buy.goCart")}
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={cartBusy}
+                      onClick={() => void addToCart()}
+                      className="h-11 w-full font-semibold"
+                    >
+                      {cartBusy
+                        ? t("product.adding")
+                        : inCart
+                          ? `${t("buy.addCart")} +1`
+                          : t("buy.addCart")}
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={loading || cartHasItems}
+                      onClick={() => void pay()}
+                      className="h-12 w-full text-base font-bold"
+                    >
+                      {loading ? t("product.processing") : t("buy.payPhone")}
+                    </Button>
+                    {cartHasItems ? (
+                      <>
+                        <p className="text-center text-[11px] text-muted-foreground">
+                          {t("buy.payUseCart")}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-10"
+                            onClick={() => onOpenChange(false)}
+                          >
+                            {t("buy.keepScrolling")}
+                          </Button>
+                          <Link
+                            href="/cart"
+                            className={cn(
+                              buttonVariants({ variant: "outline" }),
+                              "h-10",
+                            )}
+                          >
+                            {t("buy.goCart")}
+                          </Link>
+                        </div>
+                      </>
+                    ) : null}
+                  </>
+                )}
               </SheetFooter>
             ) : null}
           </>
         ) : null}
       </SheetContent>
+      <FoxDispatchOverlay
+        open={foxOpen}
+        onFinished={() => {
+          setFoxOpen(false);
+          setPaid(paidAfterFox.current);
+        }}
+      />
     </Sheet>
   );
 }

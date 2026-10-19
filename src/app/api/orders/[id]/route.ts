@@ -12,6 +12,19 @@ async function canViewOrder(userId: string, orderId: string) {
         shop: true,
         courier: true,
         pickupReceipt: true,
+        handover: {
+          include: {
+            orders: {
+              include: {
+                product: { select: { title: true, images: true } },
+                pickupReceipt: {
+                  select: { scannedAt: true, redeemedAt: true },
+                },
+              },
+              orderBy: { createdAt: "asc" },
+            },
+          },
+        },
         zone: true,
         deliveryEvents: {
           orderBy: { createdAt: "asc" },

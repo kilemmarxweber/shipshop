@@ -53,13 +53,14 @@ type Conversation = {
 function ChatInner() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [openIssues, setOpenIssues] = useState<OpenIssue[]>([]);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [acting, setActing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const threadRef = useRef<HTMLDivElement>(null);
 
   usePageBack({ fallbackHref: "/messages" });
@@ -82,8 +83,14 @@ function ChatInner() {
   }
 
   useEffect(() => {
-    if (session) load();
-  }, [session, id]);
+    if (isPending) return;
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [session, isPending, id]);
 
   useEffect(() => {
     const el = threadRef.current;
@@ -140,6 +147,10 @@ function ChatInner() {
           : "Signalement clôturé",
     );
     await load();
+  }
+
+  if (isPending || loading) {
+    return <PageLoader className="h-[40dvh]" />;
   }
 
   if (!session) {

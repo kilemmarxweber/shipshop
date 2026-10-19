@@ -185,6 +185,15 @@ export type Messages = {
     zoomHint: string;
     zoomOpen: string;
     zoomClose: string;
+    addCart: string;
+    addedCart: string;
+    keepScrolling: string;
+    shopQr: string;
+    qrUntilLast: string;
+    pickItem: string;
+    goCart: string;
+    payUseCart: string;
+    alreadyInCart: string;
   };
   cart: {
     title: string;
@@ -197,6 +206,9 @@ export type Messages = {
     confirmPurchase: string;
     cancelCart: string;
     removeAria: string;
+    payOneClick: string;
+    perShopQr: string;
+    insufficient: string;
   };
   share: {
     aria: string;
@@ -278,6 +290,7 @@ export type Messages = {
     txnReceived: string;
     txnSent: string;
     txnAdjustment: string;
+    heldChip: string;
   };
   shopExtra: {
     followerOne: string;
@@ -546,6 +559,15 @@ const fr: Messages = {
     zoomHint: "Pince ou double-tape pour zoomer",
     zoomOpen: "Agrandir la photo",
     zoomClose: "Fermer le zoom",
+    addCart: "Ajouter au panier",
+    addedCart: "Dans le panier — tu paies en 1 clic",
+    keepScrolling: "Continuer à scroller",
+    shopQr: "Un QR par boutique",
+    qrUntilLast: "Le QR se termine au dernier article remis ou annulé.",
+    pickItem: "Quel article tu remets ?",
+    goCart: "Aller au panier",
+    payUseCart: "Déjà un article au panier — paie tout en 1 clic au panier",
+    alreadyInCart: "Déjà dans le panier",
   },
   cart: {
     title: "Panier",
@@ -558,6 +580,9 @@ const fr: Messages = {
     confirmPurchase: "Confirmer l'achat",
     cancelCart: "Annuler le panier",
     removeAria: "Retirer du panier",
+    payOneClick: "Payer en 1 clic",
+    perShopQr: "Chaque boutique reçoit seulement ses articles — 1 QR à scanner.",
+    insufficient: "Solde insuffisant — rechargez votre portefeuille",
   },
   share: {
     aria: "Partager",
@@ -641,6 +666,7 @@ const fr: Messages = {
     txnReceived: "Reçu",
     txnSent: "Envoyé",
     txnAdjustment: "Ajustement",
+    heldChip: "Argent bloqué",
   },
   shopExtra: {
     followerOne: "abonné",
@@ -911,6 +937,15 @@ const en: Messages = {
     zoomHint: "Pinch or double-tap to zoom",
     zoomOpen: "Enlarge photo",
     zoomClose: "Close zoom",
+    addCart: "Add to cart",
+    addedCart: "In your cart — pay in 1 tap",
+    keepScrolling: "Keep scrolling",
+    shopQr: "One QR per shop",
+    qrUntilLast: "The QR ends when the last item is handed over or cancelled.",
+    pickItem: "Which item are you handing over?",
+    goCart: "Go to cart",
+    payUseCart: "Cart already has an item — pay everything in 1 tap from the cart",
+    alreadyInCart: "Already in your cart",
   },
   cart: {
     title: "Cart",
@@ -923,6 +958,9 @@ const en: Messages = {
     confirmPurchase: "Confirm purchase",
     cancelCart: "Clear cart",
     removeAria: "Remove from cart",
+    payOneClick: "Pay in 1 tap",
+    perShopQr: "Each shop only gets its items — one QR to scan.",
+    insufficient: "Insufficient balance — top up your wallet",
   },
   share: {
     aria: "Share",
@@ -1006,6 +1044,7 @@ const en: Messages = {
     txnReceived: "Received",
     txnSent: "Sent",
     txnAdjustment: "Adjustment",
+    heldChip: "Funds held",
   },
   shopExtra: {
     followerOne: "follower",
@@ -1276,6 +1315,15 @@ const pt: Messages = {
     zoomHint: "Aperta ou toca duas vezes para ampliar",
     zoomOpen: "Ampliar a foto",
     zoomClose: "Fechar o zoom",
+    addCart: "Adicionar ao carrinho",
+    addedCart: "No carrinho — pagas num toque",
+    keepScrolling: "Continuar a ver",
+    shopQr: "Um QR por loja",
+    qrUntilLast: "O QR termina no último artigo entregue ou anulado.",
+    pickItem: "Qual artigo entregas agora?",
+    goCart: "Ir ao carrinho",
+    payUseCart: "Já há um artigo no carrinho — paga tudo num toque no carrinho",
+    alreadyInCart: "Já no carrinho",
   },
   cart: {
     title: "Carrinho",
@@ -1288,6 +1336,9 @@ const pt: Messages = {
     confirmPurchase: "Confirmar compra",
     cancelCart: "Limpar carrinho",
     removeAria: "Remover do carrinho",
+    payOneClick: "Pagar num toque",
+    perShopQr: "Cada loja recebe só os seus artigos — um QR para validar.",
+    insufficient: "Saldo insuficiente — recarregue a sua carteira",
   },
   share: {
     aria: "Partilhar",
@@ -1371,6 +1422,7 @@ const pt: Messages = {
     txnReceived: "Recebido",
     txnSent: "Enviado",
     txnAdjustment: "Ajuste",
+    heldChip: "Dinheiro bloqueado",
   },
   shopExtra: {
     followerOne: "seguidor",

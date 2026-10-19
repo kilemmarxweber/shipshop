@@ -192,6 +192,7 @@ export function FulfillmentForm({
           <KinshasaAddressForm
             enableMap
             compact={compact}
+            autoLocate
             value={addressValue}
             onChange={(addr) =>
               onChange({

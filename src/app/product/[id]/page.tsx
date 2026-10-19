@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   Archive,
   Heart,
@@ -20,6 +20,7 @@ import { fetchJson } from "@/lib/fetch-json";
 import { useAppConfig } from "@/lib/use-app-config";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { parseCurrency } from "@/lib/money";
+import { CART_UPDATED_EVENT, notifyCartUpdated } from "@/lib/cart-events";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { formatMoney, cn } from "@/lib/utils";
 import { CurrencyPicker } from "@/components/currency-picker";
@@ -35,19 +36,14 @@ import { DEFAULT_VIDEO_SOUND } from "@/components/video-sound-button";
 import { ShopBrand } from "@/components/shop-brand";
 import { AuthInline } from "@/components/auth-inline";
 import { FulfillmentForm } from "@/components/fulfillment-form";
-import { WalletInlineTopUp } from "@/components/wallet-inline-topup";
+import { InsufficientFundsSheet } from "@/components/insufficient-funds-sheet";
+import { FoxDispatchOverlay } from "@/components/fox-dispatch-overlay";
 import { MediaUploader } from "@/components/media-uploader";
 import { ShareMenu } from "@/components/share-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 
 type Product = {
   id: string;
@@ -88,6 +84,8 @@ function ProductInner() {
   usePageBack({ fallbackHref: "/" });
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState<"cart" | "buy" | null>(null);
+  const [foxOpen, setFoxOpen] = useState(false);
+  const afterPayHref = useRef("/profile");
   const [manageBusy, setManageBusy] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [showTopUp, setShowTopUp] = useState(false);
@@ -113,6 +111,8 @@ function ProductInner() {
   const [commentsOpen, setCommentsOpen] = useState(
     searchParams.get("comments") === "1",
   );
+  const [cartHasItems, setCartHasItems] = useState(false);
+  const [inCart, setInCart] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +136,30 @@ function ProductInner() {
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (!session) {
+      setCartHasItems(false);
+      setInCart(false);
+      return;
+    }
+    fetchJson<{ items?: { productId?: string }[]; count?: number }>("/api/cart")
+      .then(({ data }) => {
+        const items = data?.items ?? [];
+        setCartHasItems((data?.count ?? items.length) > 0);
+        setInCart(items.some((item) => item.productId === id));
+      })
+      .catch(() => undefined);
+    const onCart = (event: Event) => {
+      const count = (event as CustomEvent<{ count?: number }>).detail?.count;
+      if (typeof count === "number") {
+        setCartHasItems(count > 0);
+        if (count === 0) setInCart(false);
+      }
+    };
+    window.addEventListener(CART_UPDATED_EVENT, onCart);
+    return () => window.removeEventListener(CART_UPDATED_EVENT, onCart);
+  }, [session, id]);
 
   useEffect(() => {
     if (!session) return;
@@ -311,7 +335,10 @@ function ProductInner() {
       return;
     }
     setLoading("cart");
-    const { res, data: json } = await fetchJson<{ error?: string }>("/api/cart", {
+    const { res, data: json } = await fetchJson<{
+      error?: string;
+      count?: number;
+    }>("/api/cart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ productId: id }),
@@ -322,6 +349,7 @@ function ProductInner() {
       return;
     }
     toast.success("Ajouté au panier");
+    notifyCartUpdated(json?.count);
     router.push("/cart");
   }
 
@@ -350,7 +378,11 @@ function ProductInner() {
       error?: string;
       needed?: number;
       balance?: number;
-      order?: { id: string };
+      order?: {
+        id: string;
+        handoverId?: string | null;
+        handover?: { id: string } | null;
+      };
     }>("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -373,6 +405,7 @@ function ProductInner() {
     setLoading(null);
 
     if (res.status === 402) {
+      toast.error(json?.error ?? t("product.insufficientTitle"));
       setNeeded(
         json?.needed ??
           (product?.priceCents ?? 0) + fulfillment.shippingCents,
@@ -385,9 +418,14 @@ function ProductInner() {
       toast.error(json?.error ?? "Achat impossible");
       return;
     }
-    toast.success(t("buy.buyOk"));
     notifyWalletUpdated();
-    router.push(json?.order?.id ? `/orders/${json.order.id}` : "/profile");
+    const handoverId = json?.order?.handover?.id ?? json?.order?.handoverId;
+    afterPayHref.current = handoverId
+      ? `/orders/ticket/${handoverId}`
+      : json?.order?.id
+        ? `/orders/${json.order.id}`
+        : "/profile";
+    setFoxOpen(true);
   }
 
   if (!product) {
@@ -663,11 +701,16 @@ function ProductInner() {
             />
             <Button
               onClick={buyNow}
-              disabled={loading !== null}
+              disabled={loading !== null || cartHasItems}
               className="h-12 w-full cursor-pointer text-base font-bold"
             >
               {loading === "buy" ? t("product.processing") : t("buy.payPhone")}
             </Button>
+            {cartHasItems ? (
+              <p className="text-center text-[11px] text-muted-foreground">
+                {t("buy.payUseCart")}
+              </p>
+            ) : null}
             <Button
               onClick={addToCart}
               disabled={loading !== null}
@@ -675,7 +718,11 @@ function ProductInner() {
               className="h-11 w-full cursor-pointer gap-2 text-sm font-semibold"
             >
               <ShoppingCart className="size-4" />
-              {loading === "cart" ? t("product.adding") : t("product.addToCart")}
+              {loading === "cart"
+                ? t("product.adding")
+                : inCart
+                  ? `${t("product.addToCart")} +1`
+                  : t("product.addToCart")}
             </Button>
               </>
             )}
@@ -814,27 +861,24 @@ function ProductInner() {
         }
       />
 
-      <Sheet open={showTopUp} onOpenChange={setShowTopUp}>
-        <SheetContent side="bottom" className="rounded-t-3xl bg-surface">
-          <SheetHeader>
-            <SheetTitle className="font-heading">
-              {t("product.insufficientTitle")}
-            </SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4 p-4">
-            <WalletInlineTopUp
-              neededCents={needed}
-              balanceCents={balance}
-              currency={product.currency}
-              onFunded={() => {
-                setShowTopUp(false);
-                void buyNow();
-              }}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
-
+      <InsufficientFundsSheet
+        open={showTopUp}
+        onOpenChange={setShowTopUp}
+        neededCents={needed}
+        balanceCents={balance}
+        currency={product.currency}
+        onFunded={() => {
+          setShowTopUp(false);
+          void buyNow();
+        }}
+      />
+      <FoxDispatchOverlay
+        open={foxOpen}
+        onFinished={() => {
+          setFoxOpen(false);
+          router.push(afterPayHref.current);
+        }}
+      />
     </div>
   );
 }

@@ -66,14 +66,14 @@ export function PhoneField({
       </Label>
       <div
         ref={boxRef}
-        className="relative flex h-10 overflow-visible rounded-lg border border-border bg-surface-2 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
+        className="relative flex h-11 overflow-visible rounded-lg border border-border bg-surface-2 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
       >
         <button
           type="button"
           aria-label="Choisir le pays"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="flex h-10 shrink-0 items-center gap-1 px-2 text-sm"
+          className="flex h-11 shrink-0 items-center gap-1 px-2 text-base"
         >
           <span className="text-base leading-none" aria-hidden>
             {flagEmoji(country.iso)}
@@ -94,7 +94,7 @@ export function PhoneField({
             onChange(composePhone(country.dial, e.target.value))
           }
           placeholder={"8".repeat(country.max)}
-          className="h-10 min-w-0 flex-1 border-0 bg-transparent px-2.5 text-base outline-none md:text-sm"
+          className="h-11 min-w-0 flex-1 border-0 bg-transparent px-2.5 text-base outline-none"
         />
 
         {open && (
@@ -106,7 +106,7 @@ export function PhoneField({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Pays, indicatif, code…"
-                className="h-7 w-full bg-transparent text-sm outline-none"
+                className="h-11 w-full bg-transparent text-base outline-none"
               />
             </div>
             <ul className="max-h-56 overflow-y-auto py-1">

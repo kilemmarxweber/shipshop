@@ -78,6 +78,18 @@ type OrderDetail = {
     scannedAt: string | null;
     redeemedAt: string | null;
   } | null;
+  handover?: {
+    id: string;
+    code: string;
+    qrPayload: string;
+    completedAt: string | null;
+    orders: {
+      id: string;
+      status: string;
+      product: { title: string; images: string[] };
+      pickupReceipt: { scannedAt: string | null; redeemedAt: string | null } | null;
+    }[];
+  } | null;
   deliveryEvents: {
     id: string;
     status: string;
@@ -428,12 +440,13 @@ function OrderInner() {
           <div className="mb-2 flex items-center justify-center gap-2 text-primary">
             <QrCode className="size-4" />
             <p className="text-xs font-bold tracking-wide uppercase">
-              QR de remise
+              {order.handover ? "QR boutique" : "QR de remise"}
             </p>
           </div>
           <p className="mb-4 text-[11px] text-muted-foreground">
-            Présentez ce QR au vendeur ou livreur. Après le scan, confirmez la
-            réception ici pour clôturer la commande.
+            {order.handover
+              ? "Un seul QR pour cette boutique. Il se termine quand le dernier article est remis ou annulé."
+              : "Présentez ce QR au vendeur ou livreur. Après le scan, confirmez la réception ici."}
           </p>
           {awaitingConfirm && !handedOver ? (
             <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-left">
@@ -456,7 +469,10 @@ function OrderInner() {
           {!handedOver ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={qrImageUrl(order.pickupReceipt.qrPayload, 220)}
+              src={qrImageUrl(
+                order.handover?.qrPayload ?? order.pickupReceipt.qrPayload,
+                220,
+              )}
               alt="QR remise"
               width={220}
               height={220}
@@ -479,6 +495,36 @@ function OrderInner() {
           >
             Ouvrir le QR plein écran
           </Link>
+          {order.handover && order.handover.orders.length > 0 ? (
+            <ul className="mt-4 space-y-2 text-left">
+              {order.handover.orders.map((item) => {
+                const done =
+                  Boolean(item.pickupReceipt?.redeemedAt) ||
+                  ["DELIVERED", "PICKED_UP", "CANCELLED", "REFUNDED"].includes(
+                    item.status,
+                  );
+                return (
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-2 rounded-xl border border-border bg-background/50 px-3 py-2"
+                  >
+                    <div
+                      className="size-9 shrink-0 rounded-lg bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(${item.product.images[0] ?? ""})`,
+                      }}
+                    />
+                    <p className="min-w-0 flex-1 truncate text-xs font-semibold">
+                      {item.product.title}
+                    </p>
+                    <span className="text-[10px] text-muted-foreground">
+                      {done ? "OK" : "À remettre"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </div>
       )}
 

@@ -30,12 +30,13 @@ type Conversation = {
 };
 
 export default function MessagesPage() {
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   const { t, locale } = useI18n();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isPending) return;
     if (!session) {
       setLoading(false);
       return;
@@ -54,7 +55,11 @@ export default function MessagesPage() {
         setConversations(list);
       })
       .finally(() => setLoading(false));
-  }, [session]);
+  }, [session, isPending]);
+
+  if (isPending || loading) {
+    return <PageLoader className="h-[40dvh]" />;
+  }
 
   if (!session) {
     return (
@@ -81,9 +86,7 @@ export default function MessagesPage() {
         </p>
       </div>
 
-      {loading ? (
-        <PageLoader className="h-[40dvh]" />
-      ) : conversations.length === 0 ? (
+      {conversations.length === 0 ? (
         <p className="px-4 py-10 text-center text-sm text-muted-foreground">
           {t("messages.empty")}
         </p>
