@@ -388,7 +388,11 @@ export default function DiscoverPage() {
         })}
       </div>
       {feed.hasMore ? (
-        <FeedLoadSentinel onVisible={feed.loadMore} rootSelector=".app-main" />
+        <FeedLoadSentinel
+          onVisible={feed.loadMore}
+          rootSelector=".app-main"
+          resumeKey={`${products.length}:${feed.loadingMore ? 1 : 0}`}
+        />
       ) : null}
       {feed.loadingMore ? (
         <p className="py-4 text-center text-xs text-muted-foreground">…</p>

@@ -6,8 +6,8 @@
  */
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 
-const PREFIX = "chipshop.feed.v3.";
-const MAX_ITEMS = PUBLIC_PAGE_SIZE * 3;
+const PREFIX = "chipshop.feed.v4.";
+const MAX_ITEMS = PUBLIC_PAGE_SIZE * 40;
 const MAX_BYTES = 180_000;
 const TTL_MS = 5 * 60 * 1000;
 

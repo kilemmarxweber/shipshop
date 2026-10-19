@@ -383,11 +383,16 @@
   user-select: none;
 }
 .ss-reel-fg {
-  position: relative;
+  position: absolute;
+  left: 0;
+  top: 50%;
   z-index: 1;
   display: block;
   width: 100%;
-  height: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  transform: translateY(-50%);
   object-fit: contain;
   object-position: center;
   filter: brightness(1.1) contrast(1.08) saturate(1.06);
@@ -424,8 +429,12 @@
   will-change: transform;
   transform-origin: center center;
   animation-timing-function: ease-in-out;
-  animation-fill-mode: forwards;
-  animation-duration: var(--ss-ms, 5s);
+  animation-fill-mode: both;
+  animation-duration: var(--ss-ms, 5.5s);
+}
+.ss-ken-loop {
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
 }
 .ss-ken[data-motion="zoom-in"] {
   animation-name: ss-zoom-in;
@@ -444,42 +453,42 @@
 }
 @keyframes ss-zoom-in {
   from {
-    transform: scale(1);
+    transform: scale(1.06);
   }
   to {
-    transform: scale(1.14);
+    transform: scale(1.22);
   }
 }
 @keyframes ss-zoom-out {
   from {
-    transform: scale(1.14);
+    transform: scale(1.22);
   }
   to {
-    transform: scale(1);
+    transform: scale(1.06);
   }
 }
 @keyframes ss-pan-left {
   from {
-    transform: scale(1.12) translateX(5%);
+    transform: scale(1.18) translateX(7%);
   }
   to {
-    transform: scale(1.12) translateX(-5%);
+    transform: scale(1.18) translateX(-7%);
   }
 }
 @keyframes ss-pan-right {
   from {
-    transform: scale(1.12) translateX(-5%);
+    transform: scale(1.18) translateX(-7%);
   }
   to {
-    transform: scale(1.12) translateX(5%);
+    transform: scale(1.18) translateX(7%);
   }
 }
 @keyframes ss-pan-up {
   from {
-    transform: scale(1.12) translateY(4%);
+    transform: scale(1.18) translateY(6%);
   }
   to {
-    transform: scale(1.12) translateY(-4%);
+    transform: scale(1.18) translateY(-6%);
   }
 }
 

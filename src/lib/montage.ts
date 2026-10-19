@@ -69,14 +69,57 @@ export function defaultSlideMotion(index: number): SlideMotion {
   return SLIDE_MOTIONS[index % SLIDE_MOTIONS.length]!;
 }
 
+/** Choix vendeur (préfixe) vs ancien remplissage auto zoom/pan. */
+const EXPLICIT_MOTION_PREFIX = "+";
+
+export function parseSlideMotion(raw?: string | null): SlideMotion | undefined {
+  if (!raw) return undefined;
+  const value = raw.startsWith(EXPLICIT_MOTION_PREFIX) ? raw.slice(1) : raw;
+  return isSlideMotion(value) ? value : undefined;
+}
+
+export function encodeSlideMotion(motion: SlideMotion) {
+  return `${EXPLICIT_MOTION_PREFIX}${motion}`;
+}
+
+export function looksUnspecifiedMotions(motions?: string[] | null) {
+  if (!motions?.length) return true;
+  if (
+    motions.some(
+      (m) => m.startsWith(EXPLICIT_MOTION_PREFIX) && parseSlideMotion(m),
+    )
+  ) {
+    return false;
+  }
+  return motions.every((m, i) => {
+    const parsed = parseSlideMotion(m);
+    return !parsed || parsed === defaultSlideMotion(i);
+  });
+}
+
+export function playbackMotion(
+  index: number,
+  motions?: string[] | null,
+): SlideMotion | undefined {
+  const raw = motions?.[index];
+  if (!raw) return undefined;
+  if (raw.startsWith(EXPLICIT_MOTION_PREFIX)) return parseSlideMotion(raw);
+  if (looksUnspecifiedMotions(motions)) return undefined;
+  return parseSlideMotion(raw);
+}
+
 export function normalizeMotions(
   count: number,
   motions?: string[] | null,
   maxImages = 12,
-): SlideMotion[] {
+): string[] {
   const n = Math.max(0, Math.min(maxImages, count));
   return Array.from({ length: n }, (_, i) => {
     const raw = motions?.[i];
-    return raw && isSlideMotion(raw) ? raw : defaultSlideMotion(i);
+    if (!raw) return "";
+    if (raw.startsWith(EXPLICIT_MOTION_PREFIX) && parseSlideMotion(raw)) {
+      return raw;
+    }
+    return isSlideMotion(raw) ? raw : "";
   });
 }

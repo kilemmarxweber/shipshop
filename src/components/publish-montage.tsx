@@ -31,7 +31,8 @@ import {
   MONTAGE_MAX_MS,
   SOUNDTRACK_SOURCE_MAX_SECONDS,
   SLIDE_MOTIONS,
-  defaultSlideMotion,
+  encodeSlideMotion,
+  parseSlideMotion,
   slideshowWindow,
   type SlideMotion,
 } from "@/lib/montage";
@@ -505,7 +506,8 @@ function MontageSlidesPanel({
   const count = list.length;
   const index = playing ? live : picked;
   const src = list[index] ?? list[0];
-  const motion = (motions[index] as SlideMotion | undefined) ?? defaultSlideMotion(index);
+  const videoSlide = src ? isVideoUrl(src) : false;
+  const motion = videoSlide ? undefined : parseSlideMotion(motions[index]);
   const win = slideshowWindow(index, count, clipMs, maxImages);
 
   useEffect(() => {
@@ -528,11 +530,18 @@ function MontageSlidesPanel({
   if (!src) return null;
 
   function cycleMotion(i: number) {
-    const current = (motions[i] as SlideMotion | undefined) ?? defaultSlideMotion(i);
+    const url = list[i];
+    if (!url || isVideoUrl(url)) return;
     const cycle = motionList.length ? motionList : [...SLIDE_MOTIONS];
-    const next = cycle[(cycle.indexOf(current) + 1) % cycle.length]!;
-    const copy = list.map((_, idx) => motions[idx] ?? defaultSlideMotion(idx));
-    copy[i] = next;
+    const current = parseSlideMotion(motions[i]);
+    const copy = list.map((_, idx) => motions[idx] ?? "");
+    if (!current) {
+      copy[i] = encodeSlideMotion(cycle[0]!);
+    } else {
+      const at = cycle.indexOf(current);
+      copy[i] =
+        at >= cycle.length - 1 ? "" : encodeSlideMotion(cycle[at + 1]!);
+    }
     onMotions(copy);
   }
 
@@ -551,12 +560,19 @@ function MontageSlidesPanel({
       <div className="relative overflow-hidden rounded-lg bg-black aspect-[4/5] max-h-64">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          key={`${src}-${index}-${motion}-${playing ? "play" : "edit"}`}
+          key={`${src}-${index}-${motion ?? "still"}-${playing ? "play" : "edit"}`}
           src={src}
           alt=""
-          className="ss-ken absolute inset-0 size-full object-cover"
+          className={cn(
+            "absolute inset-0 size-full object-cover",
+            motion && "ss-ken ss-ken-loop",
+          )}
           data-motion={motion}
-          style={{ ["--ss-ms" as string]: `${win.slot}ms` }}
+          style={
+            motion
+              ? { ["--ss-ms" as string]: `${win.slot}ms` }
+              : undefined
+          }
         />
         <p className="absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white tabular-nums">
           {formatClipClock(win.start)} → {formatClipClock(win.end)}
@@ -590,8 +606,10 @@ function MontageSlidesPanel({
         size="sm"
         variant="outline"
         onClick={() => cycleMotion(index)}
+        disabled={videoSlide}
       >
-        {t("montage.changeMotion")}: {labels[motion]}
+        {t("montage.changeMotion")}:{" "}
+        {videoSlide ? "—" : motion ? labels[motion] : "—"}
       </Button>
     </div>
   );

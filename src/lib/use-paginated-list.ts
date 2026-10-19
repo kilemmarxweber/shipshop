@@ -146,7 +146,6 @@ export function usePaginatedList<T extends { id: string }>(options: {
   const loadMore = useCallback(() => {
     const cursor = nextCursorRef.current;
     if (!cursor || loadingMoreRef.current) return;
-    if (pagesLoadedRef.current >= 2 && !userScrolledRef.current) return;
     void load(cursor, true);
   }, [load]);
 

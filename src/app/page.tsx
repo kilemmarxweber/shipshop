@@ -385,6 +385,7 @@ export default function FeedPage() {
                 <FeedLoadSentinel
                   onVisible={loadMoreWanted}
                   rootSelector=".feed-wanted-scroll"
+                  resumeKey={`${wanted.length}:${wantedFeed.loadingMore ? 1 : 0}`}
                 />
               ) : null}
             </div>
@@ -645,7 +646,10 @@ export default function FeedPage() {
           </DwellArticle>
         ))}
         {productFeed.hasMore ? (
-          <FeedLoadSentinel onVisible={loadMoreProducts} />
+          <FeedLoadSentinel
+            onVisible={loadMoreProducts}
+            resumeKey={`${products.length}:${productFeed.loadingMore ? 1 : 0}`}
+          />
         ) : null}
         {productFeed.loadingMore ? (
           <p className="py-4 text-center text-xs text-muted-foreground md:col-span-2">

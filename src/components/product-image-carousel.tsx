@@ -16,7 +16,7 @@ import {
 import { isVideoUrl, videoPosterUrl } from "@/lib/media";
 import { tryPlayMedia } from "@/lib/try-play-media";
 import {
-  defaultSlideMotion,
+  playbackMotion,
   slideshowSlotMs,
   type SlideMotion,
 } from "@/lib/montage";
@@ -111,6 +111,8 @@ function SlideMedia({
   const videoRef = useRef<HTMLVideoElement>(null);
   const video = isVideoUrl(src);
   const poster = video ? videoPosterUrl(src) : src;
+  const [mediaRatio, setMediaRatio] = useState<number | null>(null);
+  const applied = video ? undefined : motion;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -164,23 +166,25 @@ function SlideMedia({
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [playing, shouldLoad, video, muted]);
 
-  const ken = Boolean(motion && animate && fit === "reel");
+  const ken = Boolean(!video && applied && animate);
   const kenStyle = {
-    ["--ss-ms" as string]: `${Math.max(800, motionMs ?? 3200)}ms`,
+    ["--ss-ms" as string]: `${Math.max(2800, motionMs ?? 5500)}ms`,
   };
   const fill = fit === "reel";
+  const kenClass = cn("ss-ken", ken && "ss-ken-loop");
 
   return (
     <>
       {fill ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          key={ken ? `bg-${applied}` : "bg"}
           src={poster}
           alt=""
           draggable={false}
           aria-hidden
-          className={cn("ss-reel-bg", ken && "ss-ken")}
-          data-motion={ken ? motion : undefined}
+          className={cn("ss-reel-bg", ken && kenClass)}
+          data-motion={ken ? applied : undefined}
           style={kenStyle}
         />
       ) : null}
@@ -193,21 +197,77 @@ function SlideMedia({
           preload="none"
           poster={poster}
           disablePictureInPicture
+          onLoadedMetadata={(e) => {
+            const el = e.currentTarget;
+            if (el.videoWidth > 0 && el.videoHeight > 0) {
+              setMediaRatio(el.videoWidth / el.videoHeight);
+            }
+          }}
           onEnded={() => {
             if (!loop) onPlaybackEnded?.();
           }}
           className={mediaClass(fit)}
+          style={
+            mediaRatio
+              ? { aspectRatio: `${mediaRatio}`, height: "auto" }
+              : undefined
+          }
         />
+      ) : fill ? (
+        <div className="absolute inset-0 z-[1] overflow-hidden">
+          <div
+            key={ken ? `fg-${applied}` : "fg"}
+            className={cn("absolute inset-0", ken && kenClass)}
+            data-motion={ken ? applied : undefined}
+            style={kenStyle}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={src}
+              alt=""
+              draggable={false}
+              loading={playing ? "eager" : "lazy"}
+              decoding="async"
+              fetchPriority={playing ? "high" : "low"}
+              className={mediaClass(fit)}
+              onLoad={(e) => {
+                const el = e.currentTarget;
+                if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                  setMediaRatio(el.naturalWidth / el.naturalHeight);
+                }
+              }}
+              style={
+                mediaRatio
+                  ? { aspectRatio: `${mediaRatio}`, height: "auto" }
+                  : undefined
+              }
+            />
+          </div>
+        </div>
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          key={ken ? `cover-${applied}` : "cover"}
           src={src}
           alt=""
           draggable={false}
           loading={playing ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={playing ? "high" : "low"}
-          className={mediaClass(fit)}
+          className={cn(mediaClass(fit), ken && kenClass)}
+          data-motion={ken ? applied : undefined}
+          style={{
+            ...kenStyle,
+            ...(mediaRatio
+              ? { aspectRatio: `${mediaRatio}`, height: "auto" }
+              : {}),
+          }}
+          onLoad={(e) => {
+            const el = e.currentTarget;
+            if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+              setMediaRatio(el.naturalWidth / el.naturalHeight);
+            }
+          }}
         />
       )}
     </>
@@ -541,7 +601,7 @@ export function ProductImageCarousel({
           <div
             key={`${src}-${i}`}
             className={cn(
-              "absolute inset-0 flex items-center justify-center overflow-hidden transition-opacity duration-500",
+              "absolute inset-0 overflow-hidden transition-opacity duration-500",
               active ? "opacity-100" : "opacity-0 pointer-events-none",
             )}
             aria-hidden={!active}
@@ -558,12 +618,9 @@ export function ProductImageCarousel({
                 loop={loop}
                 onAutoplayBlocked={onAutoplayBlocked}
                 onPlaybackEnded={active ? onPlaybackEnded : undefined}
-                motion={
-                  (motions?.[i] as SlideMotion | undefined) ??
-                  defaultSlideMotion(i)
-                }
-                motionMs={slotMs}
-                animate={active && (Boolean(clipMs) || list.length > 1)}
+                motion={isVid ? undefined : playbackMotion(i, motions)}
+                motionMs={Math.max(slotMs, 4200)}
+                animate={Boolean(active && playing && !isVid)}
               />
             ) : null}
             {overlay && <div className="ss-reel-vignette" />}

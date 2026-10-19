@@ -19,7 +19,7 @@ import {
   SOUNDTRACK_START_MAX_MS,
 } from "@/lib/montage";
 import { sortByFeedRank } from "@/lib/feed-rank";
-import { loadBuyerTaste, topTasteKeys } from "@/lib/buyer-taste";
+import { loadBuyerTaste } from "@/lib/buyer-taste";
 import {
   SOLD_ORDER_STATUS_FILTER,
   soldOrdersCount,
@@ -39,7 +39,7 @@ const createSchema = z.object({
   location: z.string().max(200).optional(),
   soundtrackId: z.string().min(1).optional().nullable(),
   soundtrackStartMs: z.number().int().min(0).max(SOUNDTRACK_START_MAX_MS).optional(),
-  imageMotions: z.array(z.string().min(1).max(24)).max(12).optional(),
+  imageMotions: z.array(z.string().max(24)).max(12).optional(),
   status: z.enum(["DRAFT", "ACTIVE"]).default("DRAFT"),
 });
 
@@ -250,70 +250,6 @@ export async function GET(req: Request) {
         ? await loadBuyerTaste(session.user.id)
         : null;
 
-    if (
-      session &&
-      taste &&
-      !following &&
-      !mine &&
-      !cursor &&
-      !q &&
-      !shopId &&
-      !category
-    ) {
-      const cats = topTasteKeys(taste.categories, 5);
-      const tasteShops = topTasteKeys(taste.shopIds, 6);
-      const tokens = topTasteKeys(taste.tokens, 3);
-      const or: object[] = [];
-      if (cats.length) or.push({ category: { in: cats } });
-      if (tasteShops.length) or.push({ shopId: { in: tasteShops } });
-      for (const token of tokens) {
-        or.push({ title: { contains: token, mode: "insensitive" } });
-      }
-      if (or.length) {
-        const extra = await withDbRetry(() =>
-          prisma.product.findMany({
-            where: {
-              status: "ACTIVE",
-              wantedRequestId: null,
-              OR: or,
-              id: { notIn: products.map((p) => p.id) },
-            },
-            include: {
-              shop: {
-                select: {
-                  id: true,
-                  name: true,
-                  slug: true,
-                  logoUrl: true,
-                  ownerUserId: true,
-                  lat: true,
-                  lng: true,
-                },
-              },
-              _count: {
-                select: {
-                  likes: true,
-                  comments: true,
-                  orders: soldOrdersCount,
-                },
-              },
-              soundtrack: {
-                select: {
-                  id: true,
-                  title: true,
-                  audioUrl: true,
-                  durationMs: true,
-                },
-              },
-            },
-            orderBy: { createdAt: "desc" },
-            take: 16,
-          }),
-        );
-        products = [...extra, ...products];
-      }
-    }
-
     if (!following) {
       let followedShopIds: Set<string> | null = null;
       if (session) {
@@ -338,7 +274,6 @@ export async function GET(req: Request) {
         followedShopIds,
         taste,
       );
-      if (!cursor) products = products.slice(0, limit);
     }
 
     if (following) {

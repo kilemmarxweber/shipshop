@@ -23,7 +23,7 @@ const updateSchema = z.object({
   location: z.string().max(200).optional().nullable(),
   soundtrackId: z.string().min(1).optional().nullable(),
   soundtrackStartMs: z.number().int().min(0).max(SOUNDTRACK_START_MAX_MS).optional(),
-  imageMotions: z.array(z.string().min(1).max(24)).max(12).optional(),
+  imageMotions: z.array(z.string().max(24)).max(12).optional(),
   status: z.enum(["DRAFT", "ACTIVE", "SOLD", "HIDDEN"]).optional(),
 });
 
