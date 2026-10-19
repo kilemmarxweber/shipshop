@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { KeyRound, Plus, Users } from "lucide-react";
+import { KeyRound, Plus, Search, Users } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { uploadCompressedMedia } from "@/lib/compress-media";
@@ -40,6 +40,8 @@ type Shop = {
   currency?: string;
   fxCdfPerUsd?: number;
   fxKwPerUsd?: number;
+  isActive?: boolean;
+  owner?: { id: string; name: string; email: string } | null;
   _count?: { products: number };
 };
 
@@ -78,7 +80,18 @@ export default function ShopsPage() {
   const [isOrgOwner, setIsOrgOwner] = useState(false);
   const [roleSavingId, setRoleSavingId] = useState<string | null>(null);
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
+  const [shopQuery, setShopQuery] = useState("");
   const activatedOrg = useRef<string | null>(null);
+
+  const visibleShops = useMemo(() => {
+    const needle = shopQuery.trim().toLowerCase();
+    if (!needle) return shops;
+    return shops.filter((shop) =>
+      `${shop.name} ${shop.slug} ${shop.owner?.name ?? ""} ${shop.owner?.email ?? ""}`
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [shops, shopQuery]);
 
   async function loadSeller() {
     const res = await fetch("/api/seller/onboard");
@@ -95,16 +108,24 @@ export default function ShopsPage() {
       }
     }
     const kycRes = await fetch("/api/kyc");
+    let platformOwner = false;
     if (kycRes.ok) {
       const kycJson = await kycRes.json();
-      setIsOwner(Boolean(kycJson.isOwner));
+      platformOwner = Boolean(kycJson.isOwner);
+      setIsOwner(platformOwner);
     }
 
-    if (json.shops?.length) {
+    const mine = await fetch("/api/shops?mine=1");
+    const mineJson = await mine.json();
+    if (mineJson.isPlatformOwner) {
+      platformOwner = true;
+      setIsOwner(true);
+    }
+    if (platformOwner || mineJson.isPlatformOwner) {
+      setShops(mineJson.shops ?? []);
+    } else if (json.shops?.length) {
       setShops(json.shops);
     } else {
-      const mine = await fetch("/api/shops?mine=1");
-      const mineJson = await mine.json();
       setShops(mineJson.shops ?? []);
     }
 
@@ -255,7 +276,9 @@ export default function ShopsPage() {
     <div className="px-4 pb-6 pt-0 md:px-8">
       <div className="mb-6 space-y-3">
         <div>
-          <h1 className="font-heading text-xl font-bold">Mes boutiques</h1>
+          <h1 className="font-heading text-xl font-bold">
+            {isOwner ? "Toutes les boutiques" : "Mes boutiques"}
+          </h1>
           <p className="text-sm text-muted-foreground">
             1 organisation → plusieurs shops
           </p>
@@ -443,8 +466,20 @@ export default function ShopsPage() {
         </Dialog>
       </div>
 
+      {shops.length > 1 ? (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-border bg-surface px-3">
+          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <Input
+            value={shopQuery}
+            onChange={(e) => setShopQuery(e.target.value)}
+            placeholder="Rechercher une boutique"
+            className="h-10 border-0 bg-transparent shadow-none focus-visible:ring-0"
+          />
+        </div>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2">
-        {shops.map((shop) => (
+        {visibleShops.map((shop) => (
           <div
             key={shop.id}
             className="rounded-2xl border border-border bg-surface p-4"
@@ -463,6 +498,8 @@ export default function ShopsPage() {
                 <p className="truncate text-xs text-muted-foreground">
                   /{shop.slug} · {parseCurrency(shop.currency)} ·{" "}
                   {shop._count?.products ?? 0} produits
+                  {shop.owner?.name ? ` · ${shop.owner.name}` : ""}
+                  {shop.isActive === false ? " · off" : ""}
                 </p>
                 <p className="mt-1 text-[11px] text-trust">
                   1 $US ={" "}
@@ -499,17 +536,33 @@ export default function ShopsPage() {
                 </Button>
               </div>
             </div>
-            <Link
-              href={`/publish?shopId=${shop.id}`}
-              className="mt-3 inline-flex h-7 w-full items-center justify-center rounded-lg bg-secondary text-[0.8rem] font-medium"
-            >
-              Publier
-            </Link>
+            <div className="mt-3 grid grid-cols-3 gap-1.5">
+              <Link
+                href={`/shop/${shop.slug}`}
+                className="inline-flex h-7 items-center justify-center rounded-lg border border-border text-[0.8rem] font-medium"
+              >
+                Entrer
+              </Link>
+              <Link
+                href={`/shops/products?shopId=${shop.id}`}
+                className="inline-flex h-7 items-center justify-center rounded-lg border border-border text-[0.8rem] font-medium"
+              >
+                Produits
+              </Link>
+              <Link
+                href={`/publish?shopId=${shop.id}`}
+                className="inline-flex h-7 items-center justify-center rounded-lg bg-secondary text-[0.8rem] font-medium"
+              >
+                Publier
+              </Link>
+            </div>
           </div>
         ))}
-        {shops.length === 0 && (
+        {visibleShops.length === 0 && (
           <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-            Aucune boutique — créez-en une pour publier.
+            {shops.length === 0
+              ? "Aucune boutique — créez-en une pour publier."
+              : "Aucune boutique ne correspond."}
           </p>
         )}
       </div>

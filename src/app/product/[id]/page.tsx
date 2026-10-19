@@ -67,6 +67,7 @@ type Product = {
   commentsCount: number;
   likedByMe: boolean;
   canDelete?: boolean;
+  canManage?: boolean;
   soundtrackStartMs?: number;
   soundtrack?: { id: string; audioUrl: string } | null;
   shop: {
@@ -225,9 +226,7 @@ function ProductInner() {
     }
   }
 
-  const isOwner =
-    Boolean(session?.user?.id) &&
-    product?.shop.ownerUserId === session?.user?.id;
+  const isOwner = Boolean(product?.canManage);
 
   async function setStatus(status: "ACTIVE" | "HIDDEN") {
     if (!product) return;

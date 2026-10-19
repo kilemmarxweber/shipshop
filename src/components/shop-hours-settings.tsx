@@ -15,6 +15,7 @@ import {
   type WeekdayJs,
 } from "@/lib/shop-hours";
 import { cn } from "@/lib/utils";
+import { ShopPicker } from "@/components/shop-picker";
 
 type ShopRow = ShopHoursFields & {
   id: string;
@@ -104,17 +105,7 @@ export function ShopHoursSettings() {
       {shops.length > 1 ? (
         <label className="block space-y-1">
           <span className="text-sm font-medium">{t("hours.shop")}</span>
-          <select
-            value={shopId}
-            onChange={(e) => setShopId(e.target.value)}
-            className="h-11 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-          >
-            {shops.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          <ShopPicker shops={shops} value={shopId} onChange={setShopId} />
         </label>
       ) : null}
 

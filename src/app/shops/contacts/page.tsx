@@ -23,6 +23,7 @@ import {
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { PageLoader } from "@/components/page-loader";
+import { ShopPicker } from "@/components/shop-picker";
 import { Button } from "@/components/ui/button";
 
 type Contact = {
@@ -200,25 +201,17 @@ export default function ShopContactsPage() {
         </div>
       </div>
 
-      {shops.length > 1 && (
-        <select
-          value={shopId}
-          onChange={(e) => {
-            const v = e.target.value;
-            setShopId(v);
-            setLoading(true);
-            load(v).finally(() => setLoading(false));
-          }}
-          className="mb-4 h-9 w-full max-w-xs rounded-lg border border-border bg-surface-2 px-2 text-xs"
-        >
-          <option value="">Toutes mes boutiques</option>
-          {shops.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      )}
+      <ShopPicker
+        className="mb-4 max-w-xs"
+        shops={shops}
+        value={shopId}
+        allLabel="Toutes mes boutiques"
+        onChange={(id) => {
+          setShopId(id);
+          setLoading(true);
+          load(id).finally(() => setLoading(false));
+        }}
+      />
 
       {self && (
         <div className="mb-4 flex items-center gap-3 rounded-2xl border border-border bg-surface p-3">

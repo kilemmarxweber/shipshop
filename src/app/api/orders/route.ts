@@ -5,6 +5,7 @@ import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { SHOP_HOURS_SELECT } from "@/lib/shop-hours";
+import { assertCanManageShop } from "@/lib/shop-access";
 
 const createSchema = z.object({
   productId: z.string().min(1),
@@ -66,15 +67,8 @@ export async function GET(req: Request) {
       if (!shop) {
         return NextResponse.json({ error: "Boutique introuvable" }, { status: 404 });
       }
-      const member = await withDbRetry(() =>
-        prisma.member.findFirst({
-          where: {
-            organizationId: shop.organizationId,
-            userId: session.user.id,
-          },
-        }),
-      );
-      if (!member) {
+      const access = await assertCanManageShop(session.user.id, shop.id);
+      if (!access.ok) {
         return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
       }
 

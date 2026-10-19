@@ -15,6 +15,7 @@ import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n-provider";
 import { orderStatusLabel } from "@/lib/order-status-label";
+import { ShopPicker } from "@/components/shop-picker";
 
 type Period = "7d" | "30d" | "90d" | "all";
 
@@ -260,22 +261,13 @@ export default function ReportsPage() {
             <option value="90d">90 jours</option>
             <option value="all">Tout</option>
           </select>
-          {(report?.shops.length ?? 0) > 1 && (
-            <select
-              value={shopId}
-              onChange={(e) => setShopId(e.target.value)}
-              className="h-9 max-w-[160px] rounded-lg border border-border bg-surface-2 px-2 text-xs"
-            >
-              <option value="">
-                {isOwner ? "Toutes boutiques" : "Toutes mes boutiques"}
-              </option>
-              {report?.shops.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          )}
+          <ShopPicker
+            className="min-w-[12rem] max-w-xs shrink-0"
+            shops={report?.shops ?? []}
+            value={shopId}
+            allLabel={isOwner ? "Toutes boutiques" : "Toutes mes boutiques"}
+            onChange={setShopId}
+          />
         </div>
       </div>
 

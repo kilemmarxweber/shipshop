@@ -24,13 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ShopPicker } from "@/components/shop-picker";
 
 type Offer = {
   id: string;
@@ -383,18 +377,12 @@ export default function WantedDetailPage() {
                   </Link>
                 </p>
               ) : (
-                <Select value={shopId} onValueChange={(v) => v && setShopId(v)}>
-                  <SelectTrigger className="bg-surface-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {shops.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ShopPicker
+                  shops={shops}
+                  value={shopId}
+                  hideWhenSingle={false}
+                  onChange={setShopId}
+                />
               )}
             </div>
           )}

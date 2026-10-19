@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { PageLoader } from "@/components/page-loader";
+import { ShopPicker } from "@/components/shop-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -286,19 +287,7 @@ export default function ShopDeliveryPage() {
         </p>
       </div>
 
-      {shops.length > 1 && (
-        <select
-          className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
-          value={shopId}
-          onChange={(e) => setShopId(e.target.value)}
-        >
-          {shops.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      )}
+      <ShopPicker shops={shops} value={shopId} onChange={setShopId} />
 
       <div className="flex gap-2">
         <button

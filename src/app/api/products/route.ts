@@ -9,6 +9,7 @@ import {
   timeIdCursorWhere,
 } from "@/lib/list-cursor";
 import { getAppConfig } from "@/lib/content-source";
+import { assertCanManageShop, managedShopsWhere } from "@/lib/shop-access";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
@@ -70,23 +71,29 @@ export async function GET(req: Request) {
       if (!session) {
         return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
       }
-      // Rattache les shops legacy sans owner au vendeur connecté s'il est membre
-      await withDbRetry(() =>
-        prisma.shop.updateMany({
-          where: {
-            ownerUserId: null,
-            organization: {
-              members: { some: { userId: session.user.id } },
-            },
-          },
-          data: { ownerUserId: session.user.id },
-        }),
+      const { where: shopWhere, isPlatform } = await managedShopsWhere(
+        session.user.id,
       );
-
+      if (!isPlatform) {
+        await withDbRetry(() =>
+          prisma.shop.updateMany({
+            where: {
+              ownerUserId: null,
+              organization: {
+                members: { some: { userId: session.user.id } },
+              },
+            },
+            data: { ownerUserId: session.user.id },
+          }),
+        );
+      }
       const products = await withDbRetry(() =>
         prisma.product.findMany({
           where: {
-            shop: { ownerUserId: session.user.id },
+            shop: {
+              ...shopWhere,
+              ...(shopId ? { id: shopId } : {}),
+            },
             ...(status
               ? { status: status as "ACTIVE" | "DRAFT" | "SOLD" | "HIDDEN" }
               : {}),
@@ -358,14 +365,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Boutique introuvable" }, { status: 404 });
     }
 
-    const isOwner = shop.ownerUserId === session.user.id;
-    const member = await prisma.member.findFirst({
-      where: {
-        organizationId: shop.organizationId,
-        userId: session.user.id,
-      },
-    });
-    if (!isOwner && !member) {
+    const access = await assertCanManageShop(session.user.id, shop.id);
+    if (!access.ok) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 
@@ -479,11 +480,12 @@ export async function PATCH(req: Request) {
     const nextStatus =
       body.action === "hide_products" ? "HIDDEN" : "ACTIVE";
 
+    const { where: shopWhere } = await managedShopsWhere(session.user.id);
     const result = await withDbRetry(() =>
       prisma.product.updateMany({
         where: {
           id: { in: body.productIds },
-          shop: { ownerUserId: session.user.id },
+          shop: shopWhere,
           ...(body.action === "hide_products"
             ? { status: "ACTIVE" as const }
             : {}),

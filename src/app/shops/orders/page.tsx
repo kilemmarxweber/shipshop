@@ -19,6 +19,7 @@ import { useI18n } from "@/components/i18n-provider";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { ShopHoursNotice } from "@/components/shop-hours-notice";
 import type { ShopHoursFields } from "@/lib/shop-hours";
+import { ShopPicker } from "@/components/shop-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -406,19 +407,13 @@ export default function VendorOrdersPage() {
         ) : null}
       </div>
 
-      {shops.length > 0 && (
-        <select
-          value={shopId}
-          onChange={(e) => setShopId(e.target.value)}
-          className="mb-4 h-10 w-full max-w-sm rounded-lg border border-border bg-surface-2 px-3 text-sm"
-        >
-          {shops.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      )}
+      <ShopPicker
+        className="mb-4 max-w-sm"
+        shops={shops}
+        value={shopId}
+        hideWhenSingle={false}
+        onChange={setShopId}
+      />
 
       {cancelOrderId && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">

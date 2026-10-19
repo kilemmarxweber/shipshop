@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { managedShopsWhere } from "@/lib/shop-access";
 import { getSession } from "@/lib/session";
 import { assertUniqueShopName } from "@/lib/shop-name";
 import { ensureSellerMembership } from "@/lib/system-org";
@@ -26,12 +27,18 @@ export async function GET(req: Request) {
   const mine = searchParams.get("mine") === "1";
 
   if (mine && session) {
+    const { where, isPlatform } = await managedShopsWhere(session.user.id);
     const shops = await prisma.shop.findMany({
-      where: { ownerUserId: session.user.id, isActive: true },
+      where,
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { products: true } } },
+      include: {
+        _count: { select: { products: true } },
+        owner: {
+          select: { id: true, name: true, email: true },
+        },
+      },
     });
-    return NextResponse.json({ shops });
+    return NextResponse.json({ shops, isPlatformOwner: isPlatform });
   }
 
   if (organizationId) {

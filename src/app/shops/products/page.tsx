@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Archive, CheckCircle2, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -21,6 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageLoader } from "@/components/page-loader";
+import { ShopPicker } from "@/components/shop-picker";
 
 type Product = {
   id: string;
@@ -35,7 +37,14 @@ type Product = {
   location: string | null;
   ordersCount?: number;
   canDelete?: boolean;
-  shop: { id: string; name: string };
+  shop: { id: string; name: string; slug?: string };
+};
+
+type ShopOption = {
+  id: string;
+  name: string;
+  slug: string;
+  owner?: { name: string } | null;
 };
 
 type Tab = "all" | "ACTIVE" | "DRAFT" | "HIDDEN" | "SOLD";
@@ -47,27 +56,43 @@ const STATUS_LABEL: Record<string, string> = {
   SOLD: "Épuisé",
 };
 
-export default function SellerProductsPage() {
+function SellerProductsInner() {
   const { data: session } = authClient.useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
+  const [shops, setShops] = useState<ShopOption[]>([]);
+  const [shopId, setShopId] = useState(searchParams.get("shopId") ?? "");
+  const [platform, setPlatform] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
   const [editing, setEditing] = useState<Product | null>(null);
   const [busy, setBusy] = useState(false);
   const [republishOpen, setRepublishOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  async function load() {
+  async function load(selected = shopId) {
+    const params = new URLSearchParams({ mine: "1" });
+    if (selected) params.set("shopId", selected);
     const { data } = await fetchJson<{ products?: Product[] }>(
-      "/api/products?mine=1",
+      `/api/products?${params}`,
       { cache: "no-store" },
     );
     setProducts(data?.products ?? []);
   }
 
   useEffect(() => {
-    if (session) load();
+    if (!session) return;
+    void fetchJson<{ shops?: ShopOption[]; isPlatformOwner?: boolean }>(
+      "/api/shops?mine=1",
+    ).then(({ data }) => {
+      setShops(data?.shops ?? []);
+      setPlatform(Boolean(data?.isPlatformOwner));
+    });
   }, [session]);
+
+  useEffect(() => {
+    if (session) void load(shopId);
+  }, [session, shopId]);
 
   const filtered = useMemo(() => {
     if (tab === "all") return products;
@@ -228,7 +253,9 @@ export default function SellerProductsPage() {
     <div className="px-4 pb-6 pt-0 md:px-8">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h1 className="font-heading text-xl font-bold">Mes produits</h1>
+          <h1 className="font-heading text-xl font-bold">
+            {platform ? "Produits boutiques" : "Mes produits"}
+          </h1>
           <p className="text-xs text-muted-foreground">
             Modifier · publier · archiver · supprimer
           </p>
@@ -245,13 +272,27 @@ export default function SellerProductsPage() {
             Republier
           </Button>
           <Link
-            href="/publish"
+            href={shopId ? `/publish?shopId=${shopId}` : "/publish"}
             className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white"
           >
             + Créer
           </Link>
         </div>
       </div>
+
+      <ShopPicker
+        className="mb-4"
+        shops={shops}
+        value={shopId}
+        allLabel="Toutes les boutiques"
+        onChange={(next) => {
+          setShopId(next);
+          const url = next
+            ? `/shops/products?shopId=${encodeURIComponent(next)}`
+            : "/shops/products";
+          router.replace(url);
+        }}
+      />
 
       <div className="mb-4 flex flex-wrap gap-1.5">
         {(
@@ -583,5 +624,13 @@ export default function SellerProductsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function SellerProductsPage() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <SellerProductsInner />
+    </Suspense>
   );
 }

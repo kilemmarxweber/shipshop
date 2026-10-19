@@ -709,7 +709,6 @@ export default function ProfilePage() {
         </div>
       ) : (
         <>
-        {isOwner ? <ScrollAdSettings /> : null}
         <div className="mt-6 flex flex-col gap-2">
           {(
             [
@@ -728,7 +727,7 @@ export default function ProfilePage() {
                     ["/shops/admin/moderation", "Modération NSFW"],
                   ] as const)
                 : []),
-              ["/shops", "Mes boutiques"],
+              ["/shops", isOwner ? "Toutes les boutiques" : "Mes boutiques"],
               ["/publish", "Publier un produit"],
               ["/onboarding", "Créer une boutique"],
             ] as const
@@ -742,6 +741,7 @@ export default function ProfilePage() {
             </Link>
           ))}
         </div>
+        {isOwner ? <ScrollAdSettings /> : null}
         </>
       )}
 

@@ -173,16 +173,11 @@ export function ScrollAdSettings() {
           disabled={busy}
           onClick={() => void toggleEnabled()}
           className={cn(
-            "relative h-7 w-12 shrink-0 rounded-full transition-colors",
-            enabled ? "bg-primary" : "bg-muted",
+            "flex h-7 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors",
+            enabled ? "justify-end bg-primary" : "justify-start bg-muted",
           )}
         >
-          <span
-            className={cn(
-              "absolute top-0.5 size-6 rounded-full bg-white shadow transition-transform",
-              enabled ? "translate-x-5" : "translate-x-0.5",
-            )}
-          />
+          <span className="size-6 rounded-full bg-white shadow" />
           <span className="sr-only">{enabled ? "Désactiver" : "Activer"}</span>
         </button>
       </div>
@@ -269,16 +264,11 @@ export function ScrollAdSettings() {
                     )
                   }
                   className={cn(
-                    "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-                    clip.enabled ? "bg-primary" : "bg-muted",
+                    "flex h-5 w-8 shrink-0 items-center rounded-full p-0.5 transition-colors",
+                    clip.enabled ? "justify-end bg-primary" : "justify-start bg-muted",
                   )}
                 >
-                  <span
-                    className={cn(
-                      "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
-                      clip.enabled ? "translate-x-4" : "translate-x-0.5",
-                    )}
-                  />
+                  <span className="size-4 rounded-full bg-white shadow" />
                   <span className="sr-only">
                     {clip.enabled ? "Désactiver ce flash" : "Activer ce flash"}
                   </span>

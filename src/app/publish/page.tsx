@@ -13,13 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ShopPicker } from "@/components/shop-picker";
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
 import { MediaUploader } from "@/components/media-uploader";
@@ -45,6 +39,7 @@ type Shop = {
   name: string;
   logoUrl?: string | null;
   currency?: string;
+  owner?: { name: string } | null;
 };
 
 function PublishInner() {
@@ -361,26 +356,16 @@ function PublishInner() {
           <h1 className="font-heading text-xl font-bold">Filme l’article</h1>
           <div className="space-y-2">
             <Label>{t("publish.shop")}</Label>
-            <Select
+            <ShopPicker
+              shops={shops}
               value={shopId}
-              onValueChange={(v) => {
-                if (!v) return;
-                setShopId(v);
-                const shop = shops.find((s) => s.id === v);
+              hideWhenSingle={false}
+              onChange={(id) => {
+                setShopId(id);
+                const shop = shops.find((s) => s.id === id);
                 if (shop?.currency) setCurrency(parseCurrency(shop.currency));
               }}
-            >
-              <SelectTrigger className="bg-surface-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {shops.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <div className="space-y-2">

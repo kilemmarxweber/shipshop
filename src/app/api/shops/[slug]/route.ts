@@ -9,6 +9,7 @@ import {
   normalizeShopHours,
   shopHoursBodySchema,
 } from "@/lib/shop-hours";
+import { assertCanManageShop } from "@/lib/shop-access";
 
 const updateSchema = z.object({
   logoUrl: z.string().min(1).max(500).optional().nullable(),
@@ -28,9 +29,10 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+    const session = await getSession();
     const shop = await withDbRetry(() =>
       prisma.shop.findFirst({
-        where: { slug, isActive: true },
+        where: { slug },
         select: {
           id: true,
           name: true,
@@ -40,6 +42,7 @@ export async function GET(
           lat: true,
           lng: true,
           createdAt: true,
+          isActive: true,
           ...SHOP_HOURS_SELECT,
           owner: {
             select: {
@@ -88,8 +91,13 @@ export async function GET(
       }
     }
 
-    const { products: _p, _count, ...rest } = shop;
-    const session = await getSession();
+    const { products: _p, _count, isActive, ...rest } = shop;
+    const canManage = session
+      ? (await assertCanManageShop(session.user.id, shop.id)).ok
+      : false;
+    if (!isActive && !canManage) {
+      return NextResponse.json({ error: "Boutique introuvable" }, { status: 404 });
+    }
     const followedByMe = session
       ? Boolean(
           await withDbRetry(() =>
@@ -118,6 +126,8 @@ export async function GET(
         addressHint: addressHint ?? "Kinshasa, RDC",
         contactPhone: shop.owner?.phone ?? null,
         contactName: shop.owner?.name ?? null,
+        isActive,
+        canManage,
       },
     });
   } catch (error) {
@@ -146,13 +156,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Boutique introuvable" }, { status: 404 });
     }
 
-    const isOwner = shop.ownerUserId === session.user.id;
-    const member = await withDbRetry(() =>
-      prisma.member.findFirst({
-        where: { organizationId: shop.organizationId, userId: session.user.id },
-      }),
-    );
-    if (!isOwner && !member) {
+    const access = await assertCanManageShop(session.user.id, shop.id);
+    if (!access.ok) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 

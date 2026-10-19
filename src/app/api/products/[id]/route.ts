@@ -1,8 +1,8 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertChipShopOwner } from "@/lib/kyc";
 import { getAppConfig } from "@/lib/content-source";
+import { assertCanManageShop } from "@/lib/shop-access";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { APP_CURRENCIES } from "@/lib/money";
@@ -28,19 +28,8 @@ const updateSchema = z.object({
 });
 
 async function assertCanEdit(userId: string, shopId: string) {
-  const shop = await withDbRetry(() =>
-    prisma.shop.findUnique({ where: { id: shopId } }),
-  );
-  if (!shop) return null;
-  if (shop.ownerUserId === userId) return shop;
-  const member = await withDbRetry(() =>
-    prisma.member.findFirst({
-      where: { organizationId: shop.organizationId, userId },
-    }),
-  );
-  if (member) return shop;
-  const { isOwner } = await assertChipShopOwner(userId);
-  return isOwner ? shop : null;
+  const access = await assertCanManageShop(userId, shopId);
+  return access.ok ? access.shop : null;
 }
 
 export async function GET(
@@ -123,6 +112,9 @@ export async function GET(
     }
 
     const { _count, ...rest } = product;
+    const canManage = session
+      ? Boolean(await assertCanEdit(session.user.id, product.shopId))
+      : false;
     return NextResponse.json({
       product: {
         ...rest,
@@ -133,6 +125,7 @@ export async function GET(
         ordersCount: _count.orders,
         soldCount,
         canDelete: _count.orders === 0,
+        canManage,
       },
     });
   } catch (error) {

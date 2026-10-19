@@ -726,7 +726,19 @@ export default function AdminVendorsPage() {
                     {v.productsCount ? ` (${v.productsCount})` : ""}
                   </Button>
                   <Link
-                    href={`/shops/admin/products?shopId=${v.id}`}
+                    href={`/shop/${v.slug}`}
+                    className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium"
+                  >
+                    Entrer
+                  </Link>
+                  <Link
+                    href={`/publish?shopId=${v.id}`}
+                    className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium"
+                  >
+                    Publier
+                  </Link>
+                  <Link
+                    href={`/shops/products?shopId=${v.id}`}
                     className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium"
                   >
                     Catalogue

@@ -204,6 +204,14 @@ function AdminProductsInner() {
         <p className="text-xs text-muted-foreground">
           Tous les produits · modifier · archiver · supprimer
         </p>
+        {shopIdFilter ? (
+          <Link
+            href={`/publish?shopId=${shopIdFilter}`}
+            className="mt-2 inline-flex h-8 items-center rounded-lg bg-primary px-3 text-xs font-bold text-white"
+          >
+            + Publier dans cette boutique
+          </Link>
+        ) : null}
       </div>
 
       <div className="mb-3 flex items-center gap-2 rounded-2xl border border-border bg-surface-2 px-3">

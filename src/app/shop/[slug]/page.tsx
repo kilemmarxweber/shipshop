@@ -9,6 +9,7 @@ import {
   Link2,
   MapPin,
   MessageCircle,
+  PackagePlus,
   Pencil,
   Phone,
   Search,
@@ -66,6 +67,8 @@ type ShopProfile = {
   owner: { id: string; name: string; phone: string | null; image: string | null } | null;
   followedByMe?: boolean;
   followersCount?: number;
+  canManage?: boolean;
+  isActive?: boolean;
 } & ShopHoursFields;
 
 type Product = {
@@ -131,7 +134,7 @@ function ShopInner() {
     );
   }, [audioFocusId]);
 
-  const isOwnShop = shop?.owner?.id === session?.user?.id;
+  const isOwnShop = Boolean(shop?.canManage);
 
   function soundFor(id: string): VideoSoundState {
     const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
@@ -420,6 +423,30 @@ function ShopInner() {
             <ShopHoursNotice hours={shop} className="mt-1.5" />
           </div>
         </div>
+
+        {isOwnShop ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Link
+              href={`/publish?shopId=${shop.id}`}
+              className="inline-flex h-8 items-center gap-1 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground"
+            >
+              <PackagePlus className="size-3.5" />
+              Publier
+            </Link>
+            <Link
+              href={`/shops/products?shopId=${shop.id}`}
+              className="inline-flex h-8 items-center rounded-full border border-border px-3 text-xs font-semibold"
+            >
+              Produits
+            </Link>
+            <Link
+              href={`/shops/orders`}
+              className="inline-flex h-8 items-center rounded-full border border-border px-3 text-xs font-semibold"
+            >
+              Commandes
+            </Link>
+          </div>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <FollowShopButton
