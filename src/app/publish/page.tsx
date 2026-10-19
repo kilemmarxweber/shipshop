@@ -32,6 +32,7 @@ import { type AppCurrency, parseCurrency } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { useI18n } from "@/components/i18n-provider";
+import { notifyNewListing } from "@/lib/new-listing-events";
 import { PackagePlus, Search } from "lucide-react";
 
 type Shop = {
@@ -304,7 +305,24 @@ function PublishInner() {
           status: as,
         }),
       });
-      const json = await res.json();
+      const json = (await res.json()) as {
+        error?: string;
+        product?: {
+          id: string;
+          title: string;
+          priceCents: number;
+          currency?: string;
+          createdAt?: string;
+          images?: string[];
+          shop?: {
+            id: string;
+            name: string;
+            slug: string;
+            logoUrl?: string | null;
+            ownerUserId?: string | null;
+          };
+        };
+      };
       if (!res.ok) {
         toast.error(json.error ?? "Enregistrement échoué");
         return;
@@ -319,12 +337,33 @@ function PublishInner() {
         router.refresh();
         return;
       }
+      const created = json.product;
+      if (created?.id && created.shop) {
+        notifyNewListing({
+          id: created.id,
+          title: created.title,
+          priceCents: created.priceCents,
+          currency: created.currency,
+          createdAt:
+            typeof created.createdAt === "string"
+              ? created.createdAt
+              : undefined,
+          cover: created.images?.[0] ?? null,
+          shop: {
+            id: created.shop.id,
+            name: created.shop.name,
+            slug: created.shop.slug,
+            logoUrl: created.shop.logoUrl ?? null,
+            ownerUserId: created.shop.ownerUserId ?? null,
+          },
+        });
+      }
       toast.success("Publication réussie", {
         description: `« ${publishedTitle} » est maintenant visible pour les acheteurs sur ShipShop.`,
         duration: 6000,
       });
       resetPublishForm();
-      router.refresh();
+      router.push("/");
     } catch {
       toast.error("Publication impossible — réessayez");
     } finally {

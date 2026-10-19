@@ -9,6 +9,10 @@ import {
 } from "react";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { readFeedListCache, writeFeedListCache } from "@/lib/feed-list-cache";
+import {
+  NEW_LISTING_EVENT,
+  NEW_LISTING_STORAGE_KEY,
+} from "@/lib/new-listing-events";
 
 type ExtractPage<T> = {
   items: T[];
@@ -142,6 +146,25 @@ export function usePaginatedList<T extends { id: string }>(options: {
     return () => abortRef.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- caller supplies reset deps
   }, [enabled, load, cacheKey, ...deps]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    function refresh() {
+      pagesLoadedRef.current = 0;
+      userScrolledRef.current = false;
+      void load(null, false);
+    }
+    function onStorage(event: StorageEvent) {
+      if (event.key !== NEW_LISTING_STORAGE_KEY || !event.newValue) return;
+      refresh();
+    }
+    window.addEventListener(NEW_LISTING_EVENT, refresh);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(NEW_LISTING_EVENT, refresh);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [enabled, load]);
 
   const loadMore = useCallback(() => {
     const cursor = nextCursorRef.current;

@@ -390,6 +390,11 @@
   transform-origin: right;
   animation: flash-bar 4.2s linear forwards;
 }
+.listing-flash:hover .listing-flash-bar,
+.listing-flash:focus-within .listing-flash-bar,
+.listing-flash[data-paused="true"] .listing-flash-bar {
+  animation-play-state: paused;
+}
 
 /* Dernière card : alignée en bas pour rester entièrement visible */
 .feed-snap-item.snap-end,

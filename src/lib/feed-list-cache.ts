@@ -78,6 +78,17 @@ function pruneSession() {
   }
 }
 
+export function clearAllFeedListCaches() {
+  memory.clear();
+  if (typeof sessionStorage === "undefined") return;
+  const keys: string[] = [];
+  for (let i = 0; i < sessionStorage.length; i += 1) {
+    const key = sessionStorage.key(i);
+    if (key?.startsWith(PREFIX)) keys.push(key);
+  }
+  for (const key of keys) sessionStorage.removeItem(key);
+}
+
 export function readFeedListCache<T>(feedKey: string): FeedListCache<T> | null {
   const mem = memory.get(feedKey);
   if (isFresh(mem)) return mem as FeedListCache<T>;
