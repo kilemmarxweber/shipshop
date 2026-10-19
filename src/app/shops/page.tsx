@@ -494,7 +494,11 @@ export default function ShopsPage() {
                 nameClassName="sr-only"
               />
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">{shop.name}</p>
+                <p className="font-semibold">
+                  <Link href={`/shop/${shop.slug}#produits`} className="hover:underline">
+                    {shop.name}
+                  </Link>
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   /{shop.slug} · {parseCurrency(shop.currency)} ·{" "}
                   {shop._count?.products ?? 0} produits

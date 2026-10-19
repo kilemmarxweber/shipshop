@@ -355,9 +355,18 @@ function SellerProductsInner() {
                     <span className="ml-1">· {p.ordersCount} vente(s)</span>
                   )}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
-                  @{p.shop.name}
-                </p>
+                {p.shop.slug ? (
+                  <Link
+                    href={`/shop/${p.shop.slug}#produits`}
+                    className="text-[10px] text-muted-foreground hover:underline"
+                  >
+                    @{p.shop.name}
+                  </Link>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">
+                    @{p.shop.name}
+                  </p>
+                )}
               </div>
             </div>
 

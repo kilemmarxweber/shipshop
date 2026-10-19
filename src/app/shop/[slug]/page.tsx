@@ -44,6 +44,7 @@ import {
   useFeedAudioFocus,
 } from "@/lib/feed-audio-focus";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { MediaThumb } from "@/components/media-thumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,7 @@ type Product = {
   description: string | null;
   priceCents: number;
   currency?: string;
+  quantity?: number;
   category: string;
   images: string[];
   imageMotions?: string[];
@@ -115,6 +117,7 @@ function ShopInner() {
     {},
   );
   const [commentProductId, setCommentProductId] = useState<string | null>(null);
+  const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
   const audioFocusId = useFeedAudioFocus();
   const prevAudioFocus = useRef<string | null>(null);
@@ -190,6 +193,18 @@ function ShopInner() {
     }, 200);
     return () => clearTimeout(debounce);
   }, [shop?.id, q, category]);
+
+  useEffect(() => {
+    if (loading || !shop) return;
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#produits") return;
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById("produits")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [loading, shop, products.length]);
 
   const categoryChips = useMemo(() => {
     if (!shop) return [];
@@ -400,7 +415,18 @@ function ShopInner() {
           </label>
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-lg font-bold">
-              {shop.name}
+              <a
+                href="#produits"
+                className="text-inherit no-underline"
+                onClick={(event) => {
+                  event.preventDefault();
+                  document
+                    .getElementById("produits")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                {shop.name}
+              </a>
             </h1>
             <p className="text-[11px] text-muted-foreground">
               @{shop.slug} · {t("shop.ref")} {refCode} · {shop.productsCount}{" "}
@@ -600,7 +626,10 @@ function ShopInner() {
           </p>
         </div>
       ) : (
-        <div className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4 md:pb-8">
+        <div
+          id="produits"
+          className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4 md:pb-8"
+        >
           {products.map((p) => (
             <article
               key={p.id}
@@ -781,14 +810,13 @@ function ShopInner() {
                     {p.description}
                   </p>
                 )}
-                <Link
-                  href={`/product/${p.id}`}
-                  className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-black/55 sm:gap-3 sm:p-2.5"
-                >
-                  <MediaThumb
-                    images={p.images}
-                    className="size-11 shrink-0 rounded-xl ring-1 ring-white/10 sm:size-12"
-                  />
+                <div className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:gap-3 sm:p-2.5">
+                  <Link href={`/product/${p.id}`} className="contents">
+                    <MediaThumb
+                      images={p.images}
+                      className="size-11 shrink-0 rounded-xl ring-1 ring-white/10 sm:size-12"
+                    />
+                  </Link>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-semibold text-white">
                       {p.title}
@@ -797,15 +825,40 @@ function ShopInner() {
                       {formatMoney(p.priceCents, p.currency)}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-primary px-3.5 py-2 text-[11px] font-bold text-white">
-                    {t("common.see")}
-                  </span>
-                </Link>
+                  <button
+                    type="button"
+                    onClick={() => setBuyProduct(p)}
+                    className="min-h-11 shrink-0 rounded-full bg-primary px-4 py-2 text-[11px] font-bold text-white"
+                  >
+                    {t("buy.cta")}
+                  </button>
+                </div>
               </div>
             </article>
           ))}
         </div>
       )}
+      <BuyProductSheet
+        product={
+          buyProduct && shop
+            ? {
+                ...buyProduct,
+                shop: {
+                  id: shop.id,
+                  name: shop.name,
+                  alwaysOpen: shop.alwaysOpen,
+                  hoursStart: shop.hoursStart,
+                  hoursEnd: shop.hoursEnd,
+                  workDays: shop.workDays,
+                },
+              }
+            : null
+        }
+        open={Boolean(buyProduct)}
+        onOpenChange={(open) => {
+          if (!open) setBuyProduct(null);
+        }}
+      />
       <ProductCommentsSheet
         productId={commentProductId}
         open={Boolean(commentProductId)}

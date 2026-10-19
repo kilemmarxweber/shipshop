@@ -46,7 +46,7 @@ export function ShopBrand({
   if (slug) {
     return (
       <Link
-        href={`/shop/${slug}`}
+        href={`/shop/${slug}#produits`}
         onClick={onClick}
         className={cn("flex min-w-0 items-center gap-2", className)}
       >
