@@ -10,7 +10,8 @@ import {
 
 /**
  * Un seul son dans le feed : vidéo ou soundtrack.
- * Visible à gauche par défaut ; un tap pinne cette card jusqu’à sortie d’écran.
+ * 1) Sans tap : card visible la plus à gauche.
+ * 2) Tap sur une card muette qui a du son : elle reste seule jusqu’à un tap sur une autre, ou sortie d’écran.
  */
 const VISIBLE_RATIO = 0.4;
 const KEEP_PIN_RATIO = 0.22;
@@ -35,45 +36,22 @@ function ensurePageMediaBinding() {
 function pickWinner(): string | null {
   if (!isPageMediaDocumentVisible()) return null;
   const page = getPageMediaRoute();
+  const pin = pinnedId ? scores.get(pinnedId) : undefined;
+  if (pin && pin.page === page && pin.ratio >= KEEP_PIN_RATIO) {
+    return pinnedId;
+  }
+  if (pinnedId) pinnedId = null;
+
   const visible = [...scores.entries()].filter(
     ([, s]) => s.page === page && s.ratio >= VISIBLE_RATIO,
   );
-  if (visible.length === 0) {
-    const pin = pinnedId ? scores.get(pinnedId) : undefined;
-    if (pin && pin.page === page && pin.ratio >= KEEP_PIN_RATIO) {
-      return pinnedId;
-    }
-    pinnedId = null;
-    return null;
-  }
+  if (visible.length === 0) return null;
   visible.sort((a, b) => {
     const dx = a[1].left - b[1].left;
     if (Math.abs(dx) > 8) return dx;
     return b[1].ratio - a[1].ratio;
   });
-  const bestId = visible[0]![0];
-  const best = visible[0]![1];
-  const pin = pinnedId ? scores.get(pinnedId) : undefined;
-  // Pin seulement si la card tapée est encore celle au premier plan.
-  // En remontant le fil, une autre card plus visible reprend le son.
-  if (
-    pin &&
-    pin.page === page &&
-    pin.ratio >= KEEP_PIN_RATIO &&
-    pinnedId === bestId
-  ) {
-    return pinnedId;
-  }
-  if (
-    pin &&
-    pin.page === page &&
-    pin.ratio >= KEEP_PIN_RATIO &&
-    pin.ratio + 0.12 >= best.ratio
-  ) {
-    return pinnedId;
-  }
-  pinnedId = null;
-  return bestId;
+  return visible[0]![0];
 }
 
 function commit() {

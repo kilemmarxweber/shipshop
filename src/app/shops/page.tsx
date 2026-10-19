@@ -388,6 +388,36 @@ export default function ShopsPage() {
               <DialogTitle>Nouvelle boutique</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>Logo (optionnel)</Label>
+                <div className="flex items-center gap-3">
+                  {shopLogoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={shopLogoUrl}
+                      alt=""
+                      className="size-14 rounded-xl object-cover"
+                    />
+                  ) : null}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      try {
+                        const uploaded = await uploadCompressedMedia(file, "avatar");
+                        setShopLogoUrl(uploaded.url);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error ? error.message : "Logo impossible",
+                        );
+                      }
+                    }}
+                  />
+                </div>
+              </div>
               <Input
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
@@ -405,34 +435,6 @@ export default function ShopsPage() {
                 confirmed={shopFxConfirmed}
                 onConfirmed={setShopFxConfirmed}
               />
-              <div className="space-y-1">
-                <Label>Logo</Label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (!file) return;
-                    try {
-                      const uploaded = await uploadCompressedMedia(file, "avatar");
-                      setShopLogoUrl(uploaded.url);
-                    } catch (error) {
-                      toast.error(
-                        error instanceof Error ? error.message : "Logo impossible",
-                      );
-                    }
-                  }}
-                />
-                {shopLogoUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={shopLogoUrl}
-                    alt=""
-                    className="mt-2 size-14 rounded-xl object-cover"
-                  />
-                )}
-              </div>
               <Button onClick={createShop} className="w-full">
                 Créer
               </Button>

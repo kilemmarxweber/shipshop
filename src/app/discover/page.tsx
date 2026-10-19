@@ -206,6 +206,10 @@ export default function DiscoverPage() {
       return;
     }
     setUserPinned(id);
+    if (!soundFor(id).muted) {
+      requestFeedAudioFocus(id);
+      return;
+    }
     activateSound(id);
   }
 

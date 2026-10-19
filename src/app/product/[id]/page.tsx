@@ -30,6 +30,7 @@ import { PageLoader } from "@/components/page-loader";
 import { ProductCommentsSheet } from "@/components/product-comments-sheet";
 import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
+import { ProductImageZoom } from "@/components/product-image-zoom";
 import { DEFAULT_VIDEO_SOUND } from "@/components/video-sound-button";
 import { ShopBrand } from "@/components/shop-brand";
 import { AuthInline } from "@/components/auth-inline";
@@ -451,7 +452,7 @@ function ProductInner() {
       </div>
 
       <div className="relative mx-auto w-full max-w-2xl px-2 md:px-3">
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_8px_32px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_8px_32px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
           <ProductImageCarousel
             key={product.images.join("|")}
             images={product.images}
@@ -465,6 +466,15 @@ function ProductInner() {
             onDoubleLike={() => {
               if (!product.likedByMe) void toggleLike();
             }}
+          />
+          <ProductImageZoom
+            images={product.images}
+            alt={product.title}
+            trigger="button"
+            className="absolute top-3 right-3 z-20"
+            hint={t("buy.zoomHint")}
+            openLabel={t("buy.zoomOpen")}
+            closeLabel={t("buy.zoomClose")}
           />
           {product.soundtrack?.audioUrl ? (
             <FeedSoundtrackPlayer

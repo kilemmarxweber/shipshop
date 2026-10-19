@@ -66,7 +66,7 @@ export type FxRates = {
 export const DEFAULT_FX: FxRates = {
   cdfPerUsd: Math.max(
     1,
-    Number.parseInt(process.env.FX_CDF_PER_USD ?? "2300", 10) || 2300,
+    Number.parseInt(process.env.FX_CDF_PER_USD ?? "2400", 10) || 2400,
   ),
   kwPerUsd: Math.max(
     1,

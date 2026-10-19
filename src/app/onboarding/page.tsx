@@ -11,12 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { ShopFxRateField } from "@/components/shop-fx-rate-field";
+import { uploadCompressedMedia } from "@/lib/compress-media";
 import { DEFAULT_FX, type AppCurrency } from "@/lib/money";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
   const [shopName, setShopName] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState<AppCurrency>("USD");
   const [fxCdfPerUsd, setFxCdfPerUsd] = useState(DEFAULT_FX.cdfPerUsd);
@@ -41,6 +44,7 @@ export default function OnboardingPage() {
       body: JSON.stringify({
         shopName,
         description,
+        logoUrl: logoUrl || undefined,
         currency,
         fxCdfPerUsd,
         fxConfirmed,
@@ -74,6 +78,56 @@ export default function OnboardingPage() {
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
+        <div className="space-y-2">
+          <Label>Logo (optionnel)</Label>
+          <div className="flex items-center gap-3">
+            <div className="grid size-16 place-items-center overflow-hidden rounded-2xl border border-border bg-surface-2 text-xs font-bold text-muted-foreground">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="" className="size-full object-cover" />
+              ) : (
+                "Logo"
+              )}
+            </div>
+            <div className="min-w-0 flex-1 space-y-1">
+              <Input
+                type="file"
+                accept="image/*"
+                disabled={logoUploading}
+                className="h-11 cursor-pointer bg-surface-2 file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-medium"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  setLogoUploading(true);
+                  try {
+                    const uploaded = await uploadCompressedMedia(file, "avatar");
+                    setLogoUrl(uploaded.url);
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error ? error.message : "Logo impossible",
+                    );
+                  } finally {
+                    setLogoUploading(false);
+                  }
+                }}
+              />
+              {logoUrl ? (
+                <button
+                  type="button"
+                  className="text-[11px] text-muted-foreground underline"
+                  onClick={() => setLogoUrl(null)}
+                >
+                  Enlever le logo
+                </button>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Tu peux passer cette étape et l’ajouter plus tard.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
         <div className="space-y-2">
           <Label>Nom de la boutique</Label>
           <Input

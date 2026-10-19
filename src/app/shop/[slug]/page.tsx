@@ -138,6 +138,10 @@ function ShopInner() {
   }
 
   function activateSound(id: string) {
+    if (!soundFor(id).muted) {
+      requestFeedAudioFocus(id);
+      return;
+    }
     requestFeedAudioFocus(id);
     setSoundById((prev) =>
       applyExclusiveVideoSound(prev, id, {
@@ -587,7 +591,11 @@ function ShopInner() {
                     ? p.id
                     : undefined
                 }
-                onActivateSound={() => activateSound(p.id)}
+                onActivateSound={
+                  productHasVideo(p.images) || p.soundtrack?.audioUrl
+                    ? () => activateSound(p.id)
+                    : undefined
+                }
                 onDoubleLike={() => {
                   if (p.likedByMe) return;
                   void toggleLike(p);

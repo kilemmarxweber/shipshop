@@ -182,6 +182,9 @@ export type Messages = {
     onTheWay: string;
     sellerPaid: string;
     firstSaleHint: string;
+    zoomHint: string;
+    zoomOpen: string;
+    zoomClose: string;
   };
   cart: {
     title: string;
@@ -540,6 +543,9 @@ const fr: Messages = {
     onTheWay: "En route",
     sellerPaid: "Reçu, vendeur payé",
     firstSaleHint: "Première vente : scanne le QR et remets le colis.",
+    zoomHint: "Pince ou double-tape pour zoomer",
+    zoomOpen: "Agrandir la photo",
+    zoomClose: "Fermer le zoom",
   },
   cart: {
     title: "Panier",
@@ -902,6 +908,9 @@ const en: Messages = {
     onTheWay: "On the way",
     sellerPaid: "Received, seller paid",
     firstSaleHint: "First sale: scan the QR and hand over the parcel.",
+    zoomHint: "Pinch or double-tap to zoom",
+    zoomOpen: "Enlarge photo",
+    zoomClose: "Close zoom",
   },
   cart: {
     title: "Cart",
@@ -1264,6 +1273,9 @@ const pt: Messages = {
     onTheWay: "A caminho",
     sellerPaid: "Recebido, vendedor pago",
     firstSaleHint: "Primeira venda: lê o QR e entrega o pacote.",
+    zoomHint: "Aperta ou toca duas vezes para ampliar",
+    zoomOpen: "Ampliar a foto",
+    zoomClose: "Fechar o zoom",
   },
   cart: {
     title: "Carrinho",

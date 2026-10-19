@@ -5,11 +5,13 @@ import { getSession } from "@/lib/session";
 import { assertUniqueShopName } from "@/lib/shop-name";
 import { ensureSellerMembership } from "@/lib/system-org";
 import { APP_CURRENCIES, DEFAULT_FX, parseFxRate } from "@/lib/money";
+import { isPublicUploadPath } from "@/lib/upload-url";
 import { slugify } from "@/lib/utils";
 
 const schema = z.object({
   shopName: z.string().min(2).max(80),
   description: z.string().max(500).optional(),
+  logoUrl: z.string().min(1).max(500).optional().nullable(),
   currency: z.enum(APP_CURRENCIES).default("USD"),
   fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
   fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
@@ -35,6 +37,10 @@ export async function POST(req: Request) {
     const fxCdfPerUsd = parseFxRate(body.fxCdfPerUsd, DEFAULT_FX.cdfPerUsd);
     const fxKwPerUsd = parseFxRate(body.fxKwPerUsd, DEFAULT_FX.kwPerUsd);
     const name = await assertUniqueShopName(body.shopName);
+    const logoUrl = body.logoUrl?.trim() || null;
+    if (logoUrl && !isPublicUploadPath(logoUrl)) {
+      return NextResponse.json({ error: "Logo invalide" }, { status: 400 });
+    }
 
     let slug = slugify(name);
     const existing = await withDbRetry(() =>
@@ -54,6 +60,7 @@ export async function POST(req: Request) {
           name,
           slug,
           description: body.description,
+          logoUrl,
           currency: body.currency,
           fxCdfPerUsd,
           fxKwPerUsd,

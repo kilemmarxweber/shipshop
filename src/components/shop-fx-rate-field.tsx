@@ -20,12 +20,10 @@ export function ShopFxRateField({
   requireConfirm = false,
 }: Props) {
   const rate = Number.isFinite(cdfPerUsd) && cdfPerUsd >= 1 ? cdfPerUsd : DEFAULT_FX.cdfPerUsd;
-  const sampleUsd = 30;
-  const sampleCdf = sampleUsd * rate;
 
   return (
     <div className="space-y-2 rounded-xl border border-border bg-surface-2 p-3">
-      <Label htmlFor="fx-cdf">Taux du jour — 1 $US en CDF</Label>
+      <Label htmlFor="fx-cdf">Taux du jour — CDF pour 1 $US</Label>
       <Input
         id="fx-cdf"
         type="number"
@@ -34,10 +32,11 @@ export function ShopFxRateField({
         step={1}
         value={rate}
         onChange={(e) => onCdfPerUsd(Number.parseInt(e.target.value, 10) || 0)}
+        placeholder="2400"
         className="h-11 bg-background"
       />
       <p className="text-[11px] text-muted-foreground">
-        Exemple : {sampleUsd} $US = {sampleCdf.toLocaleString("fr-CD")} CDF
+        Exemple : 1 $US = {rate.toLocaleString("fr-CD")} CDF
       </p>
       {requireConfirm ? (
         <label className="flex items-start gap-2 text-xs leading-relaxed">

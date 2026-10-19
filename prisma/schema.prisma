@@ -172,8 +172,8 @@ model Shop {
   logoUrl        String?
   /// Monnaie d’affichage boutique : CDF, USD ou KW
   currency       String   @default("USD")
-  /// Taux du jour : 1 $US = N CDF (ex. 2300 → 30 $US = 69 000 CDF)
-  fxCdfPerUsd    Int      @default(2300)
+  /// Taux du jour : 1 $US = N CDF (ex. 2400 → 30 $US = 72 000 CDF)
+  fxCdfPerUsd    Int      @default(2400)
   /// Taux du jour : 1 $US = N KW
   fxKwPerUsd     Int      @default(1)
   fxRateUpdatedAt DateTime?

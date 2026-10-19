@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Heart, MessageCircle, Share2, ShieldCheck } from "lucide-react";
+import { Heart, MessageCircle, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
@@ -186,6 +186,10 @@ export default function FeedPage() {
   }
 
   function activateSound(id: string) {
+    if (!soundFor(id).muted) {
+      requestFeedAudioFocus(id);
+      return;
+    }
     requestFeedAudioFocus(id);
     setSoundById((prev) =>
       applyExclusiveVideoSound(prev, id, {
@@ -458,7 +462,11 @@ export default function FeedPage() {
                   ? p.id
                   : undefined
               }
-              onActivateSound={() => activateSound(p.id)}
+              onActivateSound={
+                productHasVideo(p.images) || p.soundtrack?.audioUrl
+                  ? () => activateSound(p.id)
+                  : undefined
+              }
               onDoubleLike={() => void toggleLike(p, { forceLike: true })}
             />
             {p.soundtrack?.audioUrl ? (
@@ -477,10 +485,6 @@ export default function FeedPage() {
             ) : null}
 
             <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
-              <span className="w-fit rounded-full border border-trust/30 bg-trust/15 px-2.5 py-1 text-[10px] font-semibold text-trust backdrop-blur">
-                <ShieldCheck className="mr-1 inline size-3" />
-                {t("feed.moneyProtected")}
-              </span>
               {productHasVideo(p.images) ? (
                 <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
                   {t("buy.realVideo")}

@@ -21,7 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { MediaThumb } from "@/components/media-thumb";
+import { ProductImageZoom } from "@/components/product-image-zoom";
 import { productHasVideo } from "@/components/video-sound-button";
 import { holdFeedAudio } from "@/lib/feed-audio-focus";
 
@@ -191,17 +191,20 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
         {product ? (
           <>
             <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden md:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)] md:grid-rows-1">
-              <div className="relative h-[min(38dvh,16rem)] shrink-0 overflow-hidden bg-surface-2 md:h-full md:border-r md:border-border">
-                <MediaThumb
+              <div className="relative h-[min(42dvh,18rem)] shrink-0 overflow-hidden bg-black md:h-full md:border-r md:border-border">
+                <ProductImageZoom
                   images={product.images}
+                  alt={product.title}
                   className="absolute inset-0 size-full"
-                  showFilmIcon={false}
+                  hint={t("buy.zoomHint")}
+                  openLabel={t("buy.zoomOpen")}
+                  closeLabel={t("buy.zoomClose")}
                 />
-                <span className="absolute top-3 left-3 rounded-full border border-trust/30 bg-trust/15 px-2.5 py-1 text-[10px] font-semibold text-trust backdrop-blur">
-                  {productHasVideo(product.images)
-                    ? t("buy.realVideo")
-                    : t("feed.moneyProtected")}
-                </span>
+                {productHasVideo(product.images) ? (
+                  <span className="absolute top-3 left-3 rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
+                    {t("buy.realVideo")}
+                  </span>
+                ) : null}
               </div>
 
               <div className="min-h-0 overflow-y-auto overscroll-y-contain px-4 py-4">
