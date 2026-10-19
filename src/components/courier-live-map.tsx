@@ -44,6 +44,7 @@ type Props = {
   destination: Point | null;
   etaText?: string | null;
   distanceKm?: number | null;
+  onTheWayLabel?: string;
   className?: string;
 };
 
@@ -73,6 +74,7 @@ export default function CourierLiveMap({
   destination,
   etaText,
   distanceKm,
+  onTheWayLabel = "En route",
   className,
 }: Props) {
   const prev = useRef<Point | null>(null);
@@ -174,7 +176,9 @@ export default function CourierLiveMap({
         </MapContainer>
       </div>
       <div className="absolute bottom-3 left-3 right-3 z-[500] flex flex-wrap gap-2 rounded-xl bg-black/70 px-3 py-2 text-[11px] backdrop-blur">
-        <span className="font-semibold text-primary">🛵 En route</span>
+        <span className="font-semibold text-primary">
+          🛵 {onTheWayLabel}
+        </span>
         {distanceKm != null && (
           <span className="text-white/80">{distanceKm} km</span>
         )}

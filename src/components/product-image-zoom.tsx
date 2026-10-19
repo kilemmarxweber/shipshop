@@ -173,9 +173,42 @@ type Props = {
   hint: string;
   openLabel: string;
   closeLabel: string;
+  /** Unités déjà vendues */
+  sold?: number;
+  /** Unités encore en stock */
+  remaining?: number;
+  /** Unités que l’acheteur prend maintenant */
+  taking?: number;
   /** bouton seul (fiche produit) — le zoom s’ouvre en plein écran */
   trigger?: "pane" | "button";
 };
+
+function soldProgress(sold = 0, remaining = 0, taking = 0) {
+  const soldN = Math.max(0, Math.trunc(sold));
+  const left = Math.max(0, Math.trunc(remaining));
+  const take = Math.max(0, Math.trunc(taking));
+  const total = Math.max(1, soldN + left);
+  const taken = Math.min(total, soldN + take);
+  return `${taken}/${total}`;
+}
+
+function ZoomCounters({
+  sold,
+  remaining,
+  taking,
+}: {
+  sold?: number;
+  remaining?: number;
+  taking?: number;
+}) {
+  return (
+    <div className="pointer-events-none absolute top-3 right-3 z-20">
+      <p className="rounded-full bg-black/80 px-3.5 py-1 text-lg font-black tabular-nums text-white shadow-[0_2px_12px_rgba(0,0,0,0.55)] ring-2 ring-white">
+        {soldProgress(sold, remaining, taking)}
+      </p>
+    </div>
+  );
+}
 
 export function ProductImageZoom({
   images,
@@ -184,6 +217,9 @@ export function ProductImageZoom({
   hint,
   openLabel,
   closeLabel,
+  sold,
+  remaining,
+  taking,
   trigger = "pane",
 }: Props) {
   const stills = useMemo(() => inspectImageUrls(images), [images]);
@@ -275,7 +311,18 @@ export function ProductImageZoom({
                   <X className="size-4" />
                 </button>
               </div>
-              <ZoomViewport src={src} alt={alt} className="min-h-0 flex-1" />
+              <div className="relative min-h-0 flex-1">
+                <ZoomViewport
+                  src={src}
+                  alt={alt}
+                  className="absolute inset-0 size-full"
+                />
+                <ZoomCounters
+                  sold={sold}
+                  remaining={remaining}
+                  taking={taking}
+                />
+              </div>
               {stills.length > 1 ? (
                 <div className="flex justify-center gap-2 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
                   {stills.map((url, i) => (

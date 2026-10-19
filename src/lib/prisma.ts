@@ -3,10 +3,11 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 28;
+const PRISMA_SCHEMA_REV = 31;
 
 /** Forces a reload if the generated client predates cart_item.quantity. */
 const CART_ITEM_HAS_QUANTITY = Prisma.CartItemScalarFieldEnum.quantity === "quantity";
+const SHOP_HAS_HOURS = Prisma.ShopScalarFieldEnum.alwaysOpen === "alwaysOpen";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -50,7 +51,9 @@ function getPrismaClient() {
     typeof existing.moneyMovement?.findMany === "function" &&
     typeof existing.contentSourceConfig?.findUnique === "function" &&
     typeof existing.mediaReview?.findMany === "function" &&
-    CART_ITEM_HAS_QUANTITY
+    typeof existing.productDwell?.findMany === "function" &&
+    CART_ITEM_HAS_QUANTITY &&
+    SHOP_HAS_HOURS
   ) {
     return existing;
   }

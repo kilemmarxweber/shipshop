@@ -1,9 +1,12 @@
 import { isVideoUrl } from "@/lib/media";
 import { haversineKm } from "@/lib/shipping";
+import { tasteMatchScore, type BuyerTaste } from "@/lib/taste-tokens";
 
 export type RankableProduct = {
   id: string;
   shopId?: string;
+  title?: string;
+  category?: string;
   createdAt: Date;
   images: string[];
   likesCount?: number;
@@ -23,6 +26,7 @@ export function feedRankScore(
   near?: GeoPoint | null,
   now = Date.now(),
   followedShopIds?: Set<string> | null,
+  taste?: BuyerTaste | null,
 ) {
   const ageHours = Math.max(0, (now - product.createdAt.getTime()) / 3_600_000);
   const recency = Math.exp(-ageHours / 72);
@@ -48,19 +52,38 @@ export function feedRankScore(
   }
   const following =
     product.shopId && followedShopIds?.has(product.shopId) ? 1 : 0;
-  return video * 4 + proximity * 3 + recency * 2 + engagement * 0.6 + following * 0.8;
+  const personal =
+    product.shopId && product.title && product.category
+      ? tasteMatchScore(
+          {
+            title: product.title,
+            category: product.category,
+            shopId: product.shopId,
+          },
+          taste,
+        )
+      : 0;
+  return (
+    video * 3.2 +
+    proximity * 3.6 +
+    recency * 1.6 +
+    engagement * 0.5 +
+    following * 0.8 +
+    personal * 1.15
+  );
 }
 
 export function sortByFeedRank<T extends RankableProduct>(
   products: T[],
   near?: GeoPoint | null,
   followedShopIds?: Set<string> | null,
+  taste?: BuyerTaste | null,
 ) {
   const now = Date.now();
   return [...products].sort((a, b) => {
     const diff =
-      feedRankScore(b, near, now, followedShopIds) -
-      feedRankScore(a, near, now, followedShopIds);
+      feedRankScore(b, near, now, followedShopIds, taste) -
+      feedRankScore(a, near, now, followedShopIds, taste);
     if (diff !== 0) return diff;
     return b.createdAt.getTime() - a.createdAt.getTime();
   });

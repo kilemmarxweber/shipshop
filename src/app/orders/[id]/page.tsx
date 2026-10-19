@@ -19,7 +19,11 @@ import { ISSUE_TYPE_LABELS, qrImageUrl } from "@/lib/handover";
 import { formatMoney, cn } from "@/lib/utils";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { usePageBack } from "@/components/back-nav-context";
+import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
+import { isTransitStepActive } from "@/lib/order-status-label";
+import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import type { ShopHoursFields } from "@/lib/shop-hours";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -61,7 +65,12 @@ type OrderDetail = {
   deliveryLat: number | null;
   deliveryLng: number | null;
   product: { title: string; images: string[] };
-  shop: { id: string; name: string; lat?: number; lng?: number };
+  shop: {
+    id: string;
+    name: string;
+    lat?: number;
+    lng?: number;
+  } & ShopHoursFields;
   courier: {
     id: string;
     name: string;
@@ -111,6 +120,7 @@ const REFUNDABLE = new Set([
 function OrderInner() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [busy, setBusy] = useState(false);
@@ -283,12 +293,12 @@ function OrderInner() {
           {order.escrowReleasedAt ||
           order.status === "DELIVERED" ||
           order.status === "PICKED_UP"
-            ? "Reçu, vendeur payé"
-            : ["ASSIGNED", "FULFILLING", "OUT_FOR_DELIVERY", "AWAITING_CONFIRM"].includes(
-                order.status,
-              )
-              ? "En route"
-              : "Payé et bloqué"}
+            ? t("buy.sellerPaid")
+            : isTransitStepActive(order)
+              ? order.fulfillmentType === "PICKUP"
+                ? t("buy.readyPickup")
+                : t("buy.onTheWay")
+              : t("buy.held")}
         </p>
       </div>
       <div className="mb-4 grid grid-cols-3 gap-1 text-center text-[10px] font-semibold">
@@ -298,19 +308,19 @@ function OrderInner() {
             "border-trust/40 bg-trust/10 text-trust",
           )}
         >
-          Payé et bloqué
+          {t("buy.held")}
         </div>
         <div
           className={cn(
             "rounded-xl border px-1 py-2",
-            ["ASSIGNED", "FULFILLING", "OUT_FOR_DELIVERY", "AWAITING_CONFIRM", "DELIVERED", "PICKED_UP"].includes(
-              order.status,
-            )
+            isTransitStepActive(order)
               ? "border-trust/40 bg-trust/10 text-trust"
               : "border-border text-muted-foreground",
           )}
         >
-          En route
+          {order.fulfillmentType === "PICKUP"
+            ? t("buy.readyPickup")
+            : t("buy.onTheWay")}
         </div>
         <div
           className={cn(
@@ -322,7 +332,7 @@ function OrderInner() {
               : "border-border text-muted-foreground",
           )}
         >
-          Vendeur payé
+          {t("buy.sellerPaid")}
         </div>
       </div>
 
@@ -335,6 +345,7 @@ function OrderInner() {
           <div className="min-w-0 flex-1">
             <p className="font-semibold">{order.product.title}</p>
             <p className="text-xs text-muted-foreground">@{order.shop.name}</p>
+            <ShopHoursNotice hours={order.shop} className="mt-1" />
             <p className="mt-1 font-heading font-bold text-trust">
               {formatMoney(total)}
             </p>
@@ -417,6 +428,7 @@ function OrderInner() {
             )}
           </div>
           <CourierLiveMap
+            onTheWayLabel={t("buy.onTheWay")}
             courier={
               order.courier.lastLat != null && order.courier.lastLng != null
                 ? { lat: order.courier.lastLat, lng: order.courier.lastLng }

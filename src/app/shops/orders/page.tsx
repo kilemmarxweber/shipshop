@@ -14,12 +14,16 @@ import {
   isOrderCancellable,
 } from "@/lib/order-cancel";
 import { formatMoney, cn } from "@/lib/utils";
+import { orderStatusLabel } from "@/lib/order-status-label";
+import { useI18n } from "@/components/i18n-provider";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
+import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import type { ShopHoursFields } from "@/lib/shop-hours";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-type Shop = { id: string; name: string };
+type Shop = { id: string; name: string } & ShopHoursFields;
 type Courier = {
   id: string;
   name: string;
@@ -58,6 +62,7 @@ type Order = {
 };
 
 export default function VendorOrdersPage() {
+  const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopId, setShopId] = useState("");
@@ -304,6 +309,10 @@ export default function VendorOrdersPage() {
         <p className="text-xs text-muted-foreground">
           Scan QR / code pour confirmer la remise
         </p>
+        <ShopHoursNotice
+          hours={shops.find((s) => s.id === shopId)}
+          className="mt-2"
+        />
       </div>
       {showFirstSale ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
@@ -509,7 +518,7 @@ export default function VendorOrdersPage() {
                         "bg-primary/15 text-primary",
                       )}
                     >
-                      {o.status}
+                      {orderStatusLabel(t, o.status)}
                     </span>{" "}
                     · {o.fulfillmentType} ·{" "}
                     {formatMoney(o.totalCents || o.amountCents)}

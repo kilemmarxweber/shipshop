@@ -34,6 +34,9 @@ import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ProductImageZoom } from "@/components/product-image-zoom";
 import { DEFAULT_VIDEO_SOUND } from "@/components/video-sound-button";
 import { ShopBrand } from "@/components/shop-brand";
+import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import { useProductDwell } from "@/lib/use-product-dwell";
+import type { ShopHoursFields } from "@/lib/shop-hours";
 import { AuthInline } from "@/components/auth-inline";
 import { FulfillmentForm } from "@/components/fulfillment-form";
 import { InsufficientFundsSheet } from "@/components/insufficient-funds-sheet";
@@ -52,6 +55,7 @@ type Product = {
   priceCents: number;
   currency?: string;
   quantity: number;
+  soldCount?: number;
   category: string;
   images: string[];
   imageMotions?: string[];
@@ -71,7 +75,7 @@ type Product = {
     slug: string;
     logoUrl?: string | null;
     ownerUserId?: string | null;
-  };
+  } & ShopHoursFields;
 };
 
 function ProductInner() {
@@ -113,6 +117,7 @@ function ProductInner() {
   );
   const [cartHasItems, setCartHasItems] = useState(false);
   const [inCart, setInCart] = useState(false);
+  useProductDwell(product?.id ?? id, Boolean(session && product));
 
   useEffect(() => {
     let cancelled = false;
@@ -449,6 +454,7 @@ function ProductInner() {
             avatarClassName="size-5 ring-1 ring-border"
             nameClassName="text-[11px] font-semibold text-muted-foreground hover:text-primary"
           />
+          <ShopHoursNotice hours={product.shop} className="mt-1" />
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -494,9 +500,8 @@ function ProductInner() {
           <ProductImageCarousel
             key={product.images.join("|")}
             images={product.images}
-            fit="cover"
             eager
-            className="aspect-[4/3.6] w-full"
+            className="aspect-[4/5] w-full max-h-[min(78dvh,720px)]"
             intervalMs={2800}
             hasSoundtrack={Boolean(product.soundtrack?.audioUrl)}
             clipMs={product.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
@@ -513,6 +518,9 @@ function ProductInner() {
             hint={t("buy.zoomHint")}
             openLabel={t("buy.zoomOpen")}
             closeLabel={t("buy.zoomClose")}
+            sold={product.soldCount ?? 0}
+            remaining={product.quantity}
+            taking={1}
           />
           {product.soundtrack?.audioUrl ? (
             <FeedSoundtrackPlayer

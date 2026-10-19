@@ -19,6 +19,11 @@ import {
   SOUNDTRACK_START_MAX_MS,
 } from "@/lib/montage";
 import { sortByFeedRank } from "@/lib/feed-rank";
+import { loadBuyerTaste, topTasteKeys } from "@/lib/buyer-taste";
+import {
+  SOLD_ORDER_STATUS_FILTER,
+  soldOrdersCount,
+} from "@/lib/sold-orders";
 
 const createSchema = z.object({
   shopId: z.string().min(1),
@@ -98,7 +103,13 @@ export async function GET(req: Request) {
                 lng: true,
               },
             },
-            _count: { select: { likes: true, orders: true, comments: true } },
+            _count: {
+              select: {
+                likes: true,
+                comments: true,
+                orders: true,
+              },
+            },
             soundtrack: {
               select: {
                 id: true,
@@ -112,12 +123,28 @@ export async function GET(req: Request) {
           take: 100,
         }),
       );
+      const soldRows = products.length
+        ? await withDbRetry(() =>
+            prisma.order.groupBy({
+              by: ["productId"],
+              where: {
+                productId: { in: products.map((p) => p.id) },
+                status: SOLD_ORDER_STATUS_FILTER,
+              },
+              _count: { _all: true },
+            }),
+          )
+        : [];
+      const soldMap = new Map(
+        soldRows.map((row) => [row.productId, row._count._all]),
+      );
       return NextResponse.json({
         products: products.map(({ _count, ...rest }) => ({
           ...rest,
           likesCount: _count.likes,
           commentsCount: _count.comments,
           ordersCount: _count.orders,
+          soldCount: soldMap.get(rest.id) ?? 0,
           canDelete: _count.orders === 0,
           likedByMe: false,
         })),
@@ -195,7 +222,13 @@ export async function GET(req: Request) {
               lng: true,
             },
           },
-          _count: { select: { likes: true, comments: true } },
+          _count: {
+            select: {
+              likes: true,
+              comments: true,
+              orders: soldOrdersCount,
+            },
+          },
           soundtrack: {
             select: {
               id: true,
@@ -212,6 +245,75 @@ export async function GET(req: Request) {
     const sliced = pageFromRows(fetched, limit);
     let products = sliced.page;
 
+    const taste =
+      session && !following && !mine
+        ? await loadBuyerTaste(session.user.id)
+        : null;
+
+    if (
+      session &&
+      taste &&
+      !following &&
+      !mine &&
+      !cursor &&
+      !q &&
+      !shopId &&
+      !category
+    ) {
+      const cats = topTasteKeys(taste.categories, 5);
+      const tasteShops = topTasteKeys(taste.shopIds, 6);
+      const tokens = topTasteKeys(taste.tokens, 3);
+      const or: object[] = [];
+      if (cats.length) or.push({ category: { in: cats } });
+      if (tasteShops.length) or.push({ shopId: { in: tasteShops } });
+      for (const token of tokens) {
+        or.push({ title: { contains: token, mode: "insensitive" } });
+      }
+      if (or.length) {
+        const extra = await withDbRetry(() =>
+          prisma.product.findMany({
+            where: {
+              status: "ACTIVE",
+              wantedRequestId: null,
+              OR: or,
+              id: { notIn: products.map((p) => p.id) },
+            },
+            include: {
+              shop: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  logoUrl: true,
+                  ownerUserId: true,
+                  lat: true,
+                  lng: true,
+                },
+              },
+              _count: {
+                select: {
+                  likes: true,
+                  comments: true,
+                  orders: soldOrdersCount,
+                },
+              },
+              soundtrack: {
+                select: {
+                  id: true,
+                  title: true,
+                  audioUrl: true,
+                  durationMs: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 16,
+          }),
+        );
+        products = [...extra, ...products];
+      }
+    }
+
     if (!following) {
       let followedShopIds: Set<string> | null = null;
       if (session) {
@@ -227,12 +329,16 @@ export async function GET(req: Request) {
         products.map((p) => ({
           ...p,
           shopId: p.shopId,
+          title: p.title,
+          category: p.category,
           likesCount: p._count.likes,
           commentsCount: p._count.comments,
         })),
         near,
         followedShopIds,
+        taste,
       );
+      if (!cursor) products = products.slice(0, limit);
     }
 
     if (following) {
@@ -284,6 +390,7 @@ export async function GET(req: Request) {
         ...rest,
         likesCount: _count.likes,
         commentsCount: _count.comments,
+        soldCount: _count.orders,
         likedByMe: likedIds.has(p.id),
         shop: {
           ...p.shop,

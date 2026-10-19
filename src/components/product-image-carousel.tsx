@@ -13,7 +13,7 @@ import {
   setFeedVideoScore,
   subscribeFeedVideoActive,
 } from "@/lib/feed-video-playback";
-import { isVideoUrl } from "@/lib/media";
+import { isVideoUrl, videoPosterUrl } from "@/lib/media";
 import { tryPlayMedia } from "@/lib/try-play-media";
 import {
   defaultSlideMotion,
@@ -32,8 +32,8 @@ type Props = {
   intervalMs?: number;
   showDots?: boolean;
   overlay?: boolean;
-  /** cover = remplit la card ; contain = image entière visible */
-  fit?: "cover" | "contain";
+  /** reel = image entière + fond flou (fil) ; cover = recadre ; contain = lettrebox */
+  fit?: "cover" | "contain" | "reel";
   /** Charge tout de suite (fiche produit). Sinon, seulement hors écran proche. */
   eager?: boolean;
   /** Sons vidéo — volume 100 % par défaut. */
@@ -71,11 +71,12 @@ const TAP_MAX_PX = 12;
 const IN_VIEW_RATIO = 0.5;
 const LEFT_VIEW_RATIO = 0.35;
 
-function mediaClass(fit: "cover" | "contain") {
+function mediaClass(fit: "cover" | "contain" | "reel") {
+  if (fit === "reel") return "ss-reel-fg";
   return cn(
     "pointer-events-none",
     fit === "cover"
-      ? "absolute inset-0 size-full object-cover object-center"
+      ? "ss-reel-fg ss-reel-fg-cover"
       : "max-h-full max-w-full object-contain object-center",
   );
 }
@@ -97,7 +98,7 @@ function SlideMedia({
   src: string;
   playing: boolean;
   shouldLoad: boolean;
-  fit: "cover" | "contain";
+  fit: "cover" | "contain" | "reel";
   muted: boolean;
   volume: number;
   loop: boolean;
@@ -109,6 +110,7 @@ function SlideMedia({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const video = isVideoUrl(src);
+  const poster = video ? videoPosterUrl(src) : src;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -162,44 +164,53 @@ function SlideMedia({
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [playing, shouldLoad, video, muted]);
 
-  const ken = Boolean(motion && animate);
+  const ken = Boolean(motion && animate && fit === "reel");
   const kenStyle = {
-    objectPosition: "center center",
     ["--ss-ms" as string]: `${Math.max(800, motionMs ?? 3200)}ms`,
   };
-
-  if (video) {
-    return (
-      <video
-        ref={videoRef}
-        muted={muted}
-        loop={loop}
-        playsInline
-        preload="none"
-        disablePictureInPicture
-        onEnded={() => {
-          if (!loop) onPlaybackEnded?.();
-        }}
-        className={cn(mediaClass(fit), ken && "ss-ken")}
-        data-motion={ken ? motion : undefined}
-        style={kenStyle}
-      />
-    );
-  }
+  const fill = fit === "reel";
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt=""
-      draggable={false}
-      loading={playing ? "eager" : "lazy"}
-      decoding="async"
-      fetchPriority={playing ? "high" : "low"}
-      className={cn(mediaClass(fit), ken && "ss-ken")}
-      data-motion={ken ? motion : undefined}
-      style={kenStyle}
-    />
+    <>
+      {fill ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={poster}
+          alt=""
+          draggable={false}
+          aria-hidden
+          className={cn("ss-reel-bg", ken && "ss-ken")}
+          data-motion={ken ? motion : undefined}
+          style={kenStyle}
+        />
+      ) : null}
+      {video ? (
+        <video
+          ref={videoRef}
+          muted={muted}
+          loop={loop}
+          playsInline
+          preload="none"
+          poster={poster}
+          disablePictureInPicture
+          onEnded={() => {
+            if (!loop) onPlaybackEnded?.();
+          }}
+          className={mediaClass(fit)}
+        />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          draggable={false}
+          loading={playing ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={playing ? "high" : "low"}
+          className={mediaClass(fit)}
+        />
+      )}
+    </>
   );
 }
 
@@ -219,7 +230,7 @@ export function ProductImageCarousel({
   intervalMs = 3200,
   showDots = true,
   overlay = false,
-  fit = "cover",
+  fit = "reel",
   eager = false,
   muted = false,
   volume = 1,
@@ -488,7 +499,7 @@ export function ProductImageCarousel({
     <div
       ref={rootRef}
       className={cn(
-        "relative touch-pan-y overflow-hidden bg-surface-2 select-none",
+        "relative touch-pan-y overflow-hidden bg-black select-none",
         className,
       )}
       onPointerDown={onPointerDown}
@@ -555,9 +566,7 @@ export function ProductImageCarousel({
                 animate={active && (Boolean(clipMs) || list.length > 1)}
               />
             ) : null}
-            {overlay && (
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0a0a0f]/95 via-[#0a0a0f]/25 to-transparent" />
-            )}
+            {overlay && <div className="ss-reel-vignette" />}
           </div>
         );
       })}

@@ -15,7 +15,17 @@ export async function GET(
     prisma.shopHandover.findUnique({
       where: { id },
       include: {
-        shop: { select: { id: true, name: true, slug: true } },
+        shop: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            alwaysOpen: true,
+            hoursStart: true,
+            hoursEnd: true,
+            workDays: true,
+          },
+        },
         orders: {
           include: {
             product: { select: { title: true, images: true, priceCents: true } },

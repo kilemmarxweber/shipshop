@@ -4,6 +4,7 @@ import { isInsufficientFunds, purchaseProduct } from "@/lib/checkout";
 import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { SHOP_HOURS_SELECT } from "@/lib/shop-hours";
 
 const createSchema = z.object({
   productId: z.string().min(1),
@@ -88,7 +89,9 @@ export async function GET(req: Request) {
             product: {
               select: { id: true, title: true, images: true, status: true },
             },
-            shop: { select: { id: true, name: true, slug: true } },
+            shop: {
+              select: { id: true, name: true, slug: true, ...SHOP_HOURS_SELECT },
+            },
             courier: true,
             pickupReceipt: true,
             handover: {
@@ -114,7 +117,9 @@ export async function GET(req: Request) {
           product: {
             select: { id: true, title: true, images: true, status: true },
           },
-          shop: { select: { id: true, name: true, slug: true } },
+          shop: {
+            select: { id: true, name: true, slug: true, ...SHOP_HOURS_SELECT },
+          },
           courier: true,
           pickupReceipt: true,
           handover: {

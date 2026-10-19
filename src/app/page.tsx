@@ -46,6 +46,7 @@ import {
 } from "@/components/feed-load-trigger";
 import { usePaginatedList } from "@/lib/use-paginated-list";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
+import { DwellArticle } from "@/components/dwell-article";
 
 type Product = {
   id: string;
@@ -53,6 +54,8 @@ type Product = {
   description: string | null;
   priceCents: number;
   currency?: string;
+  quantity?: number;
+  soldCount?: number;
   category: string;
   images: string[];
   imageMotions?: string[];
@@ -108,7 +111,7 @@ export default function FeedPage() {
     cacheKey:
       tab === "following"
         ? `products:following:${session?.user?.id ?? ""}`
-        : `products:foryou:${near ? "near" : "all"}`,
+        : `products:foryou:${session?.user?.id ?? "guest"}:${near ? "near" : "all"}`,
     prefetchRemaining: 4,
     deps: [tab, session?.user?.id, near?.lat, near?.lng],
     buildUrl: (cursor) => {
@@ -443,14 +446,15 @@ export default function FeedPage() {
         onScroll={productFeed.noteUserScroll}
       >
         {products.map((p, index) => (
-          <article
+          <DwellArticle
             key={p.id}
+            productId={p.id}
+            enabled={Boolean(session)}
             className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden md:h-[min(520px,70dvh)] md:min-h-0 md:rounded-2xl"
           >
             <ProductImageCarousel
               images={p.images}
               overlay
-              fit="cover"
               className="absolute inset-0"
               muted={soundFor(p.id).muted}
               volume={soundFor(p.id).volume}
@@ -638,7 +642,7 @@ export default function FeedPage() {
                 </button>
               </div>
             </div>
-          </article>
+          </DwellArticle>
         ))}
         {productFeed.hasMore ? (
           <FeedLoadSentinel onVisible={loadMoreProducts} />

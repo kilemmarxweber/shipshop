@@ -46,6 +46,8 @@ import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { MediaThumb } from "@/components/media-thumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import type { ShopHoursFields } from "@/lib/shop-hours";
 
 type ShopProfile = {
   id: string;
@@ -64,7 +66,7 @@ type ShopProfile = {
   owner: { id: string; name: string; phone: string | null; image: string | null } | null;
   followedByMe?: boolean;
   followersCount?: number;
-};
+} & ShopHoursFields;
 
 type Product = {
   id: string;
@@ -415,6 +417,7 @@ function ShopInner() {
                 {shop.description}
               </p>
             )}
+            <ShopHoursNotice hours={shop} className="mt-1.5" />
           </div>
         </div>
 
@@ -579,7 +582,6 @@ function ShopInner() {
               <ProductImageCarousel
                 images={p.images}
                 overlay
-                fit="cover"
                 className="absolute inset-0"
                 muted={soundFor(p.id).muted}
                 volume={soundFor(p.id).volume}

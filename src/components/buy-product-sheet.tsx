@@ -29,6 +29,8 @@ import {
   ProductImageZoom,
 } from "@/components/product-image-zoom";
 import { holdFeedAudio } from "@/lib/feed-audio-focus";
+import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import type { ShopHoursFields } from "@/lib/shop-hours";
 
 export type BuyProductTarget = {
   id: string;
@@ -36,9 +38,11 @@ export type BuyProductTarget = {
   priceCents: number;
   currency?: string;
   images: string[];
+  quantity?: number;
+  soldCount?: number;
   colors: string[];
   sizes: string[];
-  shop: { id: string; name: string };
+  shop: { id: string; name: string } & ShopHoursFields;
 };
 
 type Props = {
@@ -89,6 +93,9 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
   const [cartHasItems, setCartHasItems] = useState(false);
   const [afterCart, setAfterCart] = useState(false);
   const [cartQty, setCartQty] = useState(1);
+  const [soldCount, setSoldCount] = useState(0);
+  const [remaining, setRemaining] = useState(0);
+  const [shopHours, setShopHours] = useState<ShopHoursFields | null>(null);
 
   useEffect(() => {
     holdFeedAudio(open);
@@ -103,6 +110,26 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
     setNeedFunds(null);
     setPaid(null);
     setAfterCart(false);
+    setSoldCount(product.soldCount ?? 0);
+    setRemaining(product.quantity ?? 0);
+    setShopHours(product.shop);
+    const productId = product.id;
+    fetchJson<{
+      product?: {
+        soldCount?: number;
+        quantity?: number;
+        shop?: ShopHoursFields;
+      };
+    }>(`/api/products/${productId}`)
+      .then(({ data }) => {
+        if (!data?.product) return;
+        setSoldCount(data.product.soldCount ?? 0);
+        if (typeof data.product.quantity === "number") {
+          setRemaining(data.product.quantity);
+        }
+        if (data.product.shop) setShopHours(data.product.shop);
+      })
+      .catch(() => undefined);
   }, [open, product]);
 
   useEffect(() => {
@@ -112,13 +139,18 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
       return;
     }
     const productId = product.id;
-    function applyCart(items: { productId?: string }[], count?: number) {
+    function applyCart(
+      items: { productId?: string; quantity?: number }[],
+      count?: number,
+    ) {
       const list = items ?? [];
       setCartHasItems((count ?? list.length) > 0);
-      setInCart(list.some((item) => item.productId === productId));
+      const line = list.find((item) => item.productId === productId);
+      setInCart(Boolean(line));
+      setCartQty(Math.max(1, line?.quantity ?? 1));
     }
     fetchJson<{
-      items?: { productId?: string }[];
+      items?: { productId?: string; quantity?: number }[];
       count?: number;
     }>("/api/cart")
       .then(({ data }) => applyCart(data?.items ?? [], data?.count))
@@ -269,8 +301,8 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
       >
         {product ? (
           <>
-            <div className="flex min-h-[18rem] flex-1">
-              <div className="relative w-[44%] shrink-0 self-stretch overflow-hidden rounded-tl-[1.35rem] bg-black">
+            <div className="flex min-h-[16rem] flex-1">
+              <div className="relative w-[28%] max-w-[6.75rem] shrink-0 self-stretch overflow-hidden rounded-tl-[1.35rem] bg-black">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={inspectImageUrls(product.images)[0] ?? ""}
@@ -285,6 +317,9 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
                   hint={t("buy.zoomHint")}
                   openLabel={t("buy.zoomOpen")}
                   closeLabel={t("buy.zoomClose")}
+                  sold={soldCount}
+                  remaining={remaining}
+                  taking={inCart ? cartQty : 1}
                 />
               </div>
               <div className="flex min-w-0 flex-1 flex-col">
@@ -295,6 +330,7 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
                   <p className="font-heading text-sm font-bold text-trust">
                     {formatMoney(product.priceCents, product.currency)}
                   </p>
+                  <ShopHoursNotice hours={shopHours ?? product.shop} className="mt-1" />
                 </SheetHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-3">
                 {paid ? (

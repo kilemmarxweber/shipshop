@@ -7,6 +7,8 @@ import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { APP_CURRENCIES } from "@/lib/money";
 import { normalizeMotions, SOUNDTRACK_START_MAX_MS } from "@/lib/montage";
+import { SOLD_ORDER_STATUS_FILTER } from "@/lib/sold-orders";
+import { SHOP_HOURS_SELECT } from "@/lib/shop-hours";
 
 const updateSchema = z.object({
   title: z.string().min(2).max(120).optional(),
@@ -80,6 +82,7 @@ export async function GET(
           logoUrl: true,
           organizationId: true,
           ownerUserId: true,
+          ...SHOP_HOURS_SELECT,
         },
       }),
     );
@@ -100,6 +103,11 @@ export async function GET(
 
     const likesCount = await withDbRetry(() =>
       prisma.productLike.count({ where: { productId: id } }),
+    );
+    const soldCount = await withDbRetry(() =>
+      prisma.order.count({
+        where: { productId: id, status: SOLD_ORDER_STATUS_FILTER },
+      }),
     );
     const commentsCount = product._count.comments;
     let likedByMe = false;
@@ -123,6 +131,7 @@ export async function GET(
         commentsCount,
         likedByMe,
         ordersCount: _count.orders,
+        soldCount,
         canDelete: _count.orders === 0,
       },
     });

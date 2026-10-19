@@ -54,6 +54,7 @@ model User {
   movementsReceived MoneyMovement[]  @relation("MovementBeneficiary")
   paymentAudits     PaymentAudit[]
   shopHandovers     ShopHandover[]
+  productDwells     ProductDwell[]
 
   @@unique([email])
   @@map("user")
@@ -183,6 +184,14 @@ model Shop {
   isActive       Boolean  @default(true)
   /// Vitrine auto pour céder un article d’occasion (sans boutique magasin)
   isOccasionStall Boolean @default(false)
+  /// Toujours disponible (retrait / préparation). Optionnel.
+  alwaysOpen     Boolean  @default(false)
+  /// Heure d’ouverture HH:mm (Kinshasa). Null si alwaysOpen ou non renseigné.
+  hoursStart     String?
+  /// Heure de fermeture HH:mm. Affichée au client sur les commandes.
+  hoursEnd       String?
+  /// Jours JS 0=dim … 6=sam. [] = non renseigné.
+  workDays       Json     @default("[]")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -308,6 +317,7 @@ model Product {
   comments      ProductComment[]
   conversations Conversation[]
   shares        ProductShare[]
+  dwells        ProductDwell[]
   wantedOffer   WantedOffer?
 
   @@index([category, status])
@@ -326,6 +336,24 @@ model ProductLike {
   @@unique([userId, productId])
   @@index([productId])
   @@map("product_like")
+}
+
+/// Temps passé à regarder un produit (fiche ou feed).
+model ProductDwell {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  dwellMs    Int      @default(0)
+  viewCount  Int      @default(1)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId, dwellMs])
+  @@index([productId])
+  @@map("product_dwell")
 }
 
 model ProductShare {

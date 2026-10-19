@@ -34,6 +34,8 @@ type Product = {
   title: string;
   priceCents: number;
   currency?: string;
+  quantity?: number;
+  soldCount?: number;
   images: string[];
   imageMotions?: string[];
   colors?: string[];
@@ -364,7 +366,7 @@ export default function DiscoverPage() {
                   />
                 </div>
               ) : null}
-              <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 to-transparent p-3">
+              <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3">
                 <Link href={`/product/${p.id}`}>
                   <p className="truncate text-xs font-bold">{p.title}</p>
                   <p className="text-[11px] font-bold text-trust">
@@ -408,6 +410,7 @@ export default function DiscoverPage() {
                 priceCents: buyProduct.priceCents,
                 currency: buyProduct.currency,
                 images: buyProduct.images,
+                quantity: buyProduct.quantity,
                 colors: buyProduct.colors ?? [],
                 sizes: buyProduct.sizes ?? [],
                 shop: buyProduct.shop,

@@ -4,12 +4,21 @@ import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { isPublicUploadPath } from "@/lib/upload-url";
 import { parseFxRate } from "@/lib/money";
+import {
+  SHOP_HOURS_SELECT,
+  normalizeShopHours,
+  shopHoursBodySchema,
+} from "@/lib/shop-hours";
 
 const updateSchema = z.object({
   logoUrl: z.string().min(1).max(500).optional().nullable(),
   description: z.string().max(500).optional().nullable(),
   fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
   fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
+  alwaysOpen: z.boolean().optional(),
+  hoursStart: z.string().nullable().optional(),
+  hoursEnd: z.string().nullable().optional(),
+  workDays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
 });
 
 /** Profil public boutique (par slug) + stats catégories. */
@@ -31,6 +40,7 @@ export async function GET(
           lat: true,
           lng: true,
           createdAt: true,
+          ...SHOP_HOURS_SELECT,
           owner: {
             select: {
               id: true,
@@ -150,6 +160,18 @@ export async function PATCH(
       return NextResponse.json({ error: "Logo invalide" }, { status: 400 });
     }
 
+    let hoursData: ReturnType<typeof normalizeShopHours> | undefined;
+    if (body.alwaysOpen !== undefined) {
+      try {
+        hoursData = normalizeShopHours(shopHoursBodySchema.parse(body));
+      } catch {
+        return NextResponse.json(
+          { error: "Indiquez les jours et les heures, ou « toujours disponible »" },
+          { status: 400 },
+        );
+      }
+    }
+
     const updated = await withDbRetry(() =>
       prisma.shop.update({
         where: { id: shop.id },
@@ -170,6 +192,14 @@ export async function PATCH(
                 fxRateUpdatedAt: new Date(),
               }
             : {}),
+          ...(hoursData
+            ? {
+                alwaysOpen: hoursData.alwaysOpen,
+                hoursStart: hoursData.hoursStart,
+                hoursEnd: hoursData.hoursEnd,
+                workDays: hoursData.workDays,
+              }
+            : {}),
         },
         select: {
           id: true,
@@ -181,6 +211,7 @@ export async function PATCH(
           fxCdfPerUsd: true,
           fxKwPerUsd: true,
           fxRateUpdatedAt: true,
+          ...SHOP_HOURS_SELECT,
         },
       }),
     );

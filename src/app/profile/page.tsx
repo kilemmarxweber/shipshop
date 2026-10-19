@@ -26,8 +26,10 @@ import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppearanceSettings } from "@/components/appearance-settings";
+import { ShopHoursSettings } from "@/components/shop-hours-settings";
 import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
+import { orderStatusLabel } from "@/lib/order-status-label";
 
 type Order = {
   id: string;
@@ -680,7 +682,7 @@ export default function ProfilePage() {
                           "bg-muted/40 text-muted-foreground",
                       )}
                     >
-                      {o.status}
+                      {orderStatusLabel(t, o.status)}
                     </Link>
                     {canCancel && tab === "active" && (
                       <button
@@ -738,6 +740,8 @@ export default function ProfilePage() {
           ))}
         </div>
       )}
+
+      <ShopHoursSettings />
 
       <AppearanceSettings />
 

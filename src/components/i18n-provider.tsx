@@ -39,7 +39,9 @@ export type MessagePath =
   | `shopExtra.${keyof Messages["shopExtra"]}`
   | `wanted.${keyof Messages["wanted"]}`
   | `montage.${keyof Messages["montage"]}`
-  | `publish.${keyof Messages["publish"]}`;
+  | `publish.${keyof Messages["publish"]}`
+  | `orderStatus.${keyof Messages["orderStatus"]}`
+  | `hours.${keyof Messages["hours"]}`;
 
 type I18nContextValue = {
   locale: UserLocale;

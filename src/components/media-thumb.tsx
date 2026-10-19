@@ -40,7 +40,7 @@ export function MediaThumb({
   return (
     <div
       className={cn(
-        "relative overflow-hidden bg-surface-2 bg-cover bg-center",
+        "relative overflow-hidden bg-black bg-cover bg-center [filter:brightness(1.06)_contrast(1.05)_saturate(1.04)]",
         className,
       )}
       style={
@@ -55,7 +55,7 @@ export function MediaThumb({
           muted
           playsInline
           preload="metadata"
-          className="pointer-events-none absolute inset-0 size-full object-cover"
+          className="pointer-events-none absolute inset-0 size-full object-cover [filter:brightness(1.06)_contrast(1.05)]"
         />
       ) : null}
       {!useVideoFrame && cover && !isVideoUrl(cover) ? (

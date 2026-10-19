@@ -53,6 +53,27 @@ export type Messages = {
     themeUpdated: string;
     logout: string;
   };
+  hours: {
+    title: string;
+    hint: string;
+    always: string;
+    scheduled: string;
+    start: string;
+    end: string;
+    days: string;
+    closeAt: string;
+    openDays: string;
+    saved: string;
+    saveFailed: string;
+    shop: string;
+    d0: string;
+    d1: string;
+    d2: string;
+    d3: string;
+    d4: string;
+    d5: string;
+    d6: string;
+  };
   common: {
     back: string;
     close: string;
@@ -180,11 +201,13 @@ export type Messages = {
     topUpOk: string;
     held: string;
     onTheWay: string;
+    readyPickup: string;
     sellerPaid: string;
     firstSaleHint: string;
     zoomHint: string;
     zoomOpen: string;
     zoomClose: string;
+    stock: string;
     addCart: string;
     addedCart: string;
     keepScrolling: string;
@@ -370,6 +393,19 @@ export type Messages = {
     shop: string;
     media: string;
   };
+  orderStatus: {
+    PAID: string;
+    ASSIGNED: string;
+    FULFILLING: string;
+    OUT_FOR_DELIVERY: string;
+    READY_FOR_PICKUP: string;
+    AWAITING_CONFIRM: string;
+    PICKED_UP: string;
+    DELIVERED: string;
+    FAILED: string;
+    REFUNDED: string;
+    CANCELLED: string;
+  };
 };
 
 const fr: Messages = {
@@ -424,6 +460,27 @@ const fr: Messages = {
     languageUpdated: "Langue : français",
     themeUpdated: "Thème enregistré",
     logout: "Se déconnecter",
+  },
+  hours: {
+    title: "Horaires boutique",
+    hint: "Optionnel. Indiquez vos jours, l’ouverture et la fermeture, ou restez toujours disponible. Le client les voit sur ses commandes.",
+    always: "Toujours disponible",
+    scheduled: "Jours et heures",
+    start: "Ouverture",
+    end: "Fermeture",
+    days: "Jours d’ouverture",
+    closeAt: "Fermeture",
+    openDays: "Jours",
+    saved: "Horaires enregistrés",
+    saveFailed: "Enregistrement impossible",
+    shop: "Boutique",
+    d0: "Dim",
+    d1: "Lun",
+    d2: "Mar",
+    d3: "Mer",
+    d4: "Jeu",
+    d5: "Ven",
+    d6: "Sam",
   },
   common: {
     back: "Retour",
@@ -554,11 +611,13 @@ const fr: Messages = {
     topUpOk: "Compte rechargé",
     held: "Payé et bloqué",
     onTheWay: "En route",
+    readyPickup: "Prêt au retrait",
     sellerPaid: "Reçu, vendeur payé",
     firstSaleHint: "Première vente : scanne le QR et remets le colis.",
     zoomHint: "Pince ou double-tape pour zoomer",
     zoomOpen: "Agrandir la photo",
     zoomClose: "Fermer le zoom",
+    stock: "Stock",
     addCart: "Ajouter au panier",
     addedCart: "Dans le panier — tu paies en 1 clic",
     keepScrolling: "Continuer à scroller",
@@ -748,6 +807,19 @@ const fr: Messages = {
     shop: "Boutique",
     media: "Images / vidéos",
   },
+  orderStatus: {
+    PAID: "Payé et bloqué",
+    ASSIGNED: "Livreur assigné",
+    FULFILLING: "Préparation",
+    OUT_FOR_DELIVERY: "En route",
+    READY_FOR_PICKUP: "Prêt au retrait",
+    AWAITING_CONFIRM: "Confirme la réception",
+    PICKED_UP: "Retiré",
+    DELIVERED: "Livré",
+    FAILED: "Échoué",
+    REFUNDED: "Remboursé",
+    CANCELLED: "Annulé",
+  },
 };
 
 const en: Messages = {
@@ -802,6 +874,27 @@ const en: Messages = {
     languageUpdated: "Language: English",
     themeUpdated: "Theme saved",
     logout: "Sign out",
+  },
+  hours: {
+    title: "Shop hours",
+    hint: "Optional. Set working days and open/close times, or stay always available. Buyers see this on their orders.",
+    always: "Always available",
+    scheduled: "Days and hours",
+    start: "Opens",
+    end: "Closes",
+    days: "Open days",
+    closeAt: "Closes",
+    openDays: "Days",
+    saved: "Hours saved",
+    saveFailed: "Could not save",
+    shop: "Shop",
+    d0: "Sun",
+    d1: "Mon",
+    d2: "Tue",
+    d3: "Wed",
+    d4: "Thu",
+    d5: "Fri",
+    d6: "Sat",
   },
   common: {
     back: "Back",
@@ -932,11 +1025,13 @@ const en: Messages = {
     topUpOk: "Wallet topped up",
     held: "Paid and held",
     onTheWay: "On the way",
+    readyPickup: "Ready for pickup",
     sellerPaid: "Received, seller paid",
     firstSaleHint: "First sale: scan the QR and hand over the parcel.",
     zoomHint: "Pinch or double-tap to zoom",
     zoomOpen: "Enlarge photo",
     zoomClose: "Close zoom",
+    stock: "Stock",
     addCart: "Add to cart",
     addedCart: "In your cart — pay in 1 tap",
     keepScrolling: "Keep scrolling",
@@ -1126,6 +1221,19 @@ const en: Messages = {
     shop: "Shop",
     media: "Images / videos",
   },
+  orderStatus: {
+    PAID: "Paid and held",
+    ASSIGNED: "Courier assigned",
+    FULFILLING: "Preparing",
+    OUT_FOR_DELIVERY: "On the way",
+    READY_FOR_PICKUP: "Ready for pickup",
+    AWAITING_CONFIRM: "Confirm receipt",
+    PICKED_UP: "Picked up",
+    DELIVERED: "Delivered",
+    FAILED: "Failed",
+    REFUNDED: "Refunded",
+    CANCELLED: "Cancelled",
+  },
 };
 
 const pt: Messages = {
@@ -1180,6 +1288,27 @@ const pt: Messages = {
     languageUpdated: "Idioma: português",
     themeUpdated: "Tema guardado",
     logout: "Terminar sessão",
+  },
+  hours: {
+    title: "Horário da loja",
+    hint: "Opcional. Indique os dias, a abertura e o fecho, ou fique sempre disponível. O cliente vê isto nas encomendas.",
+    always: "Sempre disponível",
+    scheduled: "Dias e horas",
+    start: "Abertura",
+    end: "Fecho",
+    days: "Dias de abertura",
+    closeAt: "Fecha",
+    openDays: "Dias",
+    saved: "Horário guardado",
+    saveFailed: "Não foi possível guardar",
+    shop: "Loja",
+    d0: "Dom",
+    d1: "Seg",
+    d2: "Ter",
+    d3: "Qua",
+    d4: "Qui",
+    d5: "Sex",
+    d6: "Sáb",
   },
   common: {
     back: "Voltar",
@@ -1310,11 +1439,13 @@ const pt: Messages = {
     topUpOk: "Conta carregada",
     held: "Pago e bloqueado",
     onTheWay: "A caminho",
+    readyPickup: "Pronto para retirar",
     sellerPaid: "Recebido, vendedor pago",
     firstSaleHint: "Primeira venda: lê o QR e entrega o pacote.",
     zoomHint: "Aperta ou toca duas vezes para ampliar",
     zoomOpen: "Ampliar a foto",
     zoomClose: "Fechar o zoom",
+    stock: "Stock",
     addCart: "Adicionar ao carrinho",
     addedCart: "No carrinho — pagas num toque",
     keepScrolling: "Continuar a ver",
@@ -1503,6 +1634,19 @@ const pt: Messages = {
     titlePlaceholder: "iPhone 15 Pro Max 256GB",
     shop: "Loja",
     media: "Imagens / vídeos",
+  },
+  orderStatus: {
+    PAID: "Pago e bloqueado",
+    ASSIGNED: "Estafeta atribuído",
+    FULFILLING: "A preparar",
+    OUT_FOR_DELIVERY: "A caminho",
+    READY_FOR_PICKUP: "Pronto para retirar",
+    AWAITING_CONFIRM: "Confirma a receção",
+    PICKED_UP: "Levantado",
+    DELIVERED: "Entregue",
+    FAILED: "Falhou",
+    REFUNDED: "Reembolsado",
+    CANCELLED: "Cancelado",
   },
 };
 

@@ -13,6 +13,8 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n-provider";
+import { orderStatusLabel } from "@/lib/order-status-label";
 
 type Period = "7d" | "30d" | "90d" | "all";
 
@@ -658,6 +660,7 @@ function AttentionBlock({
 }
 
 function AttentionOrderRow({ order }: { order: AttentionOrder }) {
+  const { t } = useI18n();
   return (
     <li className="flex items-center gap-3 rounded-xl border border-border px-3 py-2">
       <div
@@ -671,7 +674,8 @@ function AttentionOrderRow({ order }: { order: AttentionOrder }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-semibold">{order.product.title}</p>
         <p className="text-[10px] text-muted-foreground">
-          {order.shop.name} · {order.buyer.name} · {order.status}
+          {order.shop.name} · {order.buyer.name} ·{" "}
+          {orderStatusLabel(t, order.status)}
         </p>
       </div>
       <div className="text-right">

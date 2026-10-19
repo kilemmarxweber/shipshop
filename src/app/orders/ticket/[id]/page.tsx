@@ -8,14 +8,16 @@ import { fetchJson } from "@/lib/fetch-json";
 import { qrImageUrl } from "@/lib/handover";
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
+import { ShopHoursNotice } from "@/components/shop-hours-notice";
 import { useI18n } from "@/components/i18n-provider";
+import type { ShopHoursFields } from "@/lib/shop-hours";
 
 type Ticket = {
   id: string;
   code: string;
   qrPayload: string;
   completedAt: string | null;
-  shop: { id: string; name: string; slug: string };
+  shop: { id: string; name: string; slug: string } & ShopHoursFields;
   orders: {
     id: string;
     status: string;
@@ -59,6 +61,7 @@ export default function ShopTicketPage() {
       <p className="mt-1 text-xs text-muted-foreground">
         @{ticket.shop.name} — {t("buy.qrUntilLast")}
       </p>
+      <ShopHoursNotice hours={ticket.shop} className="mt-2" />
       <div className="mt-4 rounded-2xl border border-primary/30 bg-surface p-5 text-center">
         <div className="mb-3 flex items-center justify-center gap-2 text-primary">
           <QrCode className="size-4" />
