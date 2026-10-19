@@ -23,6 +23,8 @@ const listeners = new Set<Listener>();
 let pinnedId: string | null = null;
 let activeId: string | null = null;
 let pageMediaBound = false;
+/** Overlay (popup Acheter) : mute le fil sans perdre la card pinnée. */
+let audioHeld = false;
 
 function ensurePageMediaBinding() {
   if (pageMediaBound) return;
@@ -75,10 +77,23 @@ function pickWinner(): string | null {
 }
 
 function commit() {
-  const next = pickWinner();
+  const next = audioHeld ? null : pickWinner();
   if (next === activeId) return;
   activeId = next;
   for (const listener of listeners) listener(activeId);
+}
+
+/** Mute le fil (popup ouvert). Relâche pour redémarrer le son. */
+export function holdFeedAudio(held: boolean) {
+  ensurePageMediaBinding();
+  if (audioHeld === held) return;
+  audioHeld = held;
+  if (held && typeof document !== "undefined") {
+    document.querySelectorAll("audio, video").forEach((node) => {
+      if (node instanceof HTMLMediaElement) node.muted = true;
+    });
+  }
+  commit();
 }
 
 export function setFeedAudioScore(

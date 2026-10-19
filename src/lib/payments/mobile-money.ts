@@ -4,6 +4,7 @@ import { getOrCreateWallet } from "@/lib/session";
 import {
   parseCurrency,
   type AppCurrency,
+  toUsdCents,
   walletCents,
 } from "@/lib/money";
 import {
@@ -26,7 +27,8 @@ import {
   writeAudit,
 } from "@/lib/payments/ledger";
 
-const DAILY_CAP_CENTS = 200_000;
+/** Plafond Mobile Money par jour, en centimes $US (pas en CDF bruts). */
+const DAILY_CAP_USD_CENTS = 200_000;
 
 export type DepositInput = {
   userId: string;
@@ -67,17 +69,22 @@ async function assertDailyCap(
 ) {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  const usedToday = await prisma.walletTransaction.aggregate({
+  const usedToday = await prisma.walletTransaction.findMany({
     where: {
       wallet: { userId },
       type: { in: ["DEPOSIT", "TRANSFER_OUT"] },
       status: { in: ["PENDING", "SUCCESS"] },
-      currency,
       createdAt: { gte: startOfDay },
     },
-    _sum: { amountCents: true },
+    select: { amountCents: true, currency: true },
   });
-  if ((usedToday._sum.amountCents ?? 0) + amountCents > DAILY_CAP_CENTS) {
+  const usedUsd = usedToday.reduce(
+    (sum, row) =>
+      sum + toUsdCents(Math.abs(row.amountCents), parseCurrency(row.currency)),
+    0,
+  );
+  const nextUsd = toUsdCents(amountCents, currency);
+  if (usedUsd + nextUsd > DAILY_CAP_USD_CENTS) {
     throw new Error("Plafond journalier atteint");
   }
 }

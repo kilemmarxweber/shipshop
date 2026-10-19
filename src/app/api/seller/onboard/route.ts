@@ -4,13 +4,16 @@ import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { assertUniqueShopName } from "@/lib/shop-name";
 import { ensureSellerMembership } from "@/lib/system-org";
-import { APP_CURRENCIES } from "@/lib/money";
+import { APP_CURRENCIES, DEFAULT_FX, parseFxRate } from "@/lib/money";
 import { slugify } from "@/lib/utils";
 
 const schema = z.object({
   shopName: z.string().min(2).max(80),
   description: z.string().max(500).optional(),
   currency: z.enum(APP_CURRENCIES).default("USD"),
+  fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
+  fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
+  fxConfirmed: z.boolean().optional(),
 });
 
 /** Devenir vendeur : le compte est déjà member Chip Shop ; crée la boutique. */
@@ -23,6 +26,14 @@ export async function POST(req: Request) {
   try {
     const body = schema.parse(await req.json());
     const { org } = await ensureSellerMembership(session.user.id);
+    if (body.fxConfirmed !== true) {
+      return NextResponse.json(
+        { error: "Validez le taux de change du jour avant de créer la boutique" },
+        { status: 400 },
+      );
+    }
+    const fxCdfPerUsd = parseFxRate(body.fxCdfPerUsd, DEFAULT_FX.cdfPerUsd);
+    const fxKwPerUsd = parseFxRate(body.fxKwPerUsd, DEFAULT_FX.kwPerUsd);
     const name = await assertUniqueShopName(body.shopName);
 
     let slug = slugify(name);
@@ -44,6 +55,9 @@ export async function POST(req: Request) {
           slug,
           description: body.description,
           currency: body.currency,
+          fxCdfPerUsd,
+          fxKwPerUsd,
+          fxRateUpdatedAt: new Date(),
         },
       }),
     );

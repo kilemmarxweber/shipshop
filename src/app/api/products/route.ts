@@ -18,6 +18,7 @@ import {
   normalizeMotions,
   SOUNDTRACK_START_MAX_MS,
 } from "@/lib/montage";
+import { sortByFeedRank } from "@/lib/feed-rank";
 
 const createSchema = z.object({
   shopId: z.string().min(1),
@@ -48,6 +49,12 @@ export async function GET(req: Request) {
     const following = searchParams.get("following") === "1";
     const status = searchParams.get("status");
     const cursorRaw = searchParams.get("cursor");
+    const nearLat = Number.parseFloat(searchParams.get("nearLat") ?? "");
+    const nearLng = Number.parseFloat(searchParams.get("nearLng") ?? "");
+    const near =
+      Number.isFinite(nearLat) && Number.isFinite(nearLng)
+        ? { lat: nearLat, lng: nearLng }
+        : null;
     const paginated = searchParams.has("limit") || Boolean(cursorRaw);
     const limit = paginated
       ? parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_SIZE)
@@ -87,6 +94,8 @@ export async function GET(req: Request) {
                 slug: true,
                 logoUrl: true,
                 ownerUserId: true,
+                lat: true,
+                lng: true,
               },
             },
             _count: { select: { likes: true, orders: true, comments: true } },
@@ -182,6 +191,8 @@ export async function GET(req: Request) {
               slug: true,
               logoUrl: true,
               ownerUserId: true,
+              lat: true,
+              lng: true,
             },
           },
           _count: { select: { likes: true, comments: true } },
@@ -200,6 +211,17 @@ export async function GET(req: Request) {
     );
     const sliced = pageFromRows(fetched, limit);
     let products = sliced.page;
+
+    if (!following) {
+      products = sortByFeedRank(
+        products.map((p) => ({
+          ...p,
+          likesCount: p._count.likes,
+          commentsCount: p._count.comments,
+        })),
+        near,
+      );
+    }
 
     if (following) {
       const followed = new Set(followedShopIds);

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Heart, MessageCircle, Share2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -29,7 +28,16 @@ import {
 } from "@/lib/feed-audio-focus";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { colorHex } from "@/lib/product-options";
+import { AuthInline } from "@/components/auth-inline";
+import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { MediaThumb } from "@/components/media-thumb";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { getCurrentGeoCoords } from "@/lib/browser-geolocation";
 import type { MessagePath } from "@/components/i18n-provider";
 import { WantedCard, type WantedListItem } from "@/components/wanted-card";
 import {
@@ -63,6 +71,8 @@ type Product = {
     logoUrl?: string | null;
     ownerUserId?: string | null;
     followedByMe?: boolean;
+    lat?: number | null;
+    lng?: number | null;
   };
 };
 
@@ -78,25 +88,39 @@ function categoryLabel(
 }
 
 export default function FeedPage() {
-  const router = useRouter();
   const { t } = useI18n();
   const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   const [tab, setTab] = useState<FeedTab>("foryou");
+
+  useEffect(() => {
+    void getCurrentGeoCoords()
+      .then((coords) =>
+        setNear({ lat: coords.latitude, lng: coords.longitude }),
+      )
+      .catch(() => undefined);
+  }, []);
+  const [near, setNear] = useState<{ lat: number; lng: number } | null>(null);
+  const [buyProduct, setBuyProduct] = useState<Product | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
   const productFeed = usePaginatedList<Product>({
     enabled: tab !== "wanted" && !(tab === "following" && !session),
     cacheKey:
       tab === "following"
         ? `products:following:${session?.user?.id ?? ""}`
-        : "products:foryou",
+        : `products:foryou:${near ? "near" : "all"}`,
     prefetchRemaining: 4,
-    deps: [tab, session?.user?.id],
+    deps: [tab, session?.user?.id, near?.lat, near?.lng],
     buildUrl: (cursor) => {
       const params = new URLSearchParams({
         status: "ACTIVE",
         limit: String(PUBLIC_PAGE_SIZE),
       });
       if (tab === "following") params.set("following", "1");
+      if (tab === "foryou" && near) {
+        params.set("nearLat", String(near.lat));
+        params.set("nearLng", String(near.lng));
+      }
       if (cursor) params.set("cursor", cursor);
       return `/api/products?${params}`;
     },
@@ -199,7 +223,7 @@ export default function FeedPage() {
 
   async function toggleLike(product: Product, opts?: { forceLike?: boolean }) {
     if (!session) {
-      router.push("/auth/login");
+      setAuthOpen(true);
       return;
     }
     if (opts?.forceLike && product.likedByMe) return;
@@ -457,9 +481,15 @@ export default function FeedPage() {
                 <ShieldCheck className="mr-1 inline size-3" />
                 {t("feed.moneyProtected")}
               </span>
-              <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
-                {categoryLabel(t, p.category)}
-              </span>
+              {productHasVideo(p.images) ? (
+                <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
+                  {t("buy.realVideo")}
+                </span>
+              ) : (
+                <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
+                  {categoryLabel(t, p.category)}
+                </span>
+              )}
             </div>
 
             <div className="absolute right-2.5 bottom-[7.5rem] z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:bottom-36 sm:gap-4 md:bottom-28">
@@ -580,14 +610,13 @@ export default function FeedPage() {
                   {p.description}
                 </p>
               )}
-              <Link
-                href={`/product/${p.id}`}
-                className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-black/55 sm:gap-3 sm:p-2.5"
-              >
-                <MediaThumb
-                  images={p.images}
-                  className="size-11 shrink-0 rounded-xl ring-1 ring-white/10 sm:size-12"
-                />
+              <div className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:gap-3 sm:p-2.5">
+                <Link href={`/product/${p.id}`} className="contents">
+                  <MediaThumb
+                    images={p.images}
+                    className="size-11 shrink-0 rounded-xl ring-1 ring-white/10 sm:size-12"
+                  />
+                </Link>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold text-white">
                     {p.title}
@@ -596,10 +625,14 @@ export default function FeedPage() {
                     {formatMoney(p.priceCents, p.currency)}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-primary px-3.5 py-2 text-[11px] font-bold text-white">
-                  {t("common.see")}
-                </span>
-              </Link>
+                <button
+                  type="button"
+                  onClick={() => setBuyProduct(p)}
+                  className="min-h-11 shrink-0 rounded-full bg-primary px-4 py-2 text-[11px] font-bold text-white"
+                >
+                  {t("buy.cta")}
+                </button>
+              </div>
             </div>
           </article>
         ))}
@@ -626,6 +659,23 @@ export default function FeedPage() {
           )
         }
       />
+      <BuyProductSheet
+        product={buyProduct}
+        open={Boolean(buyProduct)}
+        onOpenChange={(open) => {
+          if (!open) setBuyProduct(null);
+        }}
+      />
+      <Sheet open={authOpen} onOpenChange={setAuthOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl bg-surface">
+          <SheetHeader>
+            <SheetTitle>{t("buy.loginTitle")}</SheetTitle>
+          </SheetHeader>
+          <div className="p-4">
+            <AuthInline onSuccess={() => setAuthOpen(false)} />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

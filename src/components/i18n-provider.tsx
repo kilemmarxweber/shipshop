@@ -28,6 +28,7 @@ export type MessagePath =
   | `discover.${keyof Messages["discover"]}`
   | `shop.${keyof Messages["shop"]}`
   | `product.${keyof Messages["product"]}`
+  | `buy.${keyof Messages["buy"]}`
   | `cart.${keyof Messages["cart"]}`
   | `share.${keyof Messages["share"]}`
   | `follow.${keyof Messages["follow"]}`

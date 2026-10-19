@@ -34,7 +34,7 @@ export default function RegisterPage() {
       return;
     }
     toast.success(t("auth.registerWelcome"));
-    router.push("/onboarding");
+    router.push("/");
     router.refresh();
   }
 

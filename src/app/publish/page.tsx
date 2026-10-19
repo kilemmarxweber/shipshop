@@ -164,7 +164,7 @@ function PublishInner() {
                 {t("wanted.publishSell")}
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
-                Annonce magasin — catalogue, prix, livraison
+                Vendre en vidéo — 3 gestes : vidéo, prix, poster
               </span>
             </span>
           </Link>
@@ -352,9 +352,9 @@ function PublishInner() {
       {step === 1 && (
         <div className="space-y-4">
           <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-            Étape 1 sur 3
+            Vidéo · 1/3
           </p>
-          <h1 className="font-heading text-xl font-bold">Médias & titre</h1>
+          <h1 className="font-heading text-xl font-bold">Filme l’article</h1>
           <div className="space-y-2">
             <Label>{t("publish.shop")}</Label>
             <Select
@@ -377,16 +377,6 @@ function PublishInner() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>{t("publish.titleProduct")}</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t("publish.titlePlaceholder")}
-              className="bg-surface-2"
-            />
           </div>
 
           <div className="space-y-2">
@@ -432,7 +422,7 @@ function PublishInner() {
 
           <Button
             className="h-12 w-full font-bold"
-            disabled={!title || !shopId}
+            disabled={!shopId || images.length === 0}
             onClick={() => setStep(2)}
           >
             Suivant
@@ -443,11 +433,18 @@ function PublishInner() {
       {step === 2 && (
         <div className="space-y-4">
           <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-            Étape 2 sur 3
+            Prix · 2/3
           </p>
-          <h1 className="font-heading text-xl font-bold">
-            Prix, stock & options
-          </h1>
+          <h1 className="font-heading text-xl font-bold">Prix</h1>
+          <div className="space-y-2">
+            <Label>{t("publish.titleProduct")}</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t("publish.titlePlaceholder")}
+              className="bg-surface-2"
+            />
+          </div>
           <div className="space-y-2">
             <Label>Monnaie</Label>
             <CurrencyPicker value={currency} onChange={setCurrency} />
@@ -478,6 +475,11 @@ function PublishInner() {
               />
             </div>
           </div>
+          <details className="rounded-2xl border border-border bg-surface-2 p-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Plus tard (optionnel)
+            </summary>
+            <div className="mt-3 space-y-4">
           <div>
             <Label className="mb-2 block">Catégorie</Label>
             <div className="h-scroll h-scroll-fade gap-2">
@@ -556,15 +558,17 @@ function PublishInner() {
           </div>
           <div className="space-y-2">
             <Label>Localisation produit</Label>
-            <KinshasaAddressForm value={address} onChange={setAddress} />
+            <KinshasaAddressForm compact value={address} onChange={setAddress} />
           </div>
+            </div>
+          </details>
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => setStep(1)}>
               Retour
             </Button>
             <Button
               className="flex-[2] font-bold"
-              disabled={!price || !address.city}
+              disabled={!price || !title.trim()}
               onClick={() => setStep(3)}
             >
               Suivant
@@ -576,9 +580,9 @@ function PublishInner() {
       {step === 3 && (
         <div className="space-y-4">
           <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-            Étape 3 sur 3
+            Poster · 3/3
           </p>
-          <h1 className="font-heading text-xl font-bold">Vérification</h1>
+          <h1 className="font-heading text-xl font-bold">Poster</h1>
           <div className="rounded-2xl border border-border bg-surface p-4">
             <p className="font-semibold">{title}</p>
             <p className="mt-1 font-heading text-2xl font-bold text-trust">
@@ -610,8 +614,8 @@ function PublishInner() {
             )}
           </div>
           <div className="rounded-xl border border-trust/30 bg-trust/10 p-3 text-xs text-trust">
-            Argent protégé Chip Shop — l&apos;acheteur paie depuis son solde
-            prépayé.
+            Tu vends en vidéo. L&apos;argent de l&apos;acheteur est bloqué
+            jusqu&apos;à la réception.
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">

@@ -69,6 +69,7 @@ export function AppShell({
   const [cartCount, setCartCount] = useState(0);
   const inbox = useInboxUnread(userId, pathname);
   const [walletTick, setWalletTick] = useState(0);
+  const [hasShop, setHasShop] = useState(false);
 
   useEffect(() => {
     const bump = () => setWalletTick((n) => n + 1);
@@ -78,10 +79,14 @@ export function AppShell({
 
   useEffect(() => {
     if (!userId) {
+      setHasShop(false);
       setBalance(null);
       setCartCount(0);
       return;
     }
+    void fetchJson<{ shops?: { id: string }[] }>("/api/shops?mine=1")
+      .then(({ data }) => setHasShop((data?.shops?.length ?? 0) > 0))
+      .catch(() => setHasShop(false));
     Promise.all([
       fetchJson<{
         wallet?: {
@@ -302,7 +307,11 @@ export function AppShell({
                             )}
                         </span>
                       )}
-                      <span>{t(`nav.${item.key}`)}</span>
+                      <span>
+                        {item.href === "/publish" && !hasShop
+                          ? t("nav.sellVideo")
+                          : t(`nav.${item.key}`)}
+                      </span>
                     </Link>
                   );
                 })}

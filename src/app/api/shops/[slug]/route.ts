@@ -3,10 +3,13 @@ import { z } from "zod";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { isPublicUploadPath } from "@/lib/upload-url";
+import { parseFxRate } from "@/lib/money";
 
 const updateSchema = z.object({
   logoUrl: z.string().min(1).max(500).optional().nullable(),
   description: z.string().max(500).optional().nullable(),
+  fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
+  fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
 });
 
 /** Profil public boutique (par slug) + stats catégories. */
@@ -155,6 +158,18 @@ export async function PATCH(
           ...(body.description !== undefined
             ? { description: body.description }
             : {}),
+          ...(body.fxCdfPerUsd !== undefined
+            ? {
+                fxCdfPerUsd: parseFxRate(body.fxCdfPerUsd, shop.fxCdfPerUsd),
+                fxRateUpdatedAt: new Date(),
+              }
+            : {}),
+          ...(body.fxKwPerUsd !== undefined
+            ? {
+                fxKwPerUsd: parseFxRate(body.fxKwPerUsd, shop.fxKwPerUsd),
+                fxRateUpdatedAt: new Date(),
+              }
+            : {}),
         },
         select: {
           id: true,
@@ -162,6 +177,10 @@ export async function PATCH(
           slug: true,
           description: true,
           logoUrl: true,
+          currency: true,
+          fxCdfPerUsd: true,
+          fxKwPerUsd: true,
+          fxRateUpdatedAt: true,
         },
       }),
     );

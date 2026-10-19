@@ -172,6 +172,11 @@ model Shop {
   logoUrl        String?
   /// Monnaie d’affichage boutique : CDF, USD ou KW
   currency       String   @default("USD")
+  /// Taux du jour : 1 $US = N CDF (ex. 2300 → 30 $US = 69 000 CDF)
+  fxCdfPerUsd    Int      @default(2300)
+  /// Taux du jour : 1 $US = N KW
+  fxKwPerUsd     Int      @default(1)
+  fxRateUpdatedAt DateTime?
   lat            Float    @default(-4.305)
   lng            Float    @default(15.311)
   isActive       Boolean  @default(true)
@@ -675,6 +680,7 @@ enum WalletTxnType {
   ADJUSTMENT
   TRANSFER_IN
   TRANSFER_OUT
+  ESCROW_RELEASE
 }
 
 enum MobileMoneyProvider {
@@ -870,6 +876,9 @@ model Order {
   deliveryLat        Float?
   deliveryLng        Float?
   contactPhone       String?
+  optionColor        String?
+  optionSize         String?
+  escrowReleasedAt   DateTime?
   zoneId             String?
   zone               DeliveryZone?   @relation(fields: [zoneId], references: [id], onDelete: SetNull)
   courierId          String?

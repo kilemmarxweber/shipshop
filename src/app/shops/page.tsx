@@ -9,7 +9,8 @@ import { fetchJson } from "@/lib/fetch-json";
 import { uploadCompressedMedia } from "@/lib/compress-media";
 import { ShopBrand } from "@/components/shop-brand";
 import { CurrencyPicker } from "@/components/currency-picker";
-import { type AppCurrency, parseCurrency } from "@/lib/money";
+import { DEFAULT_FX, type AppCurrency, parseCurrency } from "@/lib/money";
+import { ShopFxRateField } from "@/components/shop-fx-rate-field";
 import { cn } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,8 @@ type Shop = {
   description: string | null;
   logoUrl?: string | null;
   currency?: string;
+  fxCdfPerUsd?: number;
+  fxKwPerUsd?: number;
   _count?: { products: number };
 };
 
@@ -61,6 +64,10 @@ export default function ShopsPage() {
   const [shopName, setShopName] = useState("");
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
   const [shopCurrency, setShopCurrency] = useState<AppCurrency>("USD");
+  const [shopFxCdf, setShopFxCdf] = useState(DEFAULT_FX.cdfPerUsd);
+  const [shopFxConfirmed, setShopFxConfirmed] = useState(false);
+  const [fxDrafts, setFxDrafts] = useState<Record<string, number>>({});
+  const [fxSavingId, setFxSavingId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [members, setMembers] = useState<OrgMember[]>([]);
@@ -129,7 +136,29 @@ export default function ShopsPage() {
     );
   }
 
+  async function saveShopFx(shop: Shop) {
+    const next = fxDrafts[shop.id] ?? shop.fxCdfPerUsd ?? DEFAULT_FX.cdfPerUsd;
+    setFxSavingId(shop.id);
+    const res = await fetch(`/api/shops/${shop.slug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fxCdfPerUsd: next }),
+    });
+    const json = await res.json();
+    setFxSavingId(null);
+    if (!res.ok) {
+      toast.error(json.error ?? "Taux non enregistré");
+      return;
+    }
+    toast.success("Taux du jour enregistré");
+    await loadSeller();
+  }
+
   async function createShop() {
+    if (!shopFxConfirmed) {
+      toast.error("Validez le taux de change avant de créer la boutique");
+      return;
+    }
     const res = await fetch("/api/shops", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -138,6 +167,8 @@ export default function ShopsPage() {
         name: shopName,
         logoUrl: shopLogoUrl || undefined,
         currency: shopCurrency,
+        fxCdfPerUsd: shopFxCdf,
+        fxConfirmed: shopFxConfirmed,
       }),
     });
     const json = await res.json();
@@ -148,6 +179,7 @@ export default function ShopsPage() {
     toast.success("Boutique créée");
     setShopName("");
     setShopLogoUrl(null);
+    setShopFxConfirmed(false);
     setShopCurrency("USD");
     loadSeller();
   }
@@ -366,6 +398,13 @@ export default function ShopsPage() {
                 <Label>Monnaie</Label>
                 <CurrencyPicker value={shopCurrency} onChange={setShopCurrency} />
               </div>
+              <ShopFxRateField
+                cdfPerUsd={shopFxCdf}
+                onCdfPerUsd={setShopFxCdf}
+                requireConfirm
+                confirmed={shopFxConfirmed}
+                onConfirmed={setShopFxConfirmed}
+              />
               <div className="space-y-1">
                 <Label>Logo</Label>
                 <input
@@ -423,6 +462,39 @@ export default function ShopsPage() {
                   /{shop.slug} · {parseCurrency(shop.currency)} ·{" "}
                   {shop._count?.products ?? 0} produits
                 </p>
+                <p className="mt-1 text-[11px] text-trust">
+                  1 $US ={" "}
+                  {(fxDrafts[shop.id] ?? shop.fxCdfPerUsd ?? DEFAULT_FX.cdfPerUsd).toLocaleString(
+                    "fr-CD",
+                  )}{" "}
+                  CDF
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              <Label className="text-[11px]">Taux du jour (config vendeur)</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  className="h-9 bg-surface-2"
+                  value={fxDrafts[shop.id] ?? shop.fxCdfPerUsd ?? DEFAULT_FX.cdfPerUsd}
+                  onChange={(e) =>
+                    setFxDrafts((prev) => ({
+                      ...prev,
+                      [shop.id]: Number.parseInt(e.target.value, 10) || 0,
+                    }))
+                  }
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 shrink-0"
+                  disabled={fxSavingId === shop.id}
+                  onClick={() => void saveShopFx(shop)}
+                >
+                  {fxSavingId === shop.id ? "…" : "Sauver"}
+                </Button>
               </div>
             </div>
             <Link

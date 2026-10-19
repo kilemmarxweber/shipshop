@@ -45,6 +45,7 @@ type Props = {
   defaultPhone?: string;
   value: FulfillmentState;
   onChange: (v: FulfillmentState) => void;
+  compact?: boolean;
 };
 
 export function FulfillmentForm({
@@ -54,6 +55,7 @@ export function FulfillmentForm({
   defaultPhone = "",
   value,
   onChange,
+  compact = false,
 }: Props) {
   const [quoting, setQuoting] = useState(false);
   const [courier, setCourier] = useState<CourierPreview | null>(null);
@@ -143,12 +145,15 @@ export function FulfillmentForm({
 
   return (
     <div className="space-y-4 rounded-2xl border border-border bg-surface p-4">
+      <p className="text-[11px] leading-relaxed text-trust">
+        Tu paies. On bloque. Le vendeur est payé quand tu reçois.
+      </p>
       <p className="font-heading text-sm font-bold">Livraison ou retrait</p>
       <div className="grid grid-cols-2 gap-2">
         {(
           [
-            ["PICKUP", "Retrait boutique"],
-            ["DELIVERY", "Livraison"],
+            ["PICKUP", compact ? "Retirer" : "Retrait boutique"],
+            ["DELIVERY", compact ? "Livrer ici" : "Livraison"],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -186,6 +191,7 @@ export function FulfillmentForm({
         <>
           <KinshasaAddressForm
             enableMap
+            compact={compact}
             value={addressValue}
             onChange={(addr) =>
               onChange({
@@ -264,7 +270,7 @@ export function FulfillmentForm({
           </div>
         </div>
         <div className="mt-2 flex justify-between font-heading text-base font-bold text-trust">
-          <span>Total à débiter</span>
+          <span>{compact ? "À payer" : "Total à débiter"}</span>
           <span>{formatMoney(total, currency)}</span>
         </div>
       </div>

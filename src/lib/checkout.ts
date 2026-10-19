@@ -12,7 +12,19 @@ import {
   isOrderCancellable,
 } from "@/lib/order-cancel";
 import { generatePickupCode, quoteShipping } from "@/lib/shipping";
-import { parseCurrency, walletCents, walletCreditData } from "@/lib/money";
+import { lockWallet } from "@/lib/payments/ledger";
+import {
+  APP_CURRENCIES,
+  fromUsdCents,
+  parseCurrency,
+  shopFxRates,
+  toUsdCents,
+  usdCentsNeeded,
+  walletCents,
+  walletCreditData,
+  walletEquivalentCents,
+  type AppCurrency,
+} from "@/lib/money";
 
 type Tx = Prisma.TransactionClient;
 
@@ -42,6 +54,8 @@ export type PurchaseFulfillment = {
   deliveryLat?: number | null;
   deliveryLng?: number | null;
   contactPhone?: string | null;
+  optionColor?: string | null;
+  optionSize?: string | null;
 };
 
 /** Charge wallet (product + shipping) and create order with fulfillment. */
@@ -140,26 +154,131 @@ export async function purchaseProduct(
   const productCents = product.priceCents;
   const totalCents = productCents + shippingCents;
   const currency = parseCurrency(product.currency);
+  const shopFx = shopFxRates(product.shop);
 
-  const wallet = await tx.wallet.findUnique({
+  const walletRow = await tx.wallet.findUnique({
     where: { userId: buyerId },
   });
+  if (!walletRow) throw new Error("Portefeuille introuvable");
+  await lockWallet(tx, walletRow.id);
+  const wallet = await tx.wallet.findUnique({ where: { id: walletRow.id } });
   if (!wallet) throw new Error("Portefeuille introuvable");
 
-  const available = walletCents(wallet, currency);
-  if (available < totalCents) {
+  const equivalent = walletEquivalentCents(wallet, currency, shopFx);
+  if (equivalent < totalCents) {
     const err = new Error("Solde insuffisant") as InsufficientFundsError;
     err.code = "INSUFFICIENT_FUNDS";
     err.needed = totalCents;
-    err.balance = available;
+    err.balance = equivalent;
     throw err;
   }
 
-  const newBalance = available - totalCents;
+  const pockets: Record<AppCurrency, number> = {
+    USD: walletCents(wallet, "USD"),
+    CDF: walletCents(wallet, "CDF"),
+    KW: walletCents(wallet, "KW"),
+  };
+  const conversions: {
+    from: AppCurrency;
+    fromCents: number;
+    to: AppCurrency;
+    toCents: number;
+    usdCents: number;
+  }[] = [];
+
+  let remaining = Math.max(0, totalCents - pockets[currency]);
+  if (remaining > 0) {
+    const sources = APP_CURRENCIES.filter((code) => code !== currency);
+    for (const src of sources) {
+      if (remaining <= 0) break;
+      const have = pockets[src];
+      if (have <= 0) continue;
+      const needUsd = usdCentsNeeded(remaining, currency, shopFx);
+      const haveUsd = toUsdCents(have, src, shopFx);
+      const takeUsd = Math.min(needUsd, haveUsd);
+      if (takeUsd <= 0) continue;
+      const fromCents = fromUsdCents(takeUsd, src, shopFx);
+      const toCents = fromUsdCents(takeUsd, currency, shopFx);
+      if (fromCents <= 0 || toCents <= 0) continue;
+      pockets[src] -= fromCents;
+      pockets[currency] += toCents;
+      remaining = Math.max(0, remaining - toCents);
+      conversions.push({
+        from: src,
+        fromCents,
+        to: currency,
+        toCents,
+        usdCents: takeUsd,
+      });
+    }
+  }
+
+  if (pockets[currency] < totalCents) {
+    const err = new Error("Solde insuffisant") as InsufficientFundsError;
+    err.code = "INSUFFICIENT_FUNDS";
+    err.needed = totalCents;
+    err.balance = walletEquivalentCents(wallet, currency, shopFx);
+    throw err;
+  }
+
+  for (const fx of conversions) {
+    await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        type: "ADJUSTMENT",
+        amountCents: -fx.fromCents,
+        currency: fx.from,
+        balanceAfterCents: pockets[fx.from],
+        provider: "INTERNAL",
+        status: "SUCCESS",
+        reference: `FX-${product.id.slice(0, 8)}`,
+        metadata: {
+          fx: true,
+          from: fx.from,
+          to: fx.to,
+          fromCents: fx.fromCents,
+          toCents: fx.toCents,
+          usdCents: fx.usdCents,
+          cdfPerUsd: shopFx.cdfPerUsd,
+          kwPerUsd: shopFx.kwPerUsd,
+        },
+      },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        type: "ADJUSTMENT",
+        amountCents: fx.toCents,
+        currency: fx.to,
+        balanceAfterCents: pockets[fx.to],
+        provider: "INTERNAL",
+        status: "SUCCESS",
+        reference: `FX-${product.id.slice(0, 8)}`,
+        metadata: {
+          fx: true,
+          from: fx.from,
+          to: fx.to,
+          fromCents: fx.fromCents,
+          toCents: fx.toCents,
+          usdCents: fx.usdCents,
+          cdfPerUsd: shopFx.cdfPerUsd,
+          kwPerUsd: shopFx.kwPerUsd,
+        },
+      },
+    });
+  }
+
+  pockets[currency] -= totalCents;
+  const newBalance = pockets[currency];
 
   await tx.wallet.update({
     where: { id: wallet.id },
-    data: walletCreditData(wallet, currency, newBalance, { setDisplay: false }),
+    data: {
+      usdCents: pockets.USD,
+      cdfCents: pockets.CDF,
+      kwCents: pockets.KW,
+      balanceCents: pockets.USD,
+    },
   });
 
   await tx.walletTransaction.create({
@@ -179,6 +298,12 @@ export async function purchaseProduct(
         shippingCents,
         currency,
         fulfillmentType: fulfillment.fulfillmentType,
+        escrow: true,
+        optionColor: fulfillment.optionColor ?? null,
+        optionSize: fulfillment.optionSize ?? null,
+        fx: conversions,
+        cdfPerUsd: shopFx.cdfPerUsd,
+        kwPerUsd: shopFx.kwPerUsd,
       },
     },
   });
@@ -202,6 +327,8 @@ export async function purchaseProduct(
       deliveryLat,
       deliveryLng,
       contactPhone: fulfillment.contactPhone.trim(),
+      optionColor: fulfillment.optionColor?.trim() || null,
+      optionSize: fulfillment.optionSize?.trim() || null,
       zoneId,
       courierId,
       distanceKm,
@@ -225,10 +352,10 @@ export async function purchaseProduct(
       status: initialStatus,
       note:
         fulfillment.fulfillmentType === "PICKUP"
-          ? "Paiement reçu — prêt pour retrait boutique"
+          ? "Payé et bloqué — prêt pour retrait. Le vendeur est payé à la réception."
           : autoCourierNote
-            ? autoCourierNote
-            : "Paiement reçu — en attente d'un livreur",
+            ? `${autoCourierNote} · argent bloqué jusqu’à réception`
+            : "Payé et bloqué — en attente d'un livreur",
       actorUserId: buyerId,
     },
   });
@@ -304,6 +431,9 @@ async function refundOrderInternal(
   });
   if (!order || order.buyerId !== opts.buyerId) {
     throw new Error("Commande introuvable");
+  }
+  if (order.escrowReleasedAt) {
+    throw new Error("Le vendeur a déjà été payé — remboursement impossible");
   }
   if (
     !isOrderCancellable(
@@ -513,4 +643,68 @@ export async function cancelOrderByVendor(
     reason,
     reasonLabel: meta.label,
   };
+}
+
+/** Crédite le vendeur (prix produit) une fois la réception confirmée. */
+export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
+  const order = await tx.order.findUnique({
+    where: { id: orderId },
+    include: {
+      shop: { select: { ownerUserId: true } },
+      product: { select: { currency: true } },
+    },
+  });
+  if (!order || order.escrowReleasedAt) return null;
+  const sellerId = order.shop.ownerUserId;
+  if (!sellerId) return null;
+
+  const currency = parseCurrency(order.product.currency);
+  const creditCents = order.productCents;
+  if (creditCents <= 0) {
+    await tx.order.update({
+      where: { id: order.id },
+      data: { escrowReleasedAt: new Date() },
+    });
+    return { credited: 0 };
+  }
+
+  const wallet = await tx.wallet.upsert({
+    where: { userId: sellerId },
+    create: { userId: sellerId, balanceCents: 0, currency: "USD" },
+    update: {},
+  });
+  await tx.$queryRaw`
+    SELECT id FROM "wallet" WHERE id = ${wallet.id} FOR UPDATE
+  `;
+  const locked = await tx.wallet.findUnique({ where: { id: wallet.id } });
+  if (!locked) throw new Error("Portefeuille vendeur introuvable");
+
+  const newBalance = walletCents(locked, currency) + creditCents;
+  await tx.wallet.update({
+    where: { id: locked.id },
+    data: walletCreditData(locked, currency, newBalance, { setDisplay: false }),
+  });
+  await tx.walletTransaction.create({
+    data: {
+      walletId: locked.id,
+      type: "ESCROW_RELEASE",
+      amountCents: creditCents,
+      currency,
+      balanceAfterCents: newBalance,
+      provider: "INTERNAL",
+      status: "SUCCESS",
+      reference: `ESC-${order.id.slice(0, 8)}`,
+      metadata: {
+        orderId: order.id,
+        productId: order.productId,
+        shopId: order.shopId,
+        buyerId: order.buyerId,
+      },
+    },
+  });
+  await tx.order.update({
+    where: { id: order.id },
+    data: { escrowReleasedAt: new Date() },
+  });
+  return { credited: creditCents, sellerBalance: newBalance, currency };
 }

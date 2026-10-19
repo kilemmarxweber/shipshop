@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ShoppingCart, Trash2, Wallet, X } from "lucide-react";
+import { ShoppingCart, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
@@ -11,7 +11,9 @@ import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney } from "@/lib/utils";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { useI18n } from "@/components/i18n-provider";
+import { AuthInline } from "@/components/auth-inline";
 import { FulfillmentForm } from "@/components/fulfillment-form";
+import { WalletInlineTopUp } from "@/components/wallet-inline-topup";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
 import {
@@ -201,12 +203,9 @@ export default function CartPage() {
         <p className="mt-2 text-sm text-muted-foreground">
           {t("cart.guestHint")}
         </p>
-        <Link
-          href="/auth/login"
-          className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
-        >
-          {t("auth.login")}
-        </Link>
+        <div className="mx-auto mt-6 max-w-sm text-left">
+          <AuthInline />
+        </div>
       </div>
     );
   }
@@ -300,6 +299,7 @@ export default function CartPage() {
 
           <div className="mt-6 space-y-3">
             <FulfillmentForm
+              compact
               shopId={items[0]?.product.shop.id ?? ""}
               productCents={totalCents}
               defaultPhone={profilePhone}
@@ -333,17 +333,14 @@ export default function CartPage() {
             <SheetTitle className="font-heading">Solde insuffisant</SheetTitle>
           </SheetHeader>
           <div className="space-y-4 p-4">
-            <p className="text-sm text-muted-foreground">
-              Solde actuel : {formatMoney(balance)}. Il vous faut{" "}
-              {formatMoney(needed)} pour confirmer.
-            </p>
-            <Link
-              href="/wallet"
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-bold text-primary-foreground"
-            >
-              <Wallet className="size-4" />
-              Recharger mon compte
-            </Link>
+            <WalletInlineTopUp
+              neededCents={needed}
+              balanceCents={balance}
+              onFunded={() => {
+                setShowTopUp(false);
+                void confirmPurchase();
+              }}
+            />
           </div>
         </SheetContent>
       </Sheet>

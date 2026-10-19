@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyPicker } from "@/components/currency-picker";
-import type { AppCurrency } from "@/lib/money";
+import { ShopFxRateField } from "@/components/shop-fx-rate-field";
+import { DEFAULT_FX, type AppCurrency } from "@/lib/money";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -18,12 +19,18 @@ export default function OnboardingPage() {
   const [shopName, setShopName] = useState("");
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState<AppCurrency>("USD");
+  const [fxCdfPerUsd, setFxCdfPerUsd] = useState(DEFAULT_FX.cdfPerUsd);
+  const [fxConfirmed, setFxConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!session) {
       router.push("/auth/login");
+      return;
+    }
+    if (!fxConfirmed) {
+      toast.error("Validez le taux de change du jour");
       return;
     }
     setLoading(true);
@@ -35,6 +42,8 @@ export default function OnboardingPage() {
         shopName,
         description,
         currency,
+        fxCdfPerUsd,
+        fxConfirmed,
       }),
     });
     const json = await res.json();
@@ -79,6 +88,13 @@ export default function OnboardingPage() {
           <Label>Monnaie d&apos;affichage</Label>
           <CurrencyPicker value={currency} onChange={setCurrency} />
         </div>
+        <ShopFxRateField
+          cdfPerUsd={fxCdfPerUsd}
+          onCdfPerUsd={setFxCdfPerUsd}
+          requireConfirm
+          confirmed={fxConfirmed}
+          onConfirmed={setFxConfirmed}
+        />
         <div className="space-y-2">
           <Label>Description</Label>
           <Textarea

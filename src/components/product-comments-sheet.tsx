@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { notifyInboxSeen } from "@/lib/inbox-events";
+import { AuthInline } from "@/components/auth-inline";
 import { useI18n } from "@/components/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,6 @@ export function ProductCommentsSheet({
   onCountChange,
 }: Props) {
   const { t } = useI18n();
-  const router = useRouter();
   const { data: session } = authClient.useSession();
   const [comments, setComments] = useState<ProductCommentItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,7 +80,7 @@ export function ProductCommentsSheet({
   async function send() {
     if (!productId) return;
     if (!session) {
-      router.push("/auth/login");
+      toast.error(t("buy.loginTitle"));
       return;
     }
     const text = body.trim();
@@ -158,30 +157,36 @@ export function ProductCommentsSheet({
           )}
           <div ref={bottomRef} />
         </div>
-        <form
-          className="flex gap-2 border-t border-border p-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-        >
-          <Input
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={500}
-            placeholder={t("feed.commentPlaceholder")}
-            className="bg-surface-2"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={sending || !body.trim()}
-            className={cn("shrink-0")}
-            aria-label={t("feed.commentSend")}
+        {session ? (
+          <form
+            className="flex gap-2 border-t border-border p-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
+            }}
           >
-            <Send className="size-4" />
-          </Button>
-        </form>
+            <Input
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              maxLength={500}
+              placeholder={t("feed.commentPlaceholder")}
+              className="bg-surface-2"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={sending || !body.trim()}
+              className={cn("shrink-0")}
+              aria-label={t("feed.commentSend")}
+            >
+              <Send className="size-4" />
+            </Button>
+          </form>
+        ) : (
+          <div className="border-t border-border p-3">
+            <AuthInline />
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

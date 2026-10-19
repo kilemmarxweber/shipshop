@@ -5,7 +5,7 @@ import { getSession } from "@/lib/session";
 import { assertUniqueShopName } from "@/lib/shop-name";
 import { ensureSellerMembership } from "@/lib/system-org";
 import { isPublicUploadPath } from "@/lib/upload-url";
-import { APP_CURRENCIES } from "@/lib/money";
+import { APP_CURRENCIES, DEFAULT_FX, parseFxRate } from "@/lib/money";
 import { slugify } from "@/lib/utils";
 
 const createSchema = z.object({
@@ -14,6 +14,9 @@ const createSchema = z.object({
   organizationId: z.string().min(1).optional(),
   logoUrl: z.string().min(1).max(500).optional(),
   currency: z.enum(APP_CURRENCIES).default("USD"),
+  fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
+  fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
+  fxConfirmed: z.boolean().optional(),
 });
 
 export async function GET(req: Request) {
@@ -64,6 +67,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 
+    if (body.fxConfirmed !== true) {
+      return NextResponse.json(
+        { error: "Validez le taux de change du jour avant de créer la boutique" },
+        { status: 400 },
+      );
+    }
+    const fxCdfPerUsd = parseFxRate(body.fxCdfPerUsd, DEFAULT_FX.cdfPerUsd);
+    const fxKwPerUsd = parseFxRate(body.fxKwPerUsd, DEFAULT_FX.kwPerUsd);
+
     const name = await assertUniqueShopName(body.name);
     const logoUrl = body.logoUrl?.trim() || null;
     if (logoUrl && !isPublicUploadPath(logoUrl)) {
@@ -90,6 +102,9 @@ export async function POST(req: Request) {
         description: body.description,
         logoUrl,
         currency: body.currency,
+        fxCdfPerUsd,
+        fxKwPerUsd,
+        fxRateUpdatedAt: new Date(),
       },
     });
 

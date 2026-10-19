@@ -44,6 +44,7 @@ type OrderIssue = {
 type OrderDetail = {
   id: string;
   status: string;
+  escrowReleasedAt?: string | null;
   productCents: number;
   shippingCents: number;
   totalCents: number;
@@ -266,7 +267,51 @@ function OrderInner() {
     <div className="mx-auto max-w-lg px-4 pb-10 pt-0">
       <div className="mb-4">
         <h1 className="font-heading text-lg font-bold">Suivi commande</h1>
-        <p className="text-[11px] text-muted-foreground">{order.status}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {order.escrowReleasedAt ||
+          order.status === "DELIVERED" ||
+          order.status === "PICKED_UP"
+            ? "Reçu, vendeur payé"
+            : ["ASSIGNED", "FULFILLING", "OUT_FOR_DELIVERY", "AWAITING_CONFIRM"].includes(
+                order.status,
+              )
+              ? "En route"
+              : "Payé et bloqué"}
+        </p>
+      </div>
+      <div className="mb-4 grid grid-cols-3 gap-1 text-center text-[10px] font-semibold">
+        <div
+          className={cn(
+            "rounded-xl border px-1 py-2",
+            "border-trust/40 bg-trust/10 text-trust",
+          )}
+        >
+          Payé et bloqué
+        </div>
+        <div
+          className={cn(
+            "rounded-xl border px-1 py-2",
+            ["ASSIGNED", "FULFILLING", "OUT_FOR_DELIVERY", "AWAITING_CONFIRM", "DELIVERED", "PICKED_UP"].includes(
+              order.status,
+            )
+              ? "border-trust/40 bg-trust/10 text-trust"
+              : "border-border text-muted-foreground",
+          )}
+        >
+          En route
+        </div>
+        <div
+          className={cn(
+            "rounded-xl border px-1 py-2",
+            order.escrowReleasedAt ||
+              order.status === "DELIVERED" ||
+              order.status === "PICKED_UP"
+              ? "border-trust/40 bg-trust/10 text-trust"
+              : "border-border text-muted-foreground",
+          )}
+        >
+          Vendeur payé
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-4">

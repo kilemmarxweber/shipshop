@@ -16,7 +16,9 @@ import {
   productHasVideo,
   type VideoSoundState,
 } from "@/components/video-sound-button";
+import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { Input } from "@/components/ui/input";
+import { getCurrentGeoCoords } from "@/lib/browser-geolocation";
 import { FeedLoadSentinel } from "@/components/feed-load-trigger";
 import { usePaginatedList } from "@/lib/use-paginated-list";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
@@ -34,9 +36,12 @@ type Product = {
   currency?: string;
   images: string[];
   imageMotions?: string[];
+  colors?: string[];
+  sizes?: string[];
   category: string;
   soundtrackStartMs?: number;
   soundtrack?: { audioUrl: string; durationMs?: number } | null;
+  shop?: { id: string; name: string };
 };
 
 function hasAudio(p: Product) {
@@ -53,6 +58,9 @@ export default function DiscoverPage() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [category, setCategory] = useState<string | null>(null);
+  const [nearMe, setNearMe] = useState(false);
+  const [near, setNear] = useState<{ lat: number; lng: number } | null>(null);
+  const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
     {},
   );
@@ -73,8 +81,8 @@ export default function DiscoverPage() {
 
   const feed = usePaginatedList<Product>({
     prefetchRemaining: 4,
-    cacheKey: `discover:${category ?? ""}:${debouncedQ}`,
-    deps: [debouncedQ, category],
+    cacheKey: `discover:${category ?? ""}:${debouncedQ}:${nearMe ? "near" : "all"}`,
+    deps: [debouncedQ, category, nearMe, near?.lat, near?.lng],
     buildUrl: (cursor) => {
       const params = new URLSearchParams({
         status: "ACTIVE",
@@ -82,6 +90,10 @@ export default function DiscoverPage() {
       });
       if (debouncedQ) params.set("q", debouncedQ);
       if (category) params.set("category", category);
+      if (nearMe && near) {
+        params.set("nearLat", String(near.lat));
+        params.set("nearLng", String(near.lng));
+      }
       if (cursor) params.set("cursor", cursor);
       return `/api/products?${params}`;
     },
@@ -232,6 +244,31 @@ export default function DiscoverPage() {
         <span className="text-xs font-semibold text-primary">Voir</span>
       </Link>
 
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => {
+            if (nearMe) {
+              setNearMe(false);
+              return;
+            }
+            void getCurrentGeoCoords()
+              .then((coords) => {
+                setNear({ lat: coords.latitude, lng: coords.longitude });
+                setNearMe(true);
+              })
+              .catch(() => setNearMe(false));
+          }}
+          className={cn(
+            "h-10 rounded-full px-4 text-xs font-bold",
+            nearMe
+              ? "bg-primary text-primary-foreground"
+              : "border border-border bg-surface-2",
+          )}
+        >
+          {t("discover.nearMe")}
+        </button>
+      </div>
       <h2 className="mb-3 font-heading text-sm font-bold">
         {t("discover.categoriesHeading")}
       </h2>
@@ -323,15 +360,23 @@ export default function DiscoverPage() {
                   />
                 </div>
               ) : null}
-              <Link
-                href={`/product/${p.id}`}
-                className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 to-transparent p-3"
-              >
-                <p className="truncate text-xs font-bold">{p.title}</p>
-                <p className="text-[11px] font-bold text-trust">
-                  {formatMoney(p.priceCents, p.currency)}
-                </p>
-              </Link>
+              <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 to-transparent p-3">
+                <Link href={`/product/${p.id}`}>
+                  <p className="truncate text-xs font-bold">{p.title}</p>
+                  <p className="text-[11px] font-bold text-trust">
+                    {formatMoney(p.priceCents, p.currency)}
+                  </p>
+                </Link>
+                {p.shop ? (
+                  <button
+                    type="button"
+                    onClick={() => setBuyProduct(p)}
+                    className="mt-2 h-9 w-full rounded-full bg-primary text-[11px] font-bold text-white"
+                  >
+                    {t("buy.cta")}
+                  </button>
+                ) : null}
+              </div>
             </DiscoverTile>
           );
         })}
@@ -350,6 +395,26 @@ export default function DiscoverPage() {
           {t("discover.emptyResults")}
         </p>
       )}
+      <BuyProductSheet
+        product={
+          buyProduct?.shop
+            ? {
+                id: buyProduct.id,
+                title: buyProduct.title,
+                priceCents: buyProduct.priceCents,
+                currency: buyProduct.currency,
+                images: buyProduct.images,
+                colors: buyProduct.colors ?? [],
+                sizes: buyProduct.sizes ?? [],
+                shop: buyProduct.shop,
+              }
+            : null
+        }
+        open={Boolean(buyProduct)}
+        onOpenChange={(open) => {
+          if (!open) setBuyProduct(null);
+        }}
+      />
     </div>
   );
 }

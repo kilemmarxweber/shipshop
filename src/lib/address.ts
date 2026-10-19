@@ -8,6 +8,37 @@ export type AddressParts = {
   parcelle?: string | null;
 };
 
+/** Ligne unique : ville, commune, quartier, avenue, n° — séparés par des virgules. */
+export function composeAddressLine(parts: AddressParts): string {
+  return [
+    parts.city,
+    parts.commune,
+    parts.quartier,
+    parts.avenue,
+    parts.parcelle,
+  ]
+    .map((p) => p?.trim() ?? "")
+    .filter((p) => p.length > 0)
+    .join(", ");
+}
+
+export function parseAddressLine(
+  raw: string,
+  fallbackCity = "Kinshasa",
+): AddressParts {
+  const bits = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  return {
+    city: bits[0] || fallbackCity,
+    commune: bits[1] ?? "",
+    quartier: bits[2] ?? "",
+    avenue: bits[3] ?? "",
+    parcelle: bits.slice(4).join(", "),
+  };
+}
+
 export function composeAddress(parts: AddressParts): string {
   const city = parts.city.trim();
   const chunks: string[] = [];

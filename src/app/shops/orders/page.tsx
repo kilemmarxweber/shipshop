@@ -259,6 +259,19 @@ export default function VendorOrdersPage() {
           Scan QR / code pour confirmer la remise
         </p>
       </div>
+      {orders.some(
+        (o) =>
+          o.pickupReceipt &&
+          !o.pickupReceipt.scannedAt &&
+          !["CANCELLED", "REFUNDED", "DELIVERED", "PICKED_UP"].includes(
+            o.status,
+          ),
+      ) ? (
+        <div className="mb-4 rounded-2xl border border-trust/40 bg-trust/10 p-3 text-sm text-trust">
+          Première vente : scanne le QR et remets le colis. L’argent est
+          bloqué jusqu’à confirmation de l’acheteur.
+        </div>
+      ) : null}
 
       <div className="mb-5 rounded-2xl border border-primary/30 bg-primary/10 p-4">
         <p className="mb-2 flex items-center gap-2 text-xs font-bold text-primary">

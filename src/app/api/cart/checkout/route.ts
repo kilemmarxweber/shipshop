@@ -5,7 +5,14 @@ import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { quoteShipping } from "@/lib/shipping";
-import { parseCurrency, walletCents } from "@/lib/money";
+import {
+  fromUsdCents,
+  parseCurrency,
+  shopFxRates,
+  usdCentsNeeded,
+  walletEquivalentCents,
+  walletUsdCents,
+} from "@/lib/money";
 
 const schema = z.object({
   fulfillmentType: z.enum(["DELIVERY", "PICKUP"]),
@@ -41,6 +48,7 @@ export async function POST(req: Request) {
               status: true,
               shopId: true,
               quantity: true,
+              shop: { select: { fxCdfPerUsd: true, fxKwPerUsd: true } },
             },
           },
         },
@@ -65,7 +73,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const neededBy = { USD: 0, CDF: 0, KW: 0 };
+    let neededUsd = 0;
+    let displayCurrency = "USD";
+    let checkFx = shopFxRates(cartItems[0]?.product.shop);
     for (const item of cartItems) {
       let shipping = 0;
       if (fulfillment.fulfillmentType === "DELIVERY") {
@@ -79,7 +89,14 @@ export async function POST(req: Request) {
         shipping = quote.shippingCents;
       }
       const code = parseCurrency(item.product.currency);
-      neededBy[code] += item.product.priceCents + shipping;
+      const itemFx = shopFxRates(item.product.shop);
+      checkFx = itemFx;
+      displayCurrency = code;
+      neededUsd += usdCentsNeeded(
+        item.product.priceCents + shipping,
+        code,
+        itemFx,
+      );
     }
 
     const wallet = await withDbRetry(() =>
@@ -91,20 +108,17 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    for (const code of ["USD", "CDF", "KW"] as const) {
-      const needed = neededBy[code];
-      if (needed > 0 && walletCents(wallet, code) < needed) {
-        return NextResponse.json(
-          {
-            error: "Solde insuffisant",
-            code: "INSUFFICIENT_FUNDS",
-            needed,
-            balance: walletCents(wallet, code),
-            currency: code,
-          },
-          { status: 402 },
-        );
-      }
+    if (walletUsdCents(wallet, checkFx) < neededUsd) {
+      return NextResponse.json(
+        {
+          error: "Solde insuffisant",
+          code: "INSUFFICIENT_FUNDS",
+          needed: fromUsdCents(neededUsd, displayCurrency, checkFx),
+          balance: walletEquivalentCents(wallet, displayCurrency, checkFx),
+          currency: displayCurrency,
+        },
+        { status: 402 },
+      );
     }
 
     const result = await withDbRetry(() =>

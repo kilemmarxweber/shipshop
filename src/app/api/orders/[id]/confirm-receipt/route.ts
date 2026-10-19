@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { releaseEscrowToSeller } from "@/lib/checkout";
 import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -87,10 +88,12 @@ export async function POST(
           data: {
             orderId: order.id,
             status: nextStatus,
-            note: "Réception confirmée par le client (Chip Shop)",
+            note: "Réception confirmée — vendeur payé",
             actorUserId: session.user.id,
           },
         });
+
+        await releaseEscrowToSeller(tx, order.id);
 
         return next;
       }),
@@ -106,8 +109,8 @@ export async function POST(
       status: nextStatus,
       message:
         nextStatus === "PICKED_UP"
-          ? "Retrait confirmé — commande clôturée"
-          : "Livraison confirmée — commande clôturée (SUCCESS)",
+          ? "Retrait confirmé — le vendeur est payé"
+          : "Livraison confirmée — le vendeur est payé",
     });
   } catch (error) {
     const message =

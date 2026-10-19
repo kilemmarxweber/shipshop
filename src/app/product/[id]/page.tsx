@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   ShoppingCart,
   Trash2,
-  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -33,7 +32,9 @@ import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { DEFAULT_VIDEO_SOUND } from "@/components/video-sound-button";
 import { ShopBrand } from "@/components/shop-brand";
+import { AuthInline } from "@/components/auth-inline";
 import { FulfillmentForm } from "@/components/fulfillment-form";
+import { WalletInlineTopUp } from "@/components/wallet-inline-topup";
 import { MediaUploader } from "@/components/media-uploader";
 import { ShareMenu } from "@/components/share-menu";
 import { Button } from "@/components/ui/button";
@@ -305,7 +306,7 @@ function ProductInner() {
 
   async function addToCart() {
     if (!session) {
-      router.push("/auth/login");
+      toast.error(t("buy.loginTitle"));
       return;
     }
     setLoading("cart");
@@ -325,7 +326,7 @@ function ProductInner() {
 
   async function buyNow() {
     if (!session) {
-      router.push("/auth/login");
+      toast.error(t("buy.loginTitle"));
       return;
     }
     const contactPhone = (() => {
@@ -364,6 +365,8 @@ function ProductInner() {
         deliveryLat: fulfillment.deliveryLat,
         deliveryLng: fulfillment.deliveryLng,
         contactPhone,
+        optionColor: selectedColor,
+        optionSize: selectedSize,
       }),
     });
     setLoading(null);
@@ -381,7 +384,7 @@ function ProductInner() {
       toast.error(json?.error ?? "Achat impossible");
       return;
     }
-    toast.success("Achat réussi — solde débité");
+    toast.success(t("buy.buyOk"));
     notifyWalletUpdated();
     router.push(json?.order?.id ? `/orders/${json.order.id}` : "/profile");
   }
@@ -635,7 +638,12 @@ function ProductInner() {
           </Button>
         ) : (
           <div className="mt-6 space-y-3">
+            {!session ? (
+              <AuthInline />
+            ) : (
+              <>
             <FulfillmentForm
+              compact
               shopId={product.shop.id}
               productCents={product.priceCents}
               currency={product.currency}
@@ -644,21 +652,23 @@ function ProductInner() {
               onChange={setFulfillment}
             />
             <Button
+              onClick={buyNow}
+              disabled={loading !== null}
+              className="h-12 w-full cursor-pointer text-base font-bold"
+            >
+              {loading === "buy" ? t("product.processing") : t("buy.payPhone")}
+            </Button>
+            <Button
               onClick={addToCart}
               disabled={loading !== null}
-              className="h-12 w-full cursor-pointer gap-2 bg-gradient-to-r from-[#ff5722] to-[#ff7a45] text-base font-bold"
+              variant="secondary"
+              className="h-11 w-full cursor-pointer gap-2 text-sm font-semibold"
             >
               <ShoppingCart className="size-4" />
               {loading === "cart" ? t("product.adding") : t("product.addToCart")}
             </Button>
-            <Button
-              onClick={buyNow}
-              disabled={loading !== null}
-              variant="secondary"
-              className="h-11 w-full cursor-pointer text-sm font-semibold"
-            >
-              {loading === "buy" ? t("product.processing") : t("product.payNow")}
-            </Button>
+              </>
+            )}
             <Button
               onClick={() => setCommentsOpen(true)}
               variant="outline"
@@ -802,17 +812,15 @@ function ProductInner() {
             </SheetTitle>
           </SheetHeader>
           <div className="space-y-4 p-4">
-            <p className="text-sm text-muted-foreground">
-              Solde actuel : {formatMoney(balance, product.currency)}. Il vous faut{" "}
-              {formatMoney(needed, product.currency)} pour cet achat.
-            </p>
-            <Link
-              href="/wallet"
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-bold text-primary-foreground"
-            >
-              <Wallet className="size-4" />
-              {t("product.topUpCta")}
-            </Link>
+            <WalletInlineTopUp
+              neededCents={needed}
+              balanceCents={balance}
+              currency={product.currency}
+              onFunded={() => {
+                setShowTopUp(false);
+                void buyNow();
+              }}
+            />
           </div>
         </SheetContent>
       </Sheet>

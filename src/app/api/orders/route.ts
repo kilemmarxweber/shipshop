@@ -17,6 +17,8 @@ const createSchema = z.object({
   deliveryLat: z.number().optional().nullable(),
   deliveryLng: z.number().optional().nullable(),
   contactPhone: z.string().min(10).max(24),
+  optionColor: z.string().max(40).optional().nullable(),
+  optionSize: z.string().max(20).optional().nullable(),
 });
 
 const ACTIVE = [
@@ -149,6 +151,8 @@ export async function POST(req: Request) {
           deliveryLat: body.deliveryLat,
           deliveryLng: body.deliveryLng,
           contactPhone: body.contactPhone,
+          optionColor: body.optionColor,
+          optionSize: body.optionSize,
         }),
       ),
     );

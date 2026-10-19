@@ -5,7 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Crosshair, Loader2, MapPinned } from "lucide-react";
 import { toast } from "sonner";
 import { fetchJson } from "@/lib/fetch-json";
-import { composeAddress } from "@/lib/address";
+import {
+  composeAddress,
+  composeAddressLine,
+  parseAddressLine,
+} from "@/lib/address";
 import {
   getCurrentGeoCoords,
   reverseGeocode,
@@ -46,6 +50,8 @@ type Props = {
   showPreview?: boolean;
   /** Affiche carte + GPS (livraison) */
   enableMap?: boolean;
+  /** GPS + quartier + point de repère */
+  compact?: boolean;
 };
 
 const KINSHASA_DEFAULT = { lat: -4.325, lng: 15.322 };
@@ -87,11 +93,28 @@ export function KinshasaAddressForm({
   onChange,
   showPreview = true,
   enableMap = true,
+  compact = false,
 }: Props) {
   const [communes, setCommunes] = useState<Commune[]>([]);
   const [cityName, setCityName] = useState("Kinshasa");
   const [locating, setLocating] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [lineFocused, setLineFocused] = useState(false);
+  const [addressLine, setAddressLine] = useState(() =>
+    composeAddressLine(value),
+  );
+
+  useEffect(() => {
+    if (lineFocused) return;
+    setAddressLine(composeAddressLine(value));
+  }, [
+    lineFocused,
+    value.city,
+    value.commune,
+    value.quartier,
+    value.avenue,
+    value.parcelle,
+  ]);
 
   useEffect(() => {
     fetchJson<{ city?: string; communes?: Commune[] }>("/api/geo/kinshasa")
@@ -213,9 +236,9 @@ export function KinshasaAddressForm({
         accuracyM: accuracy ?? null,
       };
       onChange(next);
-      setShowMap(true);
+      if (!compact) setShowMap(true);
       void saveIfNew(next);
-      if (!geo.houseNumber) {
+      if (!compact && !geo.houseNumber) {
         toast.message("Numéro non trouvé — saisissez-le manuellement");
       }
     } catch {
@@ -255,6 +278,56 @@ export function KinshasaAddressForm({
       city: (partial.city ?? value.city) || cityName,
       ...partial,
     });
+  }
+
+  if (compact) {
+    return (
+      <div className="space-y-3">
+        <Button
+          type="button"
+          className="h-11 w-full gap-2"
+          variant="secondary"
+          disabled={locating}
+          onClick={() => void captureGps()}
+        >
+          {locating ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Crosshair className="size-4" />
+          )}
+          {locating ? "GPS…" : "Livrer ici (GPS)"}
+        </Button>
+        {value.lat != null && value.lng != null ? (
+          <p className="text-[11px] text-trust">
+            Position OK
+            {value.accuracyM != null
+              ? ` · ~${Math.round(value.accuracyM)} m`
+              : ""}
+          </p>
+        ) : null}
+        <div className="space-y-1">
+          <Label htmlFor="addr-line-c">Adresse</Label>
+          <Input
+            id="addr-line-c"
+            value={addressLine}
+            onFocus={() => setLineFocused(true)}
+            onBlur={() => {
+              setLineFocused(false);
+              const parsed = parseAddressLine(addressLine, cityName);
+              patch(parsed);
+              void saveIfNew({ ...value, ...parsed }, true);
+            }}
+            onChange={(e) => {
+              const next = e.target.value;
+              setAddressLine(next);
+              patch(parseAddressLine(next, cityName));
+            }}
+            placeholder="ville, commune, quartier, avenue, n°"
+            className="h-11 bg-surface-2"
+          />
+        </div>
+      </div>
+    );
   }
 
   return (

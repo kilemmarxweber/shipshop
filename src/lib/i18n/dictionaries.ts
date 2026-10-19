@@ -5,6 +5,7 @@ export type Messages = {
     home: string;
     discover: string;
     publish: string;
+    sellVideo: string;
     messages: string;
     cart: string;
     profile: string;
@@ -96,6 +97,7 @@ export type Messages = {
     categoriesHeading: string;
     trendsHeading: string;
     emptyResults: string;
+    nearMe: string;
   };
   shop: {
     notFound: string;
@@ -159,6 +161,27 @@ export type Messages = {
     updated: string;
     deleteConfirm: string;
     deleteBlocked: string;
+  };
+  buy: {
+    cta: string;
+    payPhone: string;
+    loginTitle: string;
+    loginHint: string;
+    phoneRequired: string;
+    gpsRequired: string;
+    payFailed: string;
+    buyOk: string;
+    realVideo: string;
+    needMore: string;
+    topUpHint: string;
+    heldLine: string;
+    confirmUssd: string;
+    topUpFailed: string;
+    topUpOk: string;
+    held: string;
+    onTheWay: string;
+    sellerPaid: string;
+    firstSaleHint: string;
   };
   cart: {
     title: string;
@@ -338,6 +361,7 @@ const fr: Messages = {
     home: "Accueil",
     discover: "Découvrir",
     publish: "Publier",
+    sellVideo: "Vendre",
     messages: "Messages",
     cart: "Panier",
     profile: "Profil",
@@ -359,7 +383,7 @@ const fr: Messages = {
     welcome: "Bienvenue sur ShipShop",
     failed: "Connexion impossible",
     registerTitle: "Créer un compte",
-    registerHint: "Obligatoire pour acheter et vendre sur ShipShop",
+    registerHint: "Pour acheter, liker et suivre — vendre vient après",
     registerSubmit: "S'inscrire",
     registerSubmitting: "Création…",
     hasAccount: "Déjà un compte ?",
@@ -409,7 +433,7 @@ const fr: Messages = {
     exploreForYou: "Explorer Pour toi",
     emptyForYouTitle: "Aucune annonce encore",
     emptyForYouHint: "Soyez le premier à publier sur ShipShop",
-    moneyProtected: "Argent protégé",
+    moneyProtected: "Tu paies. On bloque. Reçu = vendeur payé.",
     like: "Like",
     msg: "Msg",
     comments: "Commentaires",
@@ -431,6 +455,7 @@ const fr: Messages = {
     categoriesHeading: "Catégories",
     trendsHeading: "Tendances à Kinshasa",
     emptyResults: "Aucun résultat",
+    nearMe: "Près de moi",
   },
   shop: {
     notFound: "Boutique introuvable",
@@ -462,7 +487,7 @@ const fr: Messages = {
     discoverShop: "Découvrez",
   },
   product: {
-    payFromWallet: "Paiement depuis solde prépayé",
+    payFromWallet: "Payer au téléphone — argent bloqué jusqu’à réception",
     likes: "j'aime",
     comments: "commentaires",
     commentAria: "Commentaires",
@@ -494,6 +519,27 @@ const fr: Messages = {
     updated: "Produit mis à jour",
     deleteConfirm: "Supprimer définitivement ce produit ?",
     deleteBlocked: "Lié à un paiement — archivez-le plutôt",
+  },
+  buy: {
+    cta: "Acheter",
+    payPhone: "Payer au téléphone",
+    loginTitle: "Connecte-toi pour acheter",
+    loginHint: "Même écran — tu reviens tout de suite à cette vidéo.",
+    phoneRequired: "Indique un numéro avec l’indicatif pays",
+    gpsRequired: "Partage ta position GPS pour livrer ici",
+    payFailed: "Achat impossible",
+    buyOk: "Payé et bloqué — le vendeur est payé quand tu reçois",
+    realVideo: "Vidéo du vrai article",
+    needMore: "Il te faut",
+    topUpHint: "Recharge ici, sans quitter l’achat.",
+    heldLine: "Tu paies. On bloque. Le vendeur est payé quand tu reçois.",
+    confirmUssd: "J’ai validé sur le téléphone",
+    topUpFailed: "Recharge impossible",
+    topUpOk: "Compte rechargé",
+    held: "Payé et bloqué",
+    onTheWay: "En route",
+    sellerPaid: "Reçu, vendeur payé",
+    firstSaleHint: "Première vente : scanne le QR et remets le colis.",
   },
   cart: {
     title: "Panier",
@@ -677,6 +723,7 @@ const en: Messages = {
     home: "Home",
     discover: "Discover",
     publish: "Sell",
+    sellVideo: "Sell",
     messages: "Messages",
     cart: "Cart",
     profile: "Profile",
@@ -770,6 +817,7 @@ const en: Messages = {
     categoriesHeading: "Categories",
     trendsHeading: "Trending in Kinshasa",
     emptyResults: "No results",
+    nearMe: "Near me",
   },
   shop: {
     notFound: "Shop not found",
@@ -833,6 +881,27 @@ const en: Messages = {
     updated: "Product updated",
     deleteConfirm: "Permanently delete this product?",
     deleteBlocked: "Linked to a payment — archive it instead",
+  },
+  buy: {
+    cta: "Buy",
+    payPhone: "Pay with phone",
+    loginTitle: "Sign in to buy",
+    loginHint: "Stay on this video — you’ll come right back.",
+    phoneRequired: "Add a phone number with country code",
+    gpsRequired: "Share GPS to deliver here",
+    payFailed: "Purchase failed",
+    buyOk: "Paid and held — seller is paid when you receive",
+    realVideo: "Video of the real item",
+    needMore: "You need",
+    topUpHint: "Top up here, without leaving checkout.",
+    heldLine: "You pay. We hold. Seller is paid when you receive.",
+    confirmUssd: "I confirmed on my phone",
+    topUpFailed: "Top-up failed",
+    topUpOk: "Wallet topped up",
+    held: "Paid and held",
+    onTheWay: "On the way",
+    sellerPaid: "Received, seller paid",
+    firstSaleHint: "First sale: scan the QR and hand over the parcel.",
   },
   cart: {
     title: "Cart",
@@ -1016,6 +1085,7 @@ const pt: Messages = {
     home: "Início",
     discover: "Descobrir",
     publish: "Publicar",
+    sellVideo: "Vender",
     messages: "Mensagens",
     cart: "Carrinho",
     profile: "Perfil",
@@ -1109,6 +1179,7 @@ const pt: Messages = {
     categoriesHeading: "Categorias",
     trendsHeading: "Tendências em Kinshasa",
     emptyResults: "Sem resultados",
+    nearMe: "Perto de mim",
   },
   shop: {
     notFound: "Loja não encontrada",
@@ -1172,6 +1243,27 @@ const pt: Messages = {
     updated: "Produto atualizado",
     deleteConfirm: "Eliminar definitivamente este produto?",
     deleteBlocked: "Ligado a um pagamento — arquive em vez disso",
+  },
+  buy: {
+    cta: "Comprar",
+    payPhone: "Pagar no telefone",
+    loginTitle: "Entra para comprar",
+    loginHint: "Ficas neste vídeo — voltas já a seguir.",
+    phoneRequired: "Indica um número com indicativo",
+    gpsRequired: "Partilha o GPS para entregar aqui",
+    payFailed: "Compra impossível",
+    buyOk: "Pago e bloqueado — o vendedor recebe quando confirmares",
+    realVideo: "Vídeo do artigo real",
+    needMore: "Precisas de",
+    topUpHint: "Carrega aqui, sem sair da compra.",
+    heldLine: "Pagas. Bloqueamos. O vendedor recebe quando confirmares.",
+    confirmUssd: "Validei no telefone",
+    topUpFailed: "Carregamento impossível",
+    topUpOk: "Conta carregada",
+    held: "Pago e bloqueado",
+    onTheWay: "A caminho",
+    sellerPaid: "Recebido, vendedor pago",
+    firstSaleHint: "Primeira venda: lê o QR e entrega o pacote.",
   },
   cart: {
     title: "Carrinho",
