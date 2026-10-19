@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppearanceSettings } from "@/components/appearance-settings";
 import { ShopHoursSettings } from "@/components/shop-hours-settings";
+import { ScrollAdSettings } from "@/components/scroll-ad-settings";
 import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 import { orderStatusLabel } from "@/lib/order-status-label";
@@ -707,6 +708,8 @@ export default function ProfilePage() {
           </ul>
         </div>
       ) : (
+        <>
+        {isOwner ? <ScrollAdSettings /> : null}
         <div className="mt-6 flex flex-col gap-2">
           {(
             [
@@ -739,6 +742,7 @@ export default function ProfilePage() {
             </Link>
           ))}
         </div>
+        </>
       )}
 
       <ShopHoursSettings />

@@ -47,6 +47,7 @@ import {
 import { usePaginatedList } from "@/lib/use-paginated-list";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { DwellArticle } from "@/components/dwell-article";
+import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
 
 type Product = {
   id: string;
@@ -293,6 +294,8 @@ export default function FeedPage() {
   }
 
   const tabs = (
+    <>
+    <ScrollAdFeedSurface on={tab !== "wanted"} />
     <div className="flex shrink-0 justify-center gap-6 border-b border-border px-4 py-2 text-sm font-semibold">
       <button
         type="button"
@@ -331,6 +334,7 @@ export default function FeedPage() {
         {t("feed.tabWanted")}
       </button>
     </div>
+    </>
   );
 
   if (loading) {

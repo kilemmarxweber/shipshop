@@ -13,6 +13,15 @@ import {
   catalogTracksQuery,
   seoDefaultsQuery,
 } from "@/lib/sanity/queries";
+import {
+  SCROLL_AD_DEFAULT_DELAY,
+  SCROLL_AD_DEFAULT_VIDEO,
+  clampScrollAdDelay,
+  parseScrollAdVideos,
+  scrollAdLiveVideos,
+  type ScrollAdCampaign,
+} from "@/lib/scroll-ad";
+import { Prisma } from "@/generated/prisma/client";
 
 export type ContentSource = "system" | "sanity";
 
@@ -47,6 +56,7 @@ export type AppContentConfig = {
   nsfwPolicy: NsfwPolicy;
   catalogTracks: CatalogTrack[];
   experimentId: string | null;
+  scrollAd: ScrollAdCampaign;
 };
 
 export type SeoDefaults = {
@@ -96,6 +106,31 @@ function parseMotions(value: unknown): SlideMotion[] {
   return allowed.length ? allowed : [...SLIDE_MOTIONS];
 }
 
+const DEFAULT_SCROLL_AD: ScrollAdCampaign = {
+  enabled: true,
+  delaySeconds: SCROLL_AD_DEFAULT_DELAY,
+  startsAt: null,
+  endsAt: null,
+  videos: [SCROLL_AD_DEFAULT_VIDEO],
+};
+
+function parseScrollAd(row: {
+  scrollAdEnabled?: boolean;
+  scrollAdDelaySeconds?: number;
+  scrollAdStartsAt?: Date | null;
+  scrollAdEndsAt?: Date | null;
+  scrollAdVideos?: unknown;
+} | null): ScrollAdCampaign {
+  if (!row) return { ...DEFAULT_SCROLL_AD };
+  return {
+    enabled: row.scrollAdEnabled !== false,
+    delaySeconds: clampScrollAdDelay(row.scrollAdDelaySeconds),
+    startsAt: row.scrollAdStartsAt?.toISOString() ?? null,
+    endsAt: row.scrollAdEndsAt?.toISOString() ?? null,
+    videos: parseScrollAdVideos(row.scrollAdVideos),
+  };
+}
+
 async function readSwitch() {
   const envSource = parseSource(process.env.CONTENT_SOURCE);
   try {
@@ -105,9 +140,14 @@ async function readSwitch() {
     return {
       requested: parseSource(row?.source ?? envSource),
       humanReview: Boolean(row?.nsfwReview),
+      scrollAd: parseScrollAd(row),
     };
   } catch {
-    return { requested: envSource, humanReview: false };
+    return {
+      requested: envSource,
+      humanReview: false,
+      scrollAd: { ...DEFAULT_SCROLL_AD },
+    };
   }
 }
 
@@ -223,7 +263,7 @@ async function syncSanityTracks(tracks: CatalogTrack[]) {
 }
 
 export async function getAppConfig(): Promise<AppContentConfig> {
-  const { requested, humanReview } = await readSwitch();
+  const { requested, humanReview, scrollAd } = await readSwitch();
   const sanityConfigured = isSanityConfigured();
   const source: ContentSource =
     requested === "sanity" && sanityConfigured ? "sanity" : "system";
@@ -242,6 +282,7 @@ export async function getAppConfig(): Promise<AppContentConfig> {
     nsfwPolicy,
     catalogTracks: [],
     experimentId: null,
+    scrollAd,
   };
 
   if (source !== "sanity") {
@@ -319,7 +360,43 @@ export async function setContentSource(input: {
   );
 }
 
+export async function setScrollAdCampaign(input: Partial<ScrollAdCampaign>) {
+  const current = (await readSwitch()).scrollAd;
+  const next: ScrollAdCampaign = {
+    enabled: input.enabled ?? current.enabled,
+    delaySeconds: clampScrollAdDelay(input.delaySeconds ?? current.delaySeconds),
+    startsAt: input.startsAt === undefined ? current.startsAt : input.startsAt,
+    endsAt: input.endsAt === undefined ? current.endsAt : input.endsAt,
+    videos: input.videos ?? current.videos,
+  };
+  if (next.startsAt && next.endsAt && Date.parse(next.startsAt) > Date.parse(next.endsAt)) {
+    throw new Error("La fin de période doit être après le début");
+  }
+  const videosJson = next.videos as unknown as Prisma.InputJsonValue;
+  return withDbRetry(() =>
+    prisma.contentSourceConfig.upsert({
+      where: { id: "default" },
+      create: {
+        id: "default",
+        scrollAdEnabled: next.enabled,
+        scrollAdDelaySeconds: next.delaySeconds,
+        scrollAdStartsAt: next.startsAt ? new Date(next.startsAt) : null,
+        scrollAdEndsAt: next.endsAt ? new Date(next.endsAt) : null,
+        scrollAdVideos: videosJson,
+      },
+      update: {
+        scrollAdEnabled: next.enabled,
+        scrollAdDelaySeconds: next.delaySeconds,
+        scrollAdStartsAt: next.startsAt ? new Date(next.startsAt) : null,
+        scrollAdEndsAt: next.endsAt ? new Date(next.endsAt) : null,
+        scrollAdVideos: videosJson,
+      },
+    }),
+  );
+}
+
 export function publicAppConfig(cfg: AppContentConfig) {
+  const live = scrollAdLiveVideos(cfg.scrollAd);
   return {
     source: cfg.source,
     clipMs: cfg.clipMs,
@@ -328,5 +405,8 @@ export function publicAppConfig(cfg: AppContentConfig) {
     motions: cfg.motions,
     catalogTracks: cfg.catalogTracks,
     experimentId: cfg.experimentId,
+    scrollAdEnabled: live.length > 0,
+    scrollAdDelaySeconds: cfg.scrollAd.delaySeconds,
+    scrollAdVideos: live,
   };
 }

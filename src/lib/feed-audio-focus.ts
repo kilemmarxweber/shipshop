@@ -68,7 +68,9 @@ export function holdFeedAudio(held: boolean) {
   audioHeld = held;
   if (held && typeof document !== "undefined") {
     document.querySelectorAll("audio, video").forEach((node) => {
-      if (node instanceof HTMLMediaElement) node.muted = true;
+      if (!(node instanceof HTMLMediaElement)) return;
+      if (node.dataset.scrollAd === "1") return;
+      node.muted = true;
     });
   }
   commit();

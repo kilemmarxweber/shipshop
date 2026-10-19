@@ -258,10 +258,15 @@ model MediaModerationEvent {
 
 /// Interrupteur Config système / Sanity (owner).
 model ContentSourceConfig {
-  id         String   @id @default("default")
-  source     String   @default("system")
-  nsfwReview Boolean  @default(false)
-  updatedAt  DateTime @updatedAt
+  id                    String    @id @default("default")
+  source                String    @default("system")
+  nsfwReview            Boolean   @default(false)
+  scrollAdEnabled       Boolean   @default(true)
+  scrollAdDelaySeconds  Int       @default(120)
+  scrollAdStartsAt      DateTime?
+  scrollAdEndsAt        DateTime?
+  scrollAdVideos        Json      @default("[\"/renard.mp4\"]")
+  updatedAt             DateTime  @updatedAt
 
   @@map("content_source_config")
 }

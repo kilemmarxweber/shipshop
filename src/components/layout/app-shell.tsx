@@ -22,6 +22,7 @@ import { BackButton } from "@/components/back-button";
 import { BackNavProvider } from "@/components/back-nav-context";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { NewListingFlash } from "@/components/new-listing-flash";
+import { FoxScrollAdOverlay } from "@/components/fox-scroll-ad-overlay";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useInboxUnread } from "@/hooks/use-inbox-unread";
 import { useI18n } from "@/components/i18n-provider";
@@ -224,6 +225,7 @@ export function AppShell({
             </header>
           )}
           {!hideChrome && <NewListingFlash />}
+          {!hideChrome && <FoxScrollAdOverlay />}
 
           <main
             className={cn(

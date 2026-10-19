@@ -20,6 +20,7 @@ import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { Input } from "@/components/ui/input";
 import { getCurrentGeoCoords } from "@/lib/browser-geolocation";
 import { FeedLoadSentinel } from "@/components/feed-load-trigger";
+import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
 import { usePaginatedList } from "@/lib/use-paginated-list";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import {
@@ -224,6 +225,7 @@ export default function DiscoverPage() {
 
   return (
     <div className="discover-scroll px-4 pb-4 pt-3 md:px-8">
+      <ScrollAdFeedSurface on />
       <div className="mb-4 flex items-center gap-2 rounded-2xl border border-border bg-surface-2 px-3">
         <Search className="size-4 text-muted-foreground" />
         <Input
