@@ -14,6 +14,7 @@ import {
   subscribeFeedVideoActive,
 } from "@/lib/feed-video-playback";
 import { isVideoUrl, videoPosterUrl } from "@/lib/media";
+import { iosInlineVideo } from "@/lib/ios-inline-video";
 import { tryPlayMedia } from "@/lib/try-play-media";
 import {
   playbackMotion,
@@ -193,7 +194,7 @@ function SlideMedia({
           ref={videoRef}
           muted={muted}
           loop={loop}
-          playsInline
+          {...iosInlineVideo}
           preload="none"
           poster={poster}
           disablePictureInPicture

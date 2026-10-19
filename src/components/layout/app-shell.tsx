@@ -144,7 +144,7 @@ export function AppShell({
       <div className="app-viewport">
         <div className="app-shell">
           {!hideChrome && (
-            <header className="z-40 shrink-0 border-b border-border bg-background/90 px-3 pb-1.5 pt-2.5 backdrop-blur-xl sm:px-4">
+            <header className="z-40 shrink-0 border-b border-border bg-background px-3 pb-1.5 pt-[max(0.65rem,env(safe-area-inset-top))] sm:px-4">
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
                 <Link
                   href="/"
@@ -244,7 +244,7 @@ export function AppShell({
           </main>
 
           {!hideChrome && (
-            <nav className="absolute bottom-0 left-0 right-0 z-40 shrink-0 border-t border-border bg-background/92 px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
+            <nav className="absolute bottom-0 left-0 right-0 z-40 shrink-0 border-t border-border bg-background px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <div className="grid grid-cols-5 gap-0.5">
                 {NAV.map((item) => {
                   const active =

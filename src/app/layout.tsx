@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import localFont from "next/font/local";
@@ -23,10 +23,27 @@ const spaceGrotesk = localFont({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  colorScheme: "dark",
+  interactiveWidget: "resizes-content",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f3f3f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0f" },
+  ],
+};
+
 export const metadata: Metadata = {
   title: "ShipShop — Marketplace de confiance",
   description:
     "Achetez et vendez en sécurité avec portefeuille Mobile Money prépayé.",
+  appleWebApp: {
+    capable: true,
+    title: "ShipShop",
+    statusBarStyle: "black-translucent",
+  },
   icons: {
     icon: [
       { url: "/icon.png", type: "image/png", sizes: "256x256" },
@@ -57,7 +74,7 @@ export default function RootLayout({
     <html
       lang="fr"
       suppressHydrationWarning
-      className={`${dmSans.variable} ${spaceGrotesk.variable} h-full`}
+      className={`${dmSans.variable} ${spaceGrotesk.variable} dark h-full`}
     >
       <body className="h-full overflow-hidden font-sans antialiased">
         <Suspense fallback={<PageLoader fullScreen />}>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ScanLine, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { iosInlineVideo } from "@/lib/ios-inline-video";
 
 type Detector = {
   detect: (source: CanvasImageSource) => Promise<{ rawValue: string }[]>;
@@ -149,7 +150,7 @@ export function QrScanCamera({ onClose, onScan }: Props) {
       <div className="relative mx-4 flex-1 overflow-hidden rounded-2xl bg-black">
         <video
           ref={videoRef}
-          playsInline
+          {...iosInlineVideo}
           muted
           autoPlay
           className="h-full w-full object-cover"

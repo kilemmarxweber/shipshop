@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { holdFeedAudio } from "@/lib/feed-audio-focus";
+import { iosInlineVideo } from "@/lib/ios-inline-video";
 
 const SRC = "/renard-dispatch.mp4";
 
@@ -68,7 +69,7 @@ export function FoxDispatchOverlay({ open, onFinished }: Props) {
             ref={videoRef}
             src={SRC}
             className="absolute inset-0 size-full scale-[1.08] object-cover"
-            playsInline
+            {...iosInlineVideo}
             autoPlay
             preload="auto"
             onEnded={finish}

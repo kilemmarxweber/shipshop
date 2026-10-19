@@ -8,6 +8,7 @@ import { isVideoUrl } from "@/lib/media";
 import { SCROLL_AD_IMAGE_SECONDS } from "@/lib/scroll-ad";
 import { useScrollAd } from "@/lib/use-scroll-ad";
 import { Slider } from "@/components/ui/slider";
+import { iosInlineVideo } from "@/lib/ios-inline-video";
 
 const CLOSE_AFTER = 0.88;
 
@@ -112,7 +113,7 @@ function AdPlayer({ src, onFinished }: { src: string; onFinished: () => void }) 
               ref={videoRef}
               src={src}
               className="block aspect-[9/16] max-h-[92vh] w-full object-contain"
-              playsInline
+              {...iosInlineVideo}
               autoPlay
               preload="auto"
               data-scroll-ad="1"

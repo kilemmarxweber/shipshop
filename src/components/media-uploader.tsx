@@ -13,6 +13,7 @@ import {
   looksLikeImageFile,
   looksLikeVideoFile,
 } from "@/lib/media";
+import { iosInlineVideo } from "@/lib/ios-inline-video";
 import { cn } from "@/lib/utils";
 import { useAppConfig } from "@/lib/use-app-config";
 
@@ -121,7 +122,7 @@ export function MediaUploader({ urls, onChange, max }: Props) {
                       src={src}
                       className="pointer-events-none size-full object-cover"
                       muted
-                      playsInline
+                      {...iosInlineVideo}
                       preload="metadata"
                     />
                     <Film className="pointer-events-none absolute bottom-1.5 left-1.5 size-4 text-white drop-shadow" />

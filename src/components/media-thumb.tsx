@@ -7,6 +7,7 @@ import {
   mediaCoverUrl,
   videoPosterUrl,
 } from "@/lib/media";
+import { iosInlineVideo } from "@/lib/ios-inline-video";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -53,7 +54,7 @@ export function MediaThumb({
         <video
           src={`${videoSrc}#t=0.1`}
           muted
-          playsInline
+          {...iosInlineVideo}
           preload="metadata"
           className="pointer-events-none absolute inset-0 size-full object-cover [filter:brightness(1.06)_contrast(1.05)]"
         />
