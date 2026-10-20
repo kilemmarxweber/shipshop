@@ -109,7 +109,18 @@ export default function ProfilePage() {
         fetchJson<{ user?: ProfileUser }>("/api/profile"),
         fetchJson<{ kyc?: KycSummary | null; isOwner?: boolean }>("/api/kyc"),
       ]);
-    setOrders(ordersRes.data?.orders ?? []);
+    if (!ordersRes.res.ok) {
+      toast.error(ordersRes.data?.error ?? "Impossible de charger tes commandes");
+    }
+    const list = ordersRes.data?.orders ?? [];
+    list.sort((a, b) =>
+      a.status === "AWAITING_CONFIRM"
+        ? -1
+        : b.status === "AWAITING_CONFIRM"
+          ? 1
+          : 0,
+    );
+    setOrders(list);
     const w = walletRes.data?.wallet;
     setBalance(w ? walletCents(w, parseCurrency(w.currency)) : 0);
     setCartCount(cartRes.data?.count ?? 0);
@@ -122,11 +133,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!userId) return;
-    refresh().catch(() => {
-      setOrders([]);
-      setBalance(0);
-      setCartCount(0);
-    });
+    refresh().catch(() => undefined);
   }, [userId, period, tab]);
 
   async function syncSessionUser(patch: {

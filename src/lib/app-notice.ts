@@ -6,6 +6,7 @@ export async function createAppNotice(input: {
   body: string;
   href?: string | null;
 }) {
+  if (typeof prisma.appNotice?.create !== "function") return null;
   return withDbRetry(() =>
     prisma.appNotice.create({
       data: {
