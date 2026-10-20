@@ -24,8 +24,10 @@ import {
 } from "@/components/video-sound-button";
 import {
   requestFeedAudioFocus,
+  resetFeedAudioFocus,
   useFeedAudioFocus,
 } from "@/lib/feed-audio-focus";
+import { resetAllPageMedia } from "@/lib/page-media-session";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { colorHex } from "@/lib/product-options";
 import { AuthInline } from "@/components/auth-inline";
@@ -96,6 +98,7 @@ export default function FeedPage() {
   const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   const [tab, setTab] = useState<FeedTab>("foryou");
+  const [audioEpoch, setAudioEpoch] = useState(0);
 
   useEffect(() => {
     void getCurrentGeoCoords()
@@ -179,37 +182,64 @@ export default function FeedPage() {
     );
   }, [audioFocusId]);
 
-  useEffect(() => {
+  function mediaKey(id: string) {
+    return `${tab}:${id}`;
+  }
+
+  function selectTab(next: FeedTab) {
+    resetFeedAudioFocus();
+    resetAllPageMedia();
     setSoundById({});
-  }, [tab]);
+    setAudioEpoch((n) => n + 1);
+    setTab(next);
+  }
 
   useEffect(() => {
-    if (tab === "wanted" || products.length === 0) return;
-    if (audioFocusId) return;
-    const first = products.find(
-      (p) => productHasVideo(p.images) || Boolean(p.soundtrack?.audioUrl),
-    );
-    if (!first) return;
-    const timer = window.setTimeout(() => requestFeedAudioFocus(first.id), 60);
+    const goHome = () => {
+      resetFeedAudioFocus();
+      resetAllPageMedia();
+      setSoundById({});
+      setAudioEpoch((n) => n + 1);
+      setTab("foryou");
+    };
+    window.addEventListener("ss:home-feed", goHome);
+    return () => window.removeEventListener("ss:home-feed", goHome);
+  }, []);
+
+  useEffect(() => {
+    resetFeedAudioFocus();
+    resetAllPageMedia();
+    setSoundById({});
+  }, [tab, audioEpoch]);
+
+  const bootAudioId =
+    tab === "wanted"
+      ? null
+      : (products.find(
+          (p) => productHasVideo(p.images) || Boolean(p.soundtrack?.audioUrl),
+        )?.id ?? null);
+
+  useEffect(() => {
+    if (!bootAudioId) return;
+    const key = `${tab}:${bootAudioId}`;
+    const timer = window.setTimeout(() => requestFeedAudioFocus(key), 80);
     return () => window.clearTimeout(timer);
-  }, [tab, products, audioFocusId]);
+  }, [tab, audioEpoch, bootAudioId]);
 
   function soundFor(id: string): VideoSoundState {
-    const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
-    if (audioFocusId !== id) return { ...base, muted: true };
+    const key = mediaKey(id);
+    const base = soundById[key] ?? DEFAULT_VIDEO_SOUND;
+    if (audioFocusId !== key) return { ...base, muted: true };
     return base;
   }
 
   function activateSound(id: string) {
-    if (!soundFor(id).muted) {
-      requestFeedAudioFocus(id);
-      return;
-    }
-    requestFeedAudioFocus(id);
+    const key = mediaKey(id);
+    requestFeedAudioFocus(key);
     setSoundById((prev) =>
-      applyExclusiveVideoSound(prev, id, {
+      applyExclusiveVideoSound(prev, key, {
         muted: false,
-        volume: (prev[id] ?? DEFAULT_VIDEO_SOUND).volume,
+        volume: (prev[key] ?? DEFAULT_VIDEO_SOUND).volume,
       }),
     );
   }
@@ -310,7 +340,7 @@ export default function FeedPage() {
     <div className="flex shrink-0 justify-center gap-6 border-b border-border px-4 py-2 text-sm font-semibold">
       <button
         type="button"
-        onClick={() => setTab("following")}
+        onClick={() => selectTab("following")}
         className={cn(
           "cursor-pointer pb-1",
           tab === "following"
@@ -322,7 +352,7 @@ export default function FeedPage() {
       </button>
       <button
         type="button"
-        onClick={() => setTab("foryou")}
+        onClick={() => selectTab("foryou")}
         className={cn(
           "cursor-pointer pb-1",
           tab === "foryou"
@@ -334,7 +364,7 @@ export default function FeedPage() {
       </button>
       <button
         type="button"
-        onClick={() => setTab("wanted")}
+        onClick={() => selectTab("wanted")}
         className={cn(
           "cursor-pointer pb-1",
           tab === "wanted"
@@ -425,7 +455,7 @@ export default function FeedPage() {
               </p>
               <button
                 type="button"
-                onClick={() => setTab("foryou")}
+                onClick={() => selectTab("foryou")}
                 className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
               >
                 {t("feed.exploreForYou")}
@@ -479,7 +509,7 @@ export default function FeedPage() {
               motions={p.imageMotions}
               audioKey={
                 productHasVideo(p.images) || p.soundtrack?.audioUrl
-                  ? p.id
+                  ? mediaKey(p.id)
                   : undefined
               }
               onActivateSound={
@@ -494,7 +524,7 @@ export default function FeedPage() {
                 audioUrl={p.soundtrack.audioUrl}
                 startMs={p.soundtrackStartMs}
                 sound={soundFor(p.id)}
-                active={audioFocusId === p.id}
+                active={audioFocusId === mediaKey(p.id)}
               />
             ) : null}
             {index === prefetchAt || index === products.length - 1 ? (
@@ -580,9 +610,10 @@ export default function FeedPage() {
                 hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                 sound={soundFor(p.id)}
                 onChange={(next) => {
-                  if (!next.muted) requestFeedAudioFocus(p.id);
+                  const key = mediaKey(p.id);
+                  if (!next.muted) requestFeedAudioFocus(key);
                   setSoundById((prev) =>
-                    applyExclusiveVideoSound(prev, p.id, next),
+                    applyExclusiveVideoSound(prev, key, next),
                   );
                 }}
               />

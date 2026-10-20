@@ -151,6 +151,11 @@ export function AppShell({
                 <Link
                   href="/"
                   aria-label={appName}
+                  onClick={() => {
+                    if (pathname === "/") {
+                      window.dispatchEvent(new Event("ss:home-feed"));
+                    }
+                  }}
                   className="flex min-w-0 items-center gap-1.5 justify-self-start md:gap-2"
                 >
                   <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-transparent">
@@ -271,6 +276,10 @@ export function AppShell({
                         }
                         e.preventDefault();
                         if (pathname === item.href) {
+                          if (item.href === "/") {
+                            window.dispatchEvent(new Event("ss:home-feed"));
+                            return;
+                          }
                           window.location.reload();
                           return;
                         }

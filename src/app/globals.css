@@ -277,9 +277,11 @@
   display: none;
 }
 
-/* iOS : un seul scroller (le reel), pas le double-scroll nested Safari */
-.app-main:has(.feed-snap) {
-  overflow: hidden;
+/* Mobile reel : un seul scroller. Tablette/desktop : app-main doit défiler (grille). */
+@media (max-width: 767px) {
+  .app-main:has(.feed-snap) {
+    overflow: hidden;
+  }
 }
 
 /* Thread chat : header + saisie fixes, seul le fil défile */
@@ -290,6 +292,11 @@
 }
 
 @media (min-width: 768px) {
+  .feed-snap {
+    scroll-snap-type: none;
+    touch-action: auto;
+  }
+
   .app-viewport {
     display: flex;
     align-items: stretch;

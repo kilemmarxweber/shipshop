@@ -45,6 +45,22 @@ export function pauseAllPageMedia() {
   });
 }
 
+/** Changer d’onglet feed : coupe, mute, et reprend à 0. */
+export function resetAllPageMedia() {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll("audio, video").forEach((node) => {
+    if (!(node instanceof HTMLMediaElement)) return;
+    node.pause();
+    node.muted = true;
+    if (node.dataset.scrollAd === "1") return;
+    try {
+      node.currentTime = 0;
+    } catch {
+      /* iOS si métadonnées pas prêtes */
+    }
+  });
+}
+
 export function bindPageMediaRoute(next: string) {
   if (route === next) return false;
   route = next;
