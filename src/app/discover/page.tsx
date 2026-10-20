@@ -23,6 +23,7 @@ import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
 import { usePaginatedList } from "@/lib/use-paginated-list";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import {
+  getPinnedFeedAudioId,
   requestFeedAudioFocus,
   resetFeedAudioFocus,
   unpinFeedAudio,
@@ -32,7 +33,6 @@ import {
 import {
   disableFeedSound,
   enableFeedSound,
-  isIosDevice,
   playFirstVisibleFeedSound,
 } from "@/lib/try-play-media";
 
@@ -74,7 +74,7 @@ export default function DiscoverPage() {
   const [userPinned, setUserPinned] = useState<string | null>(null);
   const [audioOff, setAudioOff] = useState(false);
   const audioFocusId = useFeedAudioFocus();
-  const soundLive = useFeedSoundLive();
+  const { live: soundLive, kick: soundKick } = useFeedSoundLive();
   const prevAudioFocus = useRef<string | null>(null);
   const audioFocusRef = useRef<string | null>(null);
   const userPinnedRef = useRef<string | null>(null);
@@ -165,14 +165,15 @@ export default function DiscoverPage() {
   }, [products, category, debouncedQ, assignVisibleAudio]);
 
   function soundFor(id: string): VideoSoundState {
-    const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
-    if (audioOff || audioFocusId !== id) return { ...base, muted: true };
-    if (isIosDevice() && !soundLive) return { ...base, muted: true };
-    return base;
+    const volume = soundById[id]?.volume ?? DEFAULT_VIDEO_SOUND.volume;
+    return {
+      volume,
+      muted: audioOff || !soundLive || audioFocusId !== id,
+    };
   }
 
   function activateSound(id: string) {
-    enableFeedSound();
+    enableFeedSound(false);
     requestFeedAudioFocus(id);
     setSoundById((prev) =>
       applyExclusiveVideoSound(prev, id, {
@@ -182,9 +183,9 @@ export default function DiscoverPage() {
     );
   }
 
-  useEffect(() => {
-    if (isIosDevice() && !soundLive) return;
-    const id = playFirstVisibleFeedSound();
+  function syncVisibleSoundIcon() {
+    const pin = getPinnedFeedAudioId();
+    const id = pin ?? playFirstVisibleFeedSound();
     if (!id) return;
     requestFeedAudioFocus(id);
     setSoundById((prev) =>
@@ -193,7 +194,23 @@ export default function DiscoverPage() {
         volume: 1,
       }),
     );
-  }, [soundLive, products, audioFocusId]);
+  }
+
+  const productSoundKey = `${products.length}:${products[0]?.id ?? ""}:${products.at(-1)?.id ?? ""}`;
+
+  useEffect(() => {
+    if (!soundLive) return;
+    syncVisibleSoundIcon();
+  }, [soundLive, soundKick, productSoundKey]);
+
+  useEffect(() => {
+    const onDiscover = () => {
+      enableFeedSound();
+      syncVisibleSoundIcon();
+    };
+    window.addEventListener("ss:discover-feed", onDiscover);
+    return () => window.removeEventListener("ss:discover-feed", onDiscover);
+  }, []);
 
   const playNext = useCallback((fromId: string) => {
     if (userPinnedRef.current || audioOffRef.current) return;
@@ -330,7 +347,7 @@ export default function DiscoverPage() {
                           unpinFeedAudio();
                         }
                       } else {
-                        enableFeedSound();
+                        enableFeedSound(false);
                         setUserPinned(p.id);
                         requestFeedAudioFocus(p.id);
                       }

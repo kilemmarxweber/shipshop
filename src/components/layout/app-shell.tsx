@@ -273,7 +273,7 @@ export function AppShell({
                       prefetch={false}
                       data-feed-sound={
                         item.href === "/" || item.href === "/discover"
-                          ? ""
+                          ? "1"
                           : undefined
                       }
                       onClick={(e) => {
@@ -295,7 +295,12 @@ export function AppShell({
                             window.dispatchEvent(new Event("ss:home-feed"));
                             return;
                           }
-                          if (item.href === "/discover") return;
+                          if (item.href === "/discover") {
+                            window.dispatchEvent(
+                              new Event("ss:discover-feed"),
+                            );
+                            return;
+                          }
                           window.location.reload();
                           return;
                         }

@@ -429,12 +429,12 @@ export function ProductImageCarousel({
           { root: ioRoot, rootMargin: "120% 0px", threshold: 0.01 },
         );
 
-    const applyVisibility = (ratio: number, left: number) => {
+    const applyVisibility = (ratio: number, left: number, top: number) => {
       if (hasVideo && !eager) {
         setFeedVideoScore(feedId, ratio, pageKey);
       }
       if (audioKey) {
-        setFeedAudioScore(audioKey, { ratio, left }, pageKey);
+        setFeedAudioScore(audioKey, { ratio, left, top }, pageKey);
       }
       if (ratio < LEFT_VIEW_RATIO) {
         setInView(false);
@@ -450,7 +450,11 @@ export function ProductImageCarousel({
     const playIo = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
-        applyVisibility(entry.intersectionRatio, entry.boundingClientRect.left);
+        applyVisibility(
+          entry.intersectionRatio,
+          entry.boundingClientRect.left,
+          entry.boundingClientRect.top,
+        );
       },
       {
         root: ioRoot,
@@ -478,7 +482,7 @@ export function ProductImageCarousel({
         Math.min(rect.right, rootBox.right) - Math.max(rect.left, rootBox.left),
       );
       const area = Math.max(1, rect.width * rect.height);
-      applyVisibility((overlapH * overlapW) / area, rect.left);
+      applyVisibility((overlapH * overlapW) / area, rect.left, rect.top);
     };
     const bootId = window.requestAnimationFrame(measure);
 

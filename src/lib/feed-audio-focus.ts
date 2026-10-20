@@ -8,8 +8,10 @@ import {
   usePageMediaLive,
 } from "@/lib/page-media-session";
 import {
+  FEED_ROW_PX,
   SOUND_UNLOCK_EVENT,
   isFeedSoundLive,
+  pickFrontRowLeft,
 } from "@/lib/try-play-media";
 
 /**
@@ -20,7 +22,7 @@ import {
 const VISIBLE_RATIO = 0.4;
 const KEEP_PIN_RATIO = 0.22;
 
-type Score = { ratio: number; left: number; page: string };
+type Score = { ratio: number; left: number; top: number; page: string };
 type Listener = (activeId: string | null) => void;
 
 const scores = new Map<string, Score>();
@@ -40,22 +42,35 @@ function ensurePageMediaBinding() {
 function pickWinner(): string | null {
   if (!isPageMediaDocumentVisible()) return null;
   const page = getPageMediaRoute();
-  const pin = pinnedId ? scores.get(pinnedId) : undefined;
-  if (pin && pin.page === page && pin.ratio >= KEEP_PIN_RATIO) {
-    return pinnedId;
-  }
-  if (pinnedId) pinnedId = null;
-
   const visible = [...scores.entries()].filter(
     ([, s]) => s.page === page && s.ratio >= VISIBLE_RATIO,
   );
-  if (visible.length === 0) return null;
-  visible.sort((a, b) => {
-    const dx = a[1].left - b[1].left;
-    if (Math.abs(dx) > 8) return dx;
-    return b[1].ratio - a[1].ratio;
-  });
-  return visible[0]![0];
+  if (visible.length === 0) {
+    pinnedId = null;
+    return null;
+  }
+  const front = pickFrontRowLeft(
+    visible.map(([id, s]) => ({
+      id,
+      top: s.top,
+      left: s.left,
+      score: s.ratio,
+    })),
+  );
+  const frontLeft = front?.id ?? null;
+  const pin = pinnedId ? scores.get(pinnedId) : undefined;
+  if (
+    pin &&
+    pinnedId &&
+    pin.page === page &&
+    pin.ratio >= KEEP_PIN_RATIO &&
+    front &&
+    Math.abs(pin.top - front.top) < FEED_ROW_PX
+  ) {
+    return pinnedId;
+  }
+  if (pinnedId) pinnedId = null;
+  return frontLeft;
 }
 
 function applyDomMute() {
@@ -67,7 +82,14 @@ function applyDomMute() {
       .closest("[data-audio-key]")
       ?.getAttribute("data-audio-key");
     const live = Boolean(!audioHeld && activeId && key === activeId);
-    if (live) return;
+    if (live) {
+      if (isFeedSoundLive()) {
+        node.dataset.wantSound = "1";
+        node.muted = false;
+        void node.play().catch(() => undefined);
+      }
+      return;
+    }
     node.muted = true;
     node.dataset.wantSound = "0";
   });
@@ -99,7 +121,7 @@ export function holdFeedAudio(held: boolean) {
 
 export function setFeedAudioScore(
   id: string,
-  score: { ratio: number; left: number },
+  score: { ratio: number; left: number; top?: number },
   page = getPageMediaRoute(),
 ) {
   ensurePageMediaBinding();
@@ -107,7 +129,12 @@ export function setFeedAudioScore(
     scores.delete(id);
     if (pinnedId === id) pinnedId = null;
   } else {
-    scores.set(id, { ...score, page });
+    scores.set(id, {
+      ratio: score.ratio,
+      left: score.left,
+      top: score.top ?? scores.get(id)?.top ?? 0,
+      page,
+    });
   }
   commit();
 }
@@ -124,8 +151,9 @@ export function requestFeedAudioFocus(id: string) {
   pinnedId = id;
   const prev = scores.get(id);
   scores.set(id, {
-    ratio: Math.max(prev?.ratio ?? 0, 0.99),
+    ratio: Math.max(prev?.ratio ?? 0, 0.5),
     left: prev?.left ?? 0,
+    top: prev?.top ?? 0,
     page: prev?.page ?? getPageMediaRoute(),
   });
   commit();
@@ -135,6 +163,10 @@ export function requestFeedAudioFocus(id: string) {
 export function unpinFeedAudio() {
   pinnedId = null;
   commit();
+}
+
+export function getPinnedFeedAudioId() {
+  return pinnedId;
 }
 
 export function subscribeFeedAudioFocus(listener: Listener) {
@@ -167,14 +199,18 @@ export function useFeedAudioFocus() {
   return live ? id : null;
 }
 
-/** iPhone : false tant que le tap son n’a pas eu lieu. */
+/** Android/desktop : on d’emblée. iOS : après le clic fil. Mute volume : off. */
 export function useFeedSoundLive() {
   const [on, setOn] = useState(false);
+  const [kick, setKick] = useState(0);
   useEffect(() => {
-    const sync = () => setOn(isFeedSoundLive());
+    const sync = () => {
+      setOn(isFeedSoundLive());
+      setKick((n) => n + 1);
+    };
     sync();
     window.addEventListener(SOUND_UNLOCK_EVENT, sync);
     return () => window.removeEventListener(SOUND_UNLOCK_EVENT, sync);
   }, []);
-  return on;
+  return { live: on, kick };
 }

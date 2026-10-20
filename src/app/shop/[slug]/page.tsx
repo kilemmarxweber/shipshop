@@ -49,7 +49,6 @@ import {
 import {
   disableFeedSound,
   enableFeedSound,
-  isIosDevice,
 } from "@/lib/try-play-media";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
@@ -129,7 +128,7 @@ function ShopInner() {
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
   const audioFocusId = useFeedAudioFocus();
-  const soundLive = useFeedSoundLive();
+  const { live: soundLive } = useFeedSoundLive();
   const prevAudioFocus = useRef<string | null>(null);
 
   useEffect(() => {
@@ -150,14 +149,15 @@ function ShopInner() {
   const isOwnShop = Boolean(shop?.canManage);
 
   function soundFor(id: string): VideoSoundState {
-    const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
-    if (audioFocusId !== id) return { ...base, muted: true };
-    if (isIosDevice() && !soundLive) return { ...base, muted: true };
-    return base;
+    const volume = soundById[id]?.volume ?? DEFAULT_VIDEO_SOUND.volume;
+    return {
+      volume,
+      muted: !soundLive || audioFocusId !== id,
+    };
   }
 
   function activateSound(id: string) {
-    enableFeedSound();
+    enableFeedSound(false);
     if (!soundFor(id).muted) {
       requestFeedAudioFocus(id);
       return;
@@ -797,7 +797,7 @@ function ShopInner() {
                       );
                       return;
                     }
-                    enableFeedSound();
+                    enableFeedSound(false);
                     requestFeedAudioFocus(p.id);
                     setSoundById((prev) =>
                       applyExclusiveVideoSound(prev, p.id, next),

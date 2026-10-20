@@ -23,6 +23,7 @@ import {
   type VideoSoundState,
 } from "@/components/video-sound-button";
 import {
+  getPinnedFeedAudioId,
   requestFeedAudioFocus,
   resetFeedAudioFocus,
   unpinFeedAudio,
@@ -32,7 +33,6 @@ import {
 import {
   disableFeedSound,
   enableFeedSound,
-  isIosDevice,
   playFirstVisibleFeedSound,
 } from "@/lib/try-play-media";
 import { resetAllPageMedia } from "@/lib/page-media-session";
@@ -186,7 +186,7 @@ export default function FeedPage() {
   );
   const [commentProductId, setCommentProductId] = useState<string | null>(null);
   const audioFocusId = useFeedAudioFocus();
-  const soundLive = useFeedSoundLive();
+  const { live: soundLive, kick: soundKick } = useFeedSoundLive();
   const prevAudioFocus = useRef<string | null>(null);
 
   useEffect(() => {
@@ -206,7 +206,7 @@ export default function FeedPage() {
 
   function selectTab(next: FeedTab) {
     if (next === "foryou" || next === "following") {
-      enableFeedSound();
+      enableFeedSound(next === tab);
     }
     if (next === tab) {
       if (next === "foryou" || next === "following") {
@@ -244,7 +244,8 @@ export default function FeedPage() {
   }, [tab, audioEpoch]);
 
   function syncVisibleSoundIcon() {
-    const id = playFirstVisibleFeedSound();
+    const pin = getPinnedFeedAudioId();
+    const id = pin ?? playFirstVisibleFeedSound();
     if (!id) return;
     requestFeedAudioFocus(id);
     setSoundById((prev) =>
@@ -255,25 +256,28 @@ export default function FeedPage() {
     );
   }
 
+  const productSoundKey = `${products.length}:${products[0]?.id ?? ""}:${products.at(-1)?.id ?? ""}`;
+
   useEffect(() => {
-    if (tab === "wanted") return;
-    if (isIosDevice() && !soundLive) return;
-    const id = window.setTimeout(syncVisibleSoundIcon, 80);
+    if (tab === "wanted" || loading || products.length === 0) return;
+    if (!soundLive) return;
+    const id = window.setTimeout(syncVisibleSoundIcon, 120);
     return () => window.clearTimeout(id);
-  }, [tab, audioEpoch, products, soundLive, audioFocusId]);
+  }, [tab, audioEpoch, productSoundKey, soundLive, soundKick, loading]);
 
   /* Son auto = card la plus visible (scores IO / scroll). Pas de pin 1re card :
      sur iOS le pin restait collé et le fil ne démutait plus au scroll. */
 
   function soundFor(id: string): VideoSoundState {
-    const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
-    if (audioFocusId !== id) return { ...base, muted: true };
-    if (isIosDevice() && !soundLive) return { ...base, muted: true };
-    return base;
+    const volume = soundById[id]?.volume ?? DEFAULT_VIDEO_SOUND.volume;
+    return {
+      volume,
+      muted: !soundLive || audioFocusId !== id,
+    };
   }
 
   function activateSound(id: string) {
-    enableFeedSound();
+    enableFeedSound(false);
     requestFeedAudioFocus(id);
     setSoundById((prev) =>
       applyExclusiveVideoSound(prev, id, {
@@ -291,6 +295,7 @@ export default function FeedPage() {
     const onScroll = () => {
       productFeed.noteUserScroll();
       wantedFeed.noteUserScroll();
+      unpinFeedAudio();
     };
     root.addEventListener("scroll", onScroll, { passive: true });
     return () => root.removeEventListener("scroll", onScroll);
@@ -382,7 +387,7 @@ export default function FeedPage() {
     >
       <button
         type="button"
-        data-feed-sound
+        data-feed-sound="1"
         onClick={() => selectTab("following")}
         className={cn(
           "cursor-pointer pb-1",
@@ -395,7 +400,7 @@ export default function FeedPage() {
       </button>
       <button
         type="button"
-        data-feed-sound
+        data-feed-sound="1"
         onClick={() => selectTab("foryou")}
         className={cn(
           "cursor-pointer pb-1",
@@ -665,7 +670,7 @@ export default function FeedPage() {
                     );
                     return;
                   }
-                  enableFeedSound();
+                  enableFeedSound(false);
                   requestFeedAudioFocus(p.id);
                   setSoundById((prev) =>
                     applyExclusiveVideoSound(prev, p.id, next),

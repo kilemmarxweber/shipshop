@@ -1,7 +1,7 @@
 /**
- * On tente le son tout de suite (comme Android), y compris iOS.
- * Si Safari/Chrome iOS refuse (pas de geste Apple), lecture muette
- * puis démute au premier tap / scroll.
+ * Autoplay dès qu’une card est visible (Android / desktop).
+ * iOS reste muet tant qu’Apple n’a pas un geste.
+ * Clic Accueil / Découvrir / Pour toi / Abonnements : démute la card visible.
  */
 
 export const SOUND_UNLOCK_EVENT = "ss:sound-unlocked";
@@ -9,8 +9,10 @@ export const SOUND_UNLOCK_EVENT = "ss:sound-unlocked";
 const waitingSound = new Set<HTMLMediaElement>();
 let soundUnlocked = false;
 let unlockArmed = false;
-/** iPhone : le tap son allume le fil ; mute bouton l’éteint. Android : toujours on. */
+/** Clic fil / volume on. */
 let userEnabledSound = false;
+/** Bouton volume off : coupe l’autoplay aussi. */
+let userMutedSound = false;
 
 export function isIosDevice() {
   if (typeof navigator === "undefined") return false;
@@ -24,9 +26,11 @@ export function isFeedSoundUnlocked() {
   return soundUnlocked;
 }
 
-/** Android : son auto. iPhone : seulement après le tap son. */
+/** Android/desktop : autoplay. iOS : après le clic. Mute volume : off partout. */
 export function isFeedSoundLive() {
-  return !isIosDevice() || (soundUnlocked && userEnabledSound);
+  if (userMutedSound) return false;
+  if (!isIosDevice()) return true;
+  return soundUnlocked && userEnabledSound;
 }
 
 function notifySound() {
@@ -34,7 +38,34 @@ function notifySound() {
   window.dispatchEvent(new Event(SOUND_UNLOCK_EVENT));
 }
 
-/** 1re card vraiment à l’écran. Sinon on attend (rien à jouer). */
+/** Deux cards côte à côte : même rangée si le top est proche. */
+export const FEED_ROW_PX = 96;
+
+/** Rangée la plus visible, puis card de gauche. */
+export function pickFrontRowLeft<T extends { top: number; left: number; score: number }>(
+  items: T[],
+): T | null {
+  if (items.length === 0) return null;
+  const rows: T[][] = [];
+  for (const item of [...items].sort((a, b) => a.top - b.top)) {
+    const row = rows.find((r) => Math.abs(r[0]!.top - item.top) < FEED_ROW_PX);
+    if (row) row.push(item);
+    else rows.push([item]);
+  }
+  let best = rows[0]!;
+  let bestScore = -1;
+  for (const row of rows) {
+    const score = Math.max(...row.map((c) => c.score));
+    if (score > bestScore) {
+      bestScore = score;
+      best = row;
+    }
+  }
+  best.sort((a, b) => a.left - b.left);
+  return best[0] ?? null;
+}
+
+/** 1re card vraiment à l’écran (gauche de la rangée). Sinon on attend. */
 export function playFirstVisibleFeedSound(): string | null {
   if (typeof document === "undefined") return null;
   const vh = window.innerHeight;
@@ -50,12 +81,11 @@ export function playFirstVisibleFeedSound(): string | null {
         0,
         Math.min(r.bottom, vh) - Math.max(r.top, 0),
       );
-      return { el, overlap, top: r.top };
+      return { el, overlap, top: r.top, left: r.left, score: overlap };
     })
-    .filter((row) => row.overlap > 48)
-    .sort((a, b) => b.overlap - a.overlap || a.top - b.top);
+    .filter((row) => row.overlap > 48);
 
-  const winner = ranked[0]?.el ?? null;
+  const winner = pickFrontRowLeft(ranked)?.el ?? null;
 
   document.querySelectorAll("audio, video").forEach((node) => {
     if (!(node instanceof HTMLMediaElement)) return;
@@ -78,13 +108,16 @@ export function playFirstVisibleFeedSound(): string | null {
   );
 }
 
-export function enableFeedSound() {
+/** `playVisible` : autoplay card de gauche. false = clic sur une card précise. */
+export function enableFeedSound(playVisible = true) {
+  userMutedSound = false;
   userEnabledSound = true;
   markUnlocked();
-  playFirstVisibleFeedSound();
+  if (playVisible) playFirstVisibleFeedSound();
 }
 
 export function disableFeedSound() {
+  userMutedSound = true;
   userEnabledSound = false;
   if (typeof document === "undefined") return;
   document.querySelectorAll("audio, video").forEach((node) => {
@@ -150,6 +183,7 @@ export function armFeedSoundUnlock() {
   };
   window.addEventListener("pointerdown", onFeedTab, opts);
   window.addEventListener("touchstart", onFeedTab, opts);
+  window.addEventListener("click", onFeedTab, opts);
 }
 
 export async function tryPlayMedia(
@@ -157,7 +191,11 @@ export async function tryPlayMedia(
   wantSound: boolean,
 ) {
   el.dataset.wantSound = wantSound ? "1" : "0";
-  if (!wantSound || (isIosDevice() && !userEnabledSound)) {
+  if (
+    !wantSound ||
+    userMutedSound ||
+    (isIosDevice() && !userEnabledSound)
+  ) {
     waitingSound.delete(el);
     el.muted = true;
     el.dataset.wantSound = "0";
