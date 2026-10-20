@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchJson } from "@/lib/fetch-json";
 import {
   INBOX_SEEN_EVENT,
+  INBOX_UPDATED_EVENT,
   type InboxSeenDetail,
 } from "@/lib/inbox-events";
 
@@ -149,7 +150,14 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
     }
 
     window.addEventListener(INBOX_SEEN_EVENT, onSeen);
-    return () => window.removeEventListener(INBOX_SEEN_EVENT, onSeen);
+    const onUpdated = () => {
+      void refresh({ silent: true });
+    };
+    window.addEventListener(INBOX_UPDATED_EVENT, onUpdated);
+    return () => {
+      window.removeEventListener(INBOX_SEEN_EVENT, onSeen);
+      window.removeEventListener(INBOX_UPDATED_EVENT, onUpdated);
+    };
   }, [refresh]);
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 export const INBOX_SEEN_EVENT = "inbox-seen";
+export const INBOX_UPDATED_EVENT = "inbox-updated";
 
 export type InboxSeenDetail = {
   conversationId?: string;
@@ -10,4 +11,9 @@ export type InboxSeenDetail = {
 export function notifyInboxSeen(detail: InboxSeenDetail) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<InboxSeenDetail>(INBOX_SEEN_EVENT, { detail }));
+}
+
+export function notifyInboxUpdated() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(INBOX_UPDATED_EVENT));
 }

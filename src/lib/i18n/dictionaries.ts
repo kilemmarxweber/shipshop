@@ -18,8 +18,15 @@ export type Messages = {
     loginTitle: string;
     loginHint: string;
     email: string;
+    emailOptional: string;
+    emailInvalid: string;
+    identifier: string;
+    phone: string;
+    phoneInvalid: string;
+    phoneTaken: string;
     password: string;
     name: string;
+    nameInvalid: string;
     submit: string;
     submitting: string;
     noAccount: string;
@@ -426,8 +433,15 @@ const fr: Messages = {
     loginTitle: "Connexion",
     loginHint: "Accédez à votre portefeuille et vos boutiques",
     email: "E-mail",
+    emailOptional: "E-mail (optionnel)",
+    emailInvalid: "E-mail invalide",
+    identifier: "E-mail ou téléphone",
+    phone: "Téléphone",
+    phoneInvalid: "Numéro invalide pour ce pays",
+    phoneTaken: "Ce numéro est déjà utilisé",
     password: "Mot de passe",
     name: "Nom",
+    nameInvalid: "Indique ton nom (2 caractères min.)",
     submit: "Se connecter",
     submitting: "Connexion…",
     noAccount: "Pas encore de compte ?",
@@ -841,8 +855,15 @@ const en: Messages = {
     loginTitle: "Sign in",
     loginHint: "Access your wallet and shops",
     email: "Email",
+    emailOptional: "Email (optional)",
+    emailInvalid: "Invalid email",
+    identifier: "Email or phone",
+    phone: "Phone",
+    phoneInvalid: "Invalid number for this country",
+    phoneTaken: "This number is already in use",
     password: "Password",
     name: "Name",
+    nameInvalid: "Enter your name (2 characters min.)",
     submit: "Sign in",
     submitting: "Signing in…",
     noAccount: "No account yet?",
@@ -1256,8 +1277,15 @@ const pt: Messages = {
     loginTitle: "Entrar",
     loginHint: "Aceda à carteira e às lojas",
     email: "E-mail",
+    emailOptional: "E-mail (opcional)",
+    emailInvalid: "E-mail inválido",
+    identifier: "E-mail ou telemóvel",
+    phone: "Telemóvel",
+    phoneInvalid: "Número inválido para este país",
+    phoneTaken: "Este número já está em uso",
     password: "Palavra-passe",
     name: "Nome",
+    nameInvalid: "Indica o teu nome (mín. 2 caracteres)",
     submit: "Entrar",
     submitting: "A entrar…",
     noAccount: "Ainda não tem conta?",

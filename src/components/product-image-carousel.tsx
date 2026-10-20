@@ -118,37 +118,49 @@ function SlideMedia({
   const poster = video ? videoPosterUrl(src) : src;
   const [mediaRatio, setMediaRatio] = useState<number | null>(null);
   const applied = video ? undefined : motion;
+  const fill = fit === "reel";
+  const applyRatio = !fill;
+
+  useEffect(() => {
+    return () => {
+      const el = videoRef.current;
+      if (!el || !isIosDevice()) return;
+      el.dataset.wantSound = "0";
+      el.muted = true;
+      if (!el.paused) el.pause();
+    };
+  }, []);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !video) return;
 
     if (!shouldLoad) {
-      el.pause();
-      // Hors écran seulement : on libère. Pause user → shouldLoad reste true
-      // pour reprendre au même currentTime.
-      el.removeAttribute("src");
-      el.load();
+      if (!el.paused) el.pause();
       return;
     }
 
+    if (el.preload !== "auto") el.preload = "auto";
     if (el.getAttribute("src") !== src) {
       el.src = src;
-      el.load();
     }
 
     if (playing && !document.hidden) {
-      void tryPlayMedia(el, !muted).then((ok) => {
-        if (!ok) onAutoplayBlocked?.();
-      });
+      if (el.paused || el.muted !== muted) {
+        void tryPlayMedia(el, !muted).then((ok) => {
+          if (!ok) onAutoplayBlocked?.();
+        });
+      }
     } else {
       el.dataset.wantSound = "0";
-      el.muted = true;
-      el.pause();
+      if (!el.muted) el.muted = true;
+      if (!el.paused) el.pause();
+      try {
+        if (el.currentTime > 0.04) el.currentTime = 0;
+      } catch {
+        /* métadonnées pas prêtes */
+      }
     }
-    return () => {
-      el.pause();
-    };
   }, [playing, shouldLoad, src, video, muted, onAutoplayBlocked]);
 
   useEffect(() => {
@@ -156,6 +168,7 @@ function SlideMedia({
     const retry = () => {
       const el = videoRef.current;
       if (!el || !playing || !shouldLoad || document.hidden) return;
+      if (!el.paused && el.muted === muted) return;
       void tryPlayMedia(el, !muted);
     };
     window.addEventListener(SOUND_UNLOCK_EVENT, retry);
@@ -165,8 +178,9 @@ function SlideMedia({
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !video) return;
-    el.muted = muted;
-    el.volume = Math.min(1, Math.max(0, volume));
+    if (el.muted !== muted) el.muted = muted;
+    const nextVol = Math.min(1, Math.max(0, volume));
+    if (el.volume !== nextVol) el.volume = nextVol;
   }, [muted, volume, video]);
 
   useEffect(() => {
@@ -176,7 +190,7 @@ function SlideMedia({
       if (!el) return;
       if (document.hidden) {
         el.pause();
-        } else if (playing && shouldLoad) {
+      } else if (playing && shouldLoad) {
         void tryPlayMedia(el, !muted);
       }
     };
@@ -188,7 +202,6 @@ function SlideMedia({
   const kenStyle = {
     ["--ss-ms" as string]: `${Math.max(2800, motionMs ?? 5500)}ms`,
   };
-  const fill = fit === "reel";
   const kenClass = cn("ss-ken", ken && "ss-ken-loop");
 
   return (
@@ -214,15 +227,9 @@ function SlideMedia({
               muted={muted}
               loop={loop}
               {...iosInlineVideo}
-              preload="metadata"
+              preload="auto"
               poster={poster}
               disablePictureInPicture
-              onLoadedMetadata={(e) => {
-                const el = e.currentTarget;
-                if (el.videoWidth > 0 && el.videoHeight > 0) {
-                  setMediaRatio(el.videoWidth / el.videoHeight);
-                }
-              }}
               onEnded={() => {
                 if (!loop) onPlaybackEnded?.();
               }}
@@ -235,10 +242,11 @@ function SlideMedia({
             muted={muted}
             loop={loop}
             {...iosInlineVideo}
-            preload="metadata"
+            preload="auto"
             poster={poster}
             disablePictureInPicture
             onLoadedMetadata={(e) => {
+              if (!applyRatio) return;
               const el = e.currentTarget;
               if (el.videoWidth > 0 && el.videoHeight > 0) {
                 setMediaRatio(el.videoWidth / el.videoHeight);
@@ -268,13 +276,14 @@ function SlideMedia({
               fetchPriority={playing ? "high" : "low"}
               className={mediaClass(fit)}
               onLoad={(e) => {
+                if (!applyRatio) return;
                 const el = e.currentTarget;
                 if (el.naturalWidth > 0 && el.naturalHeight > 0) {
                   setMediaRatio(el.naturalWidth / el.naturalHeight);
                 }
               }}
               style={
-                mediaRatio
+                applyRatio && mediaRatio
                   ? { aspectRatio: `${mediaRatio}`, height: "auto" }
                   : undefined
               }
@@ -295,11 +304,12 @@ function SlideMedia({
           data-motion={ken ? applied : undefined}
           style={{
             ...kenStyle,
-            ...(mediaRatio
+            ...(applyRatio && mediaRatio
               ? { aspectRatio: `${mediaRatio}`, height: "auto" }
               : {}),
           }}
           onLoad={(e) => {
+            if (!applyRatio) return;
             const el = e.currentTarget;
             if (el.naturalWidth > 0 && el.naturalHeight > 0) {
               setMediaRatio(el.naturalWidth / el.naturalHeight);
@@ -389,12 +399,11 @@ export function ProductImageCarousel({
     if (!nearView || !coverSrc) return;
     if (isVideoUrl(coverSrc)) {
       const video = document.createElement("video");
-      video.preload = "metadata";
+      video.preload = "auto";
       video.muted = true;
       video.src = coverSrc;
       return () => {
-        video.removeAttribute("src");
-        video.load();
+        video.pause();
       };
     }
     const img = new Image();
@@ -426,7 +435,7 @@ export function ProductImageCarousel({
             if (!entry) return;
             setNearView(entry.isIntersecting);
           },
-          { root: ioRoot, rootMargin: "120% 0px", threshold: 0.01 },
+          { root: ioRoot, rootMargin: "220% 0px", threshold: 0.01 },
         );
 
     const applyVisibility = (ratio: number, left: number, top: number) => {
@@ -664,7 +673,6 @@ export function ProductImageCarousel({
         const mount = (() => {
           if (eager) return active || neighbor;
           if (!nearView) return false;
-          if (isVid) return active;
           return active || neighbor;
         })();
 
@@ -684,14 +692,13 @@ export function ProductImageCarousel({
           <div
             key={`${src}-${i}`}
             className={cn(
-              "absolute inset-0 overflow-hidden transition-opacity duration-500",
+              "absolute inset-0 overflow-hidden",
               active ? "opacity-100" : "opacity-0 pointer-events-none",
             )}
             aria-hidden={!active}
           >
             {mount ? (
               <SlideMedia
-                key={`${src}-${i}-${active ? "on" : "off"}`}
                 src={src}
                 playing={playing}
                 shouldLoad={shouldLoad}

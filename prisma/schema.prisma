@@ -17,7 +17,7 @@ model User {
   email         String
   emailVerified Boolean   @default(false)
   image         String?
-  phone         String?
+  phone         String?   @unique
   locale        String?   @default("fr")
   theme         String?   @default("dark")
   disabledAt        DateTime?

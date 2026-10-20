@@ -18,6 +18,8 @@ const createSchema = z.object({
   fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
   fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
   fxConfirmed: z.boolean().optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
 });
 
 export async function GET(req: Request) {
@@ -112,6 +114,9 @@ export async function POST(req: Request) {
         fxCdfPerUsd,
         fxKwPerUsd,
         fxRateUpdatedAt: new Date(),
+        ...(typeof body.lat === "number" && typeof body.lng === "number"
+          ? { lat: body.lat, lng: body.lng }
+          : {}),
       },
     });
 

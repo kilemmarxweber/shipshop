@@ -8,6 +8,7 @@ import {
   countryByDial,
   countryMatches,
   flagEmoji,
+  looksLikeEmailInput,
   splitPhone,
 } from "@/lib/phone";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,9 @@ type Props = {
   onChange: (e164: string) => void;
   required?: boolean;
   className?: string;
+  /** Connexion : e-mail ou numéro (indicatif + longueur pays). */
+  emailOrPhone?: boolean;
+  autoComplete?: string;
 };
 
 export function PhoneField({
@@ -29,8 +33,11 @@ export function PhoneField({
   onChange,
   required = true,
   className,
+  emailOrPhone = false,
+  autoComplete,
 }: Props) {
-  const parts = splitPhone(value);
+  const emailMode = emailOrPhone && looksLikeEmailInput(value);
+  const parts = splitPhone(emailMode ? "" : value);
   const country = countryByDial(parts.dial);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -68,36 +75,54 @@ export function PhoneField({
         ref={boxRef}
         className="relative flex h-11 overflow-visible rounded-lg border border-border bg-surface-2 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
       >
-        <button
-          type="button"
-          aria-label="Choisir le pays"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-          className="flex h-11 shrink-0 items-center gap-1 px-2 text-base"
-        >
-          <span className="text-base leading-none" aria-hidden>
-            {flagEmoji(country.iso)}
-          </span>
-          <span className="font-medium">{country.dial}</span>
-          <ChevronsUpDown className="size-3.5 text-muted-foreground" />
-        </button>
-        <span className="my-1.5 w-px shrink-0 bg-border" aria-hidden />
+        {emailMode ? null : (
+          <>
+            <button
+              type="button"
+              aria-label="Choisir le pays"
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
+              className="flex h-11 shrink-0 items-center gap-1 px-2 text-base"
+            >
+              <span className="text-base leading-none" aria-hidden>
+                {flagEmoji(country.iso)}
+              </span>
+              <span className="font-medium">{country.dial}</span>
+              <ChevronsUpDown className="size-3.5 text-muted-foreground" />
+            </button>
+            <span className="my-1.5 w-px shrink-0 bg-border" aria-hidden />
+          </>
+        )}
         <input
           id={id}
-          type="tel"
-          inputMode="numeric"
-          autoComplete="tel-national"
-          pattern="[0-9]*"
-          maxLength={country.max}
-          value={parts.national}
-          onChange={(e) =>
-            onChange(composePhone(country.dial, e.target.value))
+          type={emailMode ? "email" : "tel"}
+          inputMode={emailMode ? "email" : emailOrPhone ? "text" : "numeric"}
+          autoComplete={
+            autoComplete ??
+            (emailOrPhone ? "username" : "tel-national")
           }
-          placeholder={"8".repeat(country.max)}
+          pattern={emailMode || emailOrPhone ? undefined : "[0-9]*"}
+          maxLength={emailMode ? undefined : country.max}
+          value={emailMode ? value : parts.national}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (emailOrPhone && looksLikeEmailInput(raw)) {
+              onChange(raw);
+              return;
+            }
+            onChange(composePhone(country.dial, raw));
+          }}
+          placeholder={
+            emailOrPhone
+              ? emailMode
+                ? "vous@email.com"
+                : `${"8".repeat(country.max)} ou e-mail`
+              : "8".repeat(country.max)
+          }
           className="h-11 min-w-0 flex-1 border-0 bg-transparent px-2.5 text-base outline-none"
         />
 
-        {open && (
+        {!emailMode && open && (
           <div className="absolute top-[calc(100%+4px)] left-0 z-50 w-[min(100%,20rem)] overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
             <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
               <Search className="size-3.5 shrink-0 text-muted-foreground" />
@@ -143,12 +168,14 @@ export function PhoneField({
           </div>
         )}
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        {flagEmoji(country.iso)} {country.label} {country.dial} — {country.max}{" "}
-        chiffre{country.max > 1 ? "s" : ""}
-        {country.min !== country.max ? ` (min. ${country.min})` : ""}, sans le
-        0.
-      </p>
+      {emailMode ? null : (
+        <p className="text-[10px] text-muted-foreground">
+          {flagEmoji(country.iso)} {country.label} {country.dial} — {country.max}{" "}
+          chiffre{country.max > 1 ? "s" : ""}
+          {country.min !== country.max ? ` (min. ${country.min})` : ""}, sans le
+          0.
+        </p>
+      )}
     </div>
   );
 }

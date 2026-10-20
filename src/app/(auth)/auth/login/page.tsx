@@ -5,8 +5,15 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { mapAuthError } from "@/lib/auth-errors";
+import {
+  isValidContactPhone,
+  looksLikeEmail,
+  looksLikeEmailInput,
+} from "@/lib/phone";
 import { AuthPrefsBar } from "@/components/auth-prefs-bar";
 import { BackButton } from "@/components/back-button";
+import { PhoneField } from "@/components/phone-field";
 import { useI18n } from "@/components/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,24 +22,30 @@ import { Label } from "@/components/ui/label";
 export default function LoginPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const id = identifier.trim();
+    if (looksLikeEmailInput(id)) {
+      if (!looksLikeEmail(id)) {
+        toast.error(t("auth.failed"));
+        return;
+      }
+    } else if (!isValidContactPhone(id)) {
+      toast.error(t("auth.phoneInvalid"));
+      return;
+    }
     setLoading(true);
-    const { error } = await authClient.signIn.email({ email, password });
+    const { error } = await authClient.signIn.email({
+      email: id,
+      password,
+    });
     setLoading(false);
     if (error) {
-      const code = (error as { code?: string }).code;
-      toast.error(
-        code === "ACCOUNT_DISABLED" ||
-          error.message?.toLowerCase().includes("désactivé") ||
-          error.message?.toLowerCase().includes("disabled")
-          ? t("auth.accountDisabled")
-          : (error.message ?? t("auth.failed")),
-      );
+      toast.error(mapAuthError(error, t, t("auth.failed")));
       return;
     }
     toast.success(t("auth.welcome"));
@@ -58,18 +71,14 @@ export default function LoginPage() {
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">{t("auth.email")}</Label>
-          <Input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="vous@email.com"
-            className="h-11 bg-muted"
-          />
-        </div>
+        <PhoneField
+          id="login-id"
+          label={t("auth.identifier")}
+          value={identifier}
+          onChange={setIdentifier}
+          required
+          emailOrPhone
+        />
         <div className="space-y-2">
           <Label htmlFor="password">{t("auth.password")}</Label>
           <Input

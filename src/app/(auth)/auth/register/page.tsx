@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { mapAuthError } from "@/lib/auth-errors";
+import { emailFromPhone, registerSchema } from "@/lib/auth-register";
 import { AuthPrefsBar } from "@/components/auth-prefs-bar";
 import { BackButton } from "@/components/back-button";
+import { PhoneField } from "@/components/phone-field";
 import { useI18n } from "@/components/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,20 +20,37 @@ export default function RegisterPage() {
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const parsed = registerSchema.safeParse({ name, email, phone, password });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const field = issue?.path[0];
+      toast.error(
+        field === "name"
+          ? t("auth.nameInvalid")
+          : field === "email"
+            ? t("auth.emailInvalid")
+            : field === "phone"
+              ? t("auth.phoneInvalid")
+              : t("auth.registerFailed"),
+      );
+      return;
+    }
     setLoading(true);
     const { error } = await authClient.signUp.email({
-      name,
-      email,
-      password,
+      name: parsed.data.name,
+      email: parsed.data.email || emailFromPhone(parsed.data.phone),
+      password: parsed.data.password,
+      phone: parsed.data.phone,
     });
     setLoading(false);
     if (error) {
-      toast.error(error.message ?? t("auth.registerFailed"));
+      toast.error(mapAuthError(error, t, t("auth.registerFailed")));
       return;
     }
     toast.success(t("auth.registerWelcome"));
@@ -47,24 +67,30 @@ export default function RegisterPage() {
         <p className="mt-1 text-sm text-muted-foreground">{t("auth.registerHint")}</p>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <div className="space-y-2">
           <Label htmlFor="name">{t("auth.name")}</Label>
           <Input
             id="name"
-            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Jean Kabila"
             className="h-11 bg-muted"
           />
         </div>
+        <PhoneField
+          id="register-phone"
+          label={t("auth.phone")}
+          value={phone}
+          onChange={setPhone}
+          required
+          autoComplete="tel"
+        />
         <div className="space-y-2">
-          <Label htmlFor="email">{t("auth.email")}</Label>
+          <Label htmlFor="email">{t("auth.emailOptional")}</Label>
           <Input
             id="email"
             type="email"
-            required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="h-11 bg-muted"
@@ -75,8 +101,6 @@ export default function RegisterPage() {
           <Input
             id="password"
             type="password"
-            required
-            minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="h-11 bg-muted"

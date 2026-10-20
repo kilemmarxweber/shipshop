@@ -11,6 +11,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { ShopFxRateField } from "@/components/shop-fx-rate-field";
+import {
+  KinshasaAddressForm,
+  type AddressState,
+} from "@/components/kinshasa-address-form";
 import { uploadCompressedMedia } from "@/lib/compress-media";
 import { DEFAULT_FX, type AppCurrency } from "@/lib/money";
 
@@ -25,6 +29,13 @@ export default function OnboardingPage() {
   const [fxCdfPerUsd, setFxCdfPerUsd] = useState(DEFAULT_FX.cdfPerUsd);
   const [fxConfirmed, setFxConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [address, setAddress] = useState<AddressState>({
+    city: "Kinshasa",
+    commune: "",
+    quartier: "",
+    avenue: "",
+    parcelle: "",
+  });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +59,8 @@ export default function OnboardingPage() {
         currency,
         fxCdfPerUsd,
         fxConfirmed,
+        lat: address.lat ?? undefined,
+        lng: address.lng ?? undefined,
       }),
     });
     const json = await res.json();
@@ -149,6 +162,19 @@ export default function OnboardingPage() {
           confirmed={fxConfirmed}
           onConfirmed={setFxConfirmed}
         />
+        <div className="space-y-2">
+          <Label>Localisation boutique</Label>
+          <p className="text-[11px] text-muted-foreground">
+            GPS au démarrage — corrige commune / quartier si le point est faux.
+          </p>
+          <KinshasaAddressForm
+            compact
+            autoLocate
+            enableMap
+            value={address}
+            onChange={setAddress}
+          />
+        </div>
         <div className="space-y-2">
           <Label>Description</Label>
           <Textarea

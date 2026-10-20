@@ -44,7 +44,7 @@ import {
   requestFeedAudioFocus,
   unpinFeedAudio,
   useFeedAudioFocus,
-  useFeedSoundLive,
+  useResumeFeedSoundWhenVisible,
 } from "@/lib/feed-audio-focus";
 import {
   disableFeedSound,
@@ -128,7 +128,7 @@ function ShopInner() {
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
   const audioFocusId = useFeedAudioFocus();
-  const { live: soundLive } = useFeedSoundLive();
+  useResumeFeedSoundWhenVisible();
   const prevAudioFocus = useRef<string | null>(null);
 
   useEffect(() => {
@@ -148,12 +148,16 @@ function ShopInner() {
 
   const isOwnShop = Boolean(shop?.canManage);
 
-  function soundFor(id: string): VideoSoundState {
+  function mediaSound(id: string): VideoSoundState {
     const volume = soundById[id]?.volume ?? DEFAULT_VIDEO_SOUND.volume;
     return {
       volume,
-      muted: !soundLive || audioFocusId !== id,
+      muted: audioFocusId !== id,
     };
+  }
+
+  function soundFor(id: string): VideoSoundState {
+    return mediaSound(id);
   }
 
   function activateSound(id: string) {
@@ -654,8 +658,8 @@ function ShopInner() {
                 images={p.images}
                 overlay
                 className="absolute inset-0"
-                muted={soundFor(p.id).muted}
-                volume={soundFor(p.id).volume}
+                muted={mediaSound(p.id).muted}
+                volume={mediaSound(p.id).volume}
                 hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                 clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
                 motions={p.imageMotions}
@@ -678,7 +682,7 @@ function ShopInner() {
                 <FeedSoundtrackPlayer
                   audioUrl={p.soundtrack.audioUrl}
                   startMs={p.soundtrackStartMs}
-                  sound={soundFor(p.id)}
+                  sound={mediaSound(p.id)}
                   active={audioFocusId === p.id}
                 />
               ) : null}

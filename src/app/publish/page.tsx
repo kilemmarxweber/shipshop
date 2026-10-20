@@ -23,11 +23,9 @@ import {
 } from "@/components/publish-montage";
 import { LOCAL_SOUNDTRACK_ID, normalizeMotions } from "@/lib/montage";
 import { useAppConfig } from "@/lib/use-app-config";
-import {
-  KinshasaAddressForm,
-  type AddressState,
-} from "@/components/kinshasa-address-form";
+import { type AddressState } from "@/components/kinshasa-address-form";
 import { composeAddress } from "@/lib/address";
+import { reverseGeocode } from "@/lib/browser-geolocation";
 import { type AppCurrency, parseCurrency } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { CurrencyPicker } from "@/components/currency-picker";
@@ -40,6 +38,8 @@ type Shop = {
   name: string;
   logoUrl?: string | null;
   currency?: string;
+  lat?: number | null;
+  lng?: number | null;
   owner?: { name: string } | null;
 };
 
@@ -105,9 +105,30 @@ function PublishInner() {
       if (!shopId && list[0]) setShopId(list[0].id);
       const selected = list.find((s) => s.id === (shopId || list[0]?.id));
       if (selected?.currency) setCurrency(parseCurrency(selected.currency));
+      if (selected) void applyShopLocation(selected);
     }
     if (session) load();
   }, [session, shopId]);
+
+  async function applyShopLocation(shop: Shop) {
+    const lat = shop.lat;
+    const lng = shop.lng;
+    if (typeof lat !== "number" || typeof lng !== "number") return;
+    try {
+      const geo = await reverseGeocode(lat, lng);
+      setAddress({
+        city: geo.city?.trim() || "Kinshasa",
+        commune: geo.commune ?? "",
+        quartier: geo.quartier ?? "",
+        avenue: "",
+        parcelle: "",
+        lat,
+        lng,
+      });
+    } catch {
+      setAddress((prev) => ({ ...prev, lat, lng }));
+    }
+  }
 
   function toggleColor(name: string) {
     setColors((prev) =>
@@ -403,6 +424,7 @@ function PublishInner() {
                 setShopId(id);
                 const shop = shops.find((s) => s.id === id);
                 if (shop?.currency) setCurrency(parseCurrency(shop.currency));
+                if (shop) void applyShopLocation(shop);
               }}
             />
           </div>
@@ -475,7 +497,13 @@ function PublishInner() {
           </div>
           <div className="space-y-2">
             <Label>Monnaie</Label>
-            <CurrencyPicker value={currency} onChange={setCurrency} />
+            <CurrencyPicker
+              value={currency}
+              onChange={(next) => {
+                setCurrency(next);
+                setPrice("");
+              }}
+            />
           </div>
           <div className="space-y-2">
             <Label>Prix ({currency})</Label>
@@ -583,8 +611,10 @@ function PublishInner() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Localisation produit</Label>
-            <KinshasaAddressForm compact value={address} onChange={setAddress} />
+            <Label>Localisation boutique</Label>
+            <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
+              {composeAddress(address) || "Position de la boutique"}
+            </p>
           </div>
             </div>
           </details>

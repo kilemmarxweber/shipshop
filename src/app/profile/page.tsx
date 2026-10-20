@@ -30,7 +30,11 @@ import { ShopHoursSettings } from "@/components/shop-hours-settings";
 import { ScrollAdSettings } from "@/components/scroll-ad-settings";
 import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
+import { isPhoneBackedEmail } from "@/lib/auth-register";
+import { isValidContactPhone } from "@/lib/phone";
 import { orderStatusLabel } from "@/lib/order-status-label";
+import { PageLoader } from "@/components/page-loader";
+import { PhoneField } from "@/components/phone-field";
 
 type Order = {
   id: string;
@@ -68,7 +72,7 @@ const IMAGE_TYPES = new Set([
 ]);
 
 export default function ProfilePage() {
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   const { t } = useI18n();
   usePageBack({ fallbackHref: "/" });
   const userId = session?.user?.id;
@@ -94,7 +98,7 @@ export default function ProfilePage() {
   function applyProfile(user: ProfileUser) {
     setProfile(user);
     setNameDraft(user.name);
-    setEmailDraft(user.email);
+    setEmailDraft(isPhoneBackedEmail(user.email) ? "" : user.email);
     setPhoneDraft(user.phone ?? "");
   }
 
@@ -192,12 +196,12 @@ export default function ProfilePage() {
       toast.error("Nom trop court");
       return;
     }
-    if (!email.includes("@")) {
-      toast.error("E-mail invalide");
+    if (email && !email.includes("@")) {
+      toast.error(t("auth.emailInvalid"));
       return;
     }
-    if (phone && phone.length < 9) {
-      toast.error("Téléphone trop court");
+    if (!isValidContactPhone(phone)) {
+      toast.error(t("auth.phoneInvalid"));
       return;
     }
 
@@ -210,8 +214,8 @@ export default function ProfilePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
-        email,
-        phone: phone || null,
+        ...(email ? { email } : {}),
+        phone,
       }),
     });
     setSavingProfile(false);
@@ -242,6 +246,10 @@ export default function ProfilePage() {
     await refresh();
   }
 
+  if (isPending) {
+    return <PageLoader />;
+  }
+
   if (!session) {
     return (
       <div className="px-5 py-16 text-center">
@@ -268,7 +276,8 @@ export default function ProfilePage() {
   }
 
   const displayName = profile?.name ?? session.user.name ?? "Utilisateur";
-  const displayEmail = profile?.email ?? session.user.email ?? "";
+  const rawEmail = profile?.email ?? session.user.email ?? "";
+  const displayEmail = isPhoneBackedEmail(rawEmail) ? "" : rawEmail;
   const displayPhone = profile?.phone ?? "";
   const displayImage = profile?.image ?? session.user.image ?? null;
   const kycStatus = kyc?.status ?? "NONE";
@@ -276,7 +285,16 @@ export default function ProfilePage() {
 
   return (
     <div className="px-4 pb-6 pt-0 md:px-8">
-      <div className="text-center">
+      <div className="relative text-center">
+        <button
+          type="button"
+          onClick={() => authClient.signOut()}
+          className="absolute right-0 top-[22px] z-10 grid size-9 cursor-pointer place-items-center rounded-full border border-primary/45 bg-primary/15 text-primary shadow-sm transition hover:bg-primary/25"
+          aria-label={t("settings.logout")}
+          title={t("settings.logout")}
+        >
+          <LogOut className="size-4" />
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -325,11 +343,7 @@ export default function ProfilePage() {
             type="button"
             onClick={() => {
               setEditing((v) => !v);
-              if (profile) {
-                setNameDraft(profile.name);
-                setEmailDraft(profile.email);
-                setPhoneDraft(profile.phone ?? "");
-              }
+              if (profile) applyProfile(profile);
             }}
             className="mt-0.5 grid size-8 cursor-pointer place-items-center rounded-full border border-border bg-muted/40 text-muted-foreground transition hover:bg-muted hover:text-foreground"
             aria-label="Modifier le profil"
@@ -392,14 +406,16 @@ export default function ProfilePage() {
             type="email"
             value={emailDraft}
             onChange={(e) => setEmailDraft(e.target.value)}
-            placeholder="E-mail"
+            placeholder={t("auth.emailOptional")}
             className="h-10 bg-surface-2"
           />
-          <Input
+          <PhoneField
+            id="profile-phone"
+            label={t("auth.phone")}
             value={phoneDraft}
-            onChange={(e) => setPhoneDraft(e.target.value)}
-            placeholder="+243 8XX XXX XXX"
-            className="h-10 bg-surface-2"
+            onChange={setPhoneDraft}
+            required
+            autoComplete="tel"
           />
           <div className="flex gap-2 pt-1">
             <Button
@@ -756,15 +772,6 @@ export default function ProfilePage() {
       <ShopHoursSettings />
 
       <AppearanceSettings />
-
-      <Button
-        variant="ghost"
-        className="mt-8 w-full gap-2 text-muted-foreground"
-        onClick={() => authClient.signOut()}
-      >
-        <LogOut className="size-4" />
-        {t("settings.logout")}
-      </Button>
     </div>
   );
 }

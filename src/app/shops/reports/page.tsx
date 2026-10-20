@@ -277,11 +277,11 @@ export default function ReportsPage() {
               : "Vos boutiques · ventes, stock et pics d'achats"}
           </p>
         </div>
-        <div className="h-scroll gap-2">
+        <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-xs">
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value as Period)}
-            className="h-9 shrink-0 rounded-lg border border-border bg-surface-2 px-2 text-xs"
+            className="h-9 w-full rounded-lg border border-border bg-surface-2 px-2 text-xs"
           >
             <option value="7d">7 jours</option>
             <option value="30d">30 jours</option>
@@ -289,7 +289,7 @@ export default function ReportsPage() {
             <option value="all">Tout</option>
           </select>
           <ShopPicker
-            className="min-w-[12rem] max-w-xs shrink-0"
+            className="w-full max-w-xs"
             shops={report?.shops ?? []}
             value={shopId}
             allLabel={isOwner ? "Toutes boutiques" : "Toutes mes boutiques"}

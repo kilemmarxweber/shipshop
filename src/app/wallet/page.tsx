@@ -22,6 +22,7 @@ import type { RailProvider } from "@/lib/payments/provider";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { usePageBack } from "@/components/back-nav-context";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
+import { PageLoader } from "@/components/page-loader";
 import { PhoneField } from "@/components/phone-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,7 +72,7 @@ type Recipient = {
 };
 
 export default function WalletPage() {
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   const { t } = useI18n();
   usePageBack({ fallbackHref: "/profile" });
   const [balance, setBalance] = useState(0);
@@ -158,9 +159,9 @@ export default function WalletPage() {
   }
 
   useEffect(() => {
-    if (!session) return;
+    if (isPending || !session) return;
     void refresh();
-  }, [session]);
+  }, [session, isPending]);
 
   useEffect(() => {
     const onUpdate = () => {
@@ -183,6 +184,10 @@ export default function WalletPage() {
     }, 250);
     return () => clearTimeout(handle);
   }, [query, tab]);
+
+  if (isPending) {
+    return <PageLoader />;
+  }
 
   if (!session) {
     return (

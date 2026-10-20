@@ -20,6 +20,8 @@ const updateSchema = z.object({
   hoursStart: z.string().nullable().optional(),
   hoursEnd: z.string().nullable().optional(),
   workDays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
 });
 
 /** Profil public boutique (par slug) + stats catégories. */
@@ -204,6 +206,9 @@ export async function PATCH(
                 hoursEnd: hoursData.hoursEnd,
                 workDays: hoursData.workDays,
               }
+            : {}),
+          ...(typeof body.lat === "number" && typeof body.lng === "number"
+            ? { lat: body.lat, lng: body.lng }
             : {}),
         },
         select: {

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { haltTrackedFeedMedia, isIosDevice } from "@/lib/try-play-media";
 
 /**
  * Un seul écran a le droit de jouer du son :
@@ -37,17 +38,32 @@ export function subscribePageMedia(listener: Listener) {
   };
 }
 
+function rewindMedia(node: HTMLMediaElement) {
+  try {
+    if (node.currentTime > 0.04) node.currentTime = 0;
+  } catch {
+    /* métadonnées pas prêtes */
+  }
+}
+
+/** Quitter une route : coupe le son et remet la vidéo au début. */
 export function pauseAllPageMedia() {
   if (typeof document === "undefined") return;
+  if (isIosDevice()) haltTrackedFeedMedia();
   document.querySelectorAll("audio, video").forEach((node) => {
     if (!(node instanceof HTMLMediaElement)) return;
-    node.pause();
+    if (!node.paused) node.pause();
+    if (node.dataset.scrollAd === "1") return;
+    if (!node.muted) node.muted = true;
+    node.dataset.wantSound = "0";
+    rewindMedia(node);
   });
 }
 
 /** Changer d’onglet feed : coupe, mute, et reprend à 0. */
 export function resetAllPageMedia() {
   if (typeof document === "undefined") return;
+  if (isIosDevice()) haltTrackedFeedMedia();
   document.querySelectorAll("audio, video").forEach((node) => {
     if (!(node instanceof HTMLMediaElement)) return;
     node.pause();

@@ -13,7 +13,14 @@ function canYScroll(el: HTMLElement) {
   return el.scrollHeight > el.clientHeight + 2;
 }
 
+function pageScroller(): HTMLElement | null {
+  const main = document.querySelector(".app-main");
+  return main instanceof HTMLElement ? main : null;
+}
+
 function isScrollNotAtTop(target: EventTarget | null, root: HTMLElement) {
+  const main = pageScroller();
+  if (main && canYScroll(main) && main.scrollTop > 8) return true;
   let node: HTMLElement | null =
     target instanceof HTMLElement
       ? target
@@ -26,6 +33,16 @@ function isScrollNotAtTop(target: EventTarget | null, root: HTMLElement) {
     node = node.parentElement;
   }
   return canYScroll(root) && root.scrollTop > 8;
+}
+
+function canPull(root: HTMLElement) {
+  const main = pageScroller();
+  const scroller =
+    main && (canYScroll(main) || main.scrollHeight > main.clientHeight + 2)
+      ? main
+      : root;
+  if (scroller.scrollHeight <= scroller.clientHeight + 2) return false;
+  return scroller.scrollTop <= 8;
 }
 
 function isBlocked(target: EventTarget | null) {
@@ -62,7 +79,8 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
         pulling.current = false;
         return;
       }
-      pulling.current = !isScrollNotAtTop(event.target, root);
+      pulling.current =
+        canPull(root) && !isScrollNotAtTop(event.target, root);
       startY.current = event.clientY;
     };
 
@@ -80,7 +98,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
       }
       const next = Math.min(128, raw * 0.45);
       setPull(next);
-      if (next > 10) event.preventDefault();
+      if (next > 10 && canPull(root)) event.preventDefault();
     };
 
     const finish = (event: PointerEvent) => {
@@ -104,7 +122,8 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
         pulling.current = false;
         return;
       }
-      pulling.current = !isScrollNotAtTop(event.target, root);
+      pulling.current =
+        canPull(root) && !isScrollNotAtTop(event.target, root);
       startY.current = event.touches[0]?.clientY ?? 0;
     };
     const onTouchMove = (event: TouchEvent) => {
@@ -122,7 +141,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
       }
       const next = Math.min(128, raw * 0.45);
       setPull(next);
-      if (next > 10) event.preventDefault();
+      if (next > 10 && canPull(root)) event.preventDefault();
     };
     const onTouchEnd = () => {
       finish({ pointerType: "touch" } as PointerEvent);

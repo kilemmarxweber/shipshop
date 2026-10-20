@@ -59,7 +59,7 @@ export function VideoSoundButton({
     >
       <span
         className={cn(
-          "grid size-10 place-items-center rounded-full border backdrop-blur transition hover:scale-105 active:scale-95",
+          "grid size-10 place-items-center rounded-full border backdrop-blur",
           sound.muted
             ? "border-white/15 bg-white/10"
             : "border-white/35 bg-white/20",

@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, withDbRetry } from "@/lib/prisma";
+import { isPhoneBackedEmail } from "@/lib/auth-register";
+import { normalizeAccountPhone } from "@/lib/phone";
 import { getSession } from "@/lib/session";
 import { isPublicUploadPath } from "@/lib/upload-url";
 
 const schema = z.object({
   name: z.string().min(2).max(80).optional(),
-  email: z.string().email().max(120).optional(),
+  email: z.union([z.string().email().max(120), z.literal("")]).optional(),
   phone: z
-    .union([z.string().min(9).max(20), z.literal(""), z.null()])
+    .union([z.string().max(24), z.literal(""), z.null()])
     .optional(),
   image: z.string().min(1).max(500).optional().nullable(),
   locale: z.enum(["fr", "en", "pt"]).optional(),
@@ -55,6 +57,12 @@ export async function PATCH(req: Request) {
 
     if (body.email) {
       const email = body.email.trim().toLowerCase();
+      if (isPhoneBackedEmail(email)) {
+        return NextResponse.json(
+          { error: "E-mail invalide" },
+          { status: 400 },
+        );
+      }
       const taken = await withDbRetry(() =>
         prisma.user.findFirst({
           where: {
@@ -69,6 +77,35 @@ export async function PATCH(req: Request) {
           { error: "Cet e-mail est déjà utilisé" },
           { status: 409 },
         );
+      }
+    }
+
+    let nextPhone: string | null | undefined;
+    if (body.phone !== undefined) {
+      const raw = body.phone?.trim() || "";
+      if (!raw) {
+        nextPhone = null;
+      } else {
+        const phone = normalizeAccountPhone(raw);
+        if (!phone) {
+          return NextResponse.json(
+            { error: "Numéro de téléphone invalide" },
+            { status: 400 },
+          );
+        }
+        const taken = await withDbRetry(() =>
+          prisma.user.findFirst({
+            where: { phone, NOT: { id: session.user.id } },
+            select: { id: true },
+          }),
+        );
+        if (taken) {
+          return NextResponse.json(
+            { error: "Ce numéro est déjà utilisé" },
+            { status: 409 },
+          );
+        }
+        nextPhone = phone;
       }
     }
 
@@ -94,9 +131,7 @@ export async function PATCH(req: Request) {
           ...(body.email !== undefined
             ? { email: body.email.trim().toLowerCase() }
             : {}),
-          ...(body.phone !== undefined
-            ? { phone: body.phone?.trim() || null }
-            : {}),
+          ...(nextPhone !== undefined ? { phone: nextPhone } : {}),
           ...(body.image !== undefined ? { image: body.image } : {}),
           ...(body.locale !== undefined ? { locale: body.locale } : {}),
           ...(body.theme !== undefined ? { theme: body.theme } : {}),

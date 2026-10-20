@@ -11,6 +11,10 @@ import { ShopBrand } from "@/components/shop-brand";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { DEFAULT_FX, type AppCurrency, parseCurrency } from "@/lib/money";
 import { ShopFxRateField } from "@/components/shop-fx-rate-field";
+import {
+  KinshasaAddressForm,
+  type AddressState,
+} from "@/components/kinshasa-address-form";
 import { cn } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
 import { Button } from "@/components/ui/button";
@@ -68,6 +72,13 @@ export default function ShopsPage() {
   const [shopCurrency, setShopCurrency] = useState<AppCurrency>("USD");
   const [shopFxCdf, setShopFxCdf] = useState(DEFAULT_FX.cdfPerUsd);
   const [shopFxConfirmed, setShopFxConfirmed] = useState(false);
+  const [shopAddress, setShopAddress] = useState<AddressState>({
+    city: "Kinshasa",
+    commune: "",
+    quartier: "",
+    avenue: "",
+    parcelle: "",
+  });
   const [fxDrafts, setFxDrafts] = useState<Record<string, number>>({});
   const [fxSavingId, setFxSavingId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -190,6 +201,8 @@ export default function ShopsPage() {
         currency: shopCurrency,
         fxCdfPerUsd: shopFxCdf,
         fxConfirmed: shopFxConfirmed,
+        lat: shopAddress.lat ?? undefined,
+        lng: shopAddress.lng ?? undefined,
       }),
     });
     const json = await res.json();
@@ -202,6 +215,13 @@ export default function ShopsPage() {
     setShopLogoUrl(null);
     setShopFxConfirmed(false);
     setShopCurrency("USD");
+    setShopAddress({
+      city: "Kinshasa",
+      commune: "",
+      quartier: "",
+      avenue: "",
+      parcelle: "",
+    });
     loadSeller();
   }
 
@@ -458,6 +478,15 @@ export default function ShopsPage() {
                 confirmed={shopFxConfirmed}
                 onConfirmed={setShopFxConfirmed}
               />
+              <div className="space-y-1">
+                <Label>Localisation</Label>
+                <KinshasaAddressForm
+                  compact
+                  autoLocate
+                  value={shopAddress}
+                  onChange={setShopAddress}
+                />
+              </div>
               <Button onClick={createShop} className="w-full">
                 Créer
               </Button>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   AlertTriangle,
   Bell,
@@ -65,7 +65,6 @@ export function AppShell({
   appName: string;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   useBindPageMediaSession();
   const { t } = useI18n();
   const { data: session } = authClient.useSession();
@@ -146,6 +145,34 @@ export function AppShell({
   const showBack = !hideChrome && !hideBackOn.has(pathname);
 
   const { urgentCount, unreadMessages } = inbox;
+  const feedLayout =
+    pathname === "/" || pathname.startsWith("/shop/");
+
+  function onChromeNav(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    href: string,
+  ) {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0
+    ) {
+      return;
+    }
+    const unlockSound = href === "/" || href === "/discover";
+    if (unlockSound) enableFeedSound();
+    if (pathname === href) {
+      event.preventDefault();
+      if (href === "/") {
+        window.dispatchEvent(new Event("ss:home-feed"));
+      }
+      if (href === "/discover") {
+        window.dispatchEvent(new Event("ss:discover-feed"));
+      }
+    }
+  }
 
   return (
     <BackNavProvider>
@@ -158,11 +185,7 @@ export function AppShell({
                 <Link
                   href="/"
                   aria-label={appName}
-                  onClick={() => {
-                    if (pathname === "/") {
-                      window.dispatchEvent(new Event("ss:home-feed"));
-                    }
-                  }}
+                  onClick={(event) => onChromeNav(event, "/")}
                   className="flex min-w-0 items-center gap-1.5 justify-self-start md:gap-2"
                 >
                   <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-transparent">
@@ -180,6 +203,7 @@ export function AppShell({
                 {session ? (
                   <Link
                     href="/wallet"
+                    onClick={(event) => onChromeNav(event, "/wallet")}
                     className="flex items-center gap-1.5 justify-self-center rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-semibold text-trust transition hover:bg-muted"
                   >
                     <Wallet className="size-3.5" />
@@ -220,6 +244,12 @@ export function AppShell({
                   <Link
                     href={session ? "/profile" : "/auth/login"}
                     prefetch={false}
+                    onClick={(event) =>
+                      onChromeNav(
+                        event,
+                        session ? "/profile" : "/auth/login",
+                      )
+                    }
                     className="grid size-9 place-items-center overflow-hidden rounded-full border border-border bg-muted/50"
                     aria-label={t("nav.profile")}
                   >
@@ -244,6 +274,7 @@ export function AppShell({
           <main
             className={cn(
               "app-main",
+              feedLayout && "app-main-feed",
               pathname.startsWith("/messages/") && "app-main-chat",
               !hideChrome &&
                 "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
@@ -276,40 +307,7 @@ export function AppShell({
                           ? "1"
                           : undefined
                       }
-                      onClick={(e) => {
-                        if (
-                          e.metaKey ||
-                          e.ctrlKey ||
-                          e.shiftKey ||
-                          e.altKey ||
-                          e.button !== 0
-                        ) {
-                          return;
-                        }
-                        const unlockSound =
-                          item.href === "/" || item.href === "/discover";
-                        if (unlockSound) enableFeedSound();
-                        e.preventDefault();
-                        if (pathname === item.href) {
-                          if (item.href === "/") {
-                            window.dispatchEvent(new Event("ss:home-feed"));
-                            return;
-                          }
-                          if (item.href === "/discover") {
-                            window.dispatchEvent(
-                              new Event("ss:discover-feed"),
-                            );
-                            return;
-                          }
-                          window.location.reload();
-                          return;
-                        }
-                        if (unlockSound) {
-                          router.push(item.href);
-                          return;
-                        }
-                        window.location.assign(item.href);
-                      }}
+                      onClick={(event) => onChromeNav(event, item.href)}
                       className={cn(
                         "flex flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition",
                         active ? "text-primary" : "text-muted-foreground",

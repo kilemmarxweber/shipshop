@@ -55,24 +55,39 @@ export function FeedSoundtrackPlayer({
   }, [canPlay, sound.muted]);
 
   useEffect(() => {
+    return () => {
+      const audio = ref.current;
+      if (!audio) return;
+      audio.dataset.wantSound = "0";
+      audio.muted = true;
+      if (!audio.paused) audio.pause();
+    };
+  }, []);
+
+  useEffect(() => {
     const audio = ref.current;
     if (!audio) return;
     audio.volume = Math.min(1, Math.max(0, sound.volume));
     if (canPlay) {
-      void tryPlayMedia(audio, !sound.muted);
-    } else {
+      if (audio.paused || audio.muted) {
+        void tryPlayMedia(audio, !sound.muted);
+      }
+    } else if (!audio.paused || !audio.muted) {
       audio.muted = true;
       audio.pause();
+      try {
+        if (audio.currentTime > 0.04) audio.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
     }
-    return () => {
-      audio.pause();
-    };
   }, [canPlay, sound.muted, sound.volume, audioUrl]);
 
   useEffect(() => {
     const retry = () => {
       const audio = ref.current;
       if (!audio || !canPlay) return;
+      if (!audio.paused && !audio.muted) return;
       void tryPlayMedia(audio, !sound.muted);
     };
     window.addEventListener(SOUND_UNLOCK_EVENT, retry);
@@ -127,7 +142,7 @@ export function FeedSoundtrackPlayer({
 
   return (
     <div ref={rootRef} className="pointer-events-none absolute size-0 overflow-hidden">
-      <audio ref={ref} src={audioUrl} preload="metadata" />
+      <audio ref={ref} src={audioUrl} preload="auto" />
     </div>
   );
 }

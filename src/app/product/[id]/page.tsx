@@ -766,9 +766,23 @@ function ProductInner() {
                 <Label>Monnaie</Label>
                 <CurrencyPicker
                   value={parseCurrency(editing.currency)}
-                  onChange={(next) =>
-                    setEditing({ ...editing, currency: next })
-                  }
+                  onChange={(next) => {
+                    const prev = parseCurrency(editing.currency);
+                    if (next === prev) return;
+                    if (
+                      editing.priceCents > 0 &&
+                      !window.confirm(
+                        "Changer de monnaie vide le prix. Continuer ?",
+                      )
+                    ) {
+                      return;
+                    }
+                    setEditing({
+                      ...editing,
+                      currency: next,
+                      priceCents: 0,
+                    });
+                  }}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -776,7 +790,11 @@ function ProductInner() {
                   <Label>Prix ({editing.currency ?? "USD"})</Label>
                   <Input
                     type="number"
-                    value={(editing.priceCents / 100).toString()}
+                    value={
+                      editing.priceCents
+                        ? (editing.priceCents / 100).toString()
+                        : ""
+                    }
                     onChange={(e) =>
                       setEditing({
                         ...editing,

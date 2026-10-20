@@ -7,7 +7,7 @@ import { AlertTriangle, Send } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
-import { notifyInboxSeen } from "@/lib/inbox-events";
+import { notifyInboxSeen, notifyInboxUpdated } from "@/lib/inbox-events";
 import { ISSUE_TYPE_LABELS } from "@/lib/handover";
 import { useI18n } from "@/components/i18n-provider";
 import { usePageBack } from "@/components/back-nav-context";
@@ -100,8 +100,18 @@ function ChatInner() {
 
   async function send() {
     const text = body.trim();
-    if (!text) return;
+    if (!text || sending || !session) return;
+    const tempId = `temp:${Date.now()}`;
+    const optimistic: Message = {
+      id: tempId,
+      body: text,
+      createdAt: new Date().toISOString(),
+      senderId: session.user.id,
+      sender: { id: session.user.id, name: session.user.name ?? "Moi" },
+    };
+    setBody("");
     setSending(true);
+    setMessages((prev) => [...prev, optimistic]);
     const { res, data } = await fetchJson<{
       message?: Message;
       error?: string;
@@ -112,13 +122,17 @@ function ChatInner() {
     });
     setSending(false);
     if (!res.ok || !data?.message) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setBody(text);
       toast.error(data?.error ?? "Envoi impossible");
       return;
     }
-    setMessages((prev) => [...prev, data.message!]);
-    setBody("");
-    // Réponse vendeur acquitte les urgences
-    await load();
+    setMessages((prev) =>
+      prev.map((m) => (m.id === tempId ? data.message! : m)),
+    );
+    toast.success("Message envoyé");
+    notifyInboxUpdated();
+    void load();
   }
 
   async function resolveIssue(

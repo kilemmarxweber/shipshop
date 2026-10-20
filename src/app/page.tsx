@@ -28,7 +28,7 @@ import {
   resetFeedAudioFocus,
   unpinFeedAudio,
   useFeedAudioFocus,
-  useFeedSoundLive,
+  useResumeFeedSoundWhenVisible,
 } from "@/lib/feed-audio-focus";
 import {
   disableFeedSound,
@@ -120,6 +120,7 @@ export default function FeedPage() {
   const [tab, setTab] = useState<FeedTab>("foryou");
   const [audioEpoch, setAudioEpoch] = useState(0);
   useFeedOrientation();
+  useResumeFeedSoundWhenVisible();
 
   useEffect(() => {
     void getCurrentGeoCoords()
@@ -186,7 +187,6 @@ export default function FeedPage() {
   );
   const [commentProductId, setCommentProductId] = useState<string | null>(null);
   const audioFocusId = useFeedAudioFocus();
-  const { live: soundLive, kick: soundKick } = useFeedSoundLive();
   const prevAudioFocus = useRef<string | null>(null);
 
   useEffect(() => {
@@ -260,20 +260,26 @@ export default function FeedPage() {
 
   useEffect(() => {
     if (tab === "wanted" || loading || products.length === 0) return;
-    if (!soundLive) return;
-    const id = window.setTimeout(syncVisibleSoundIcon, 120);
+    const id = window.setTimeout(() => {
+      enableFeedSound(false);
+      syncVisibleSoundIcon();
+    }, 120);
     return () => window.clearTimeout(id);
-  }, [tab, audioEpoch, productSoundKey, soundLive, soundKick, loading]);
+  }, [tab, audioEpoch, productSoundKey, loading]);
 
   /* Son auto = card la plus visible (scores IO / scroll). Pas de pin 1re card :
      sur iOS le pin restait collé et le fil ne démutait plus au scroll. */
 
-  function soundFor(id: string): VideoSoundState {
+  function mediaSound(id: string): VideoSoundState {
     const volume = soundById[id]?.volume ?? DEFAULT_VIDEO_SOUND.volume;
     return {
       volume,
-      muted: !soundLive || audioFocusId !== id,
+      muted: audioFocusId !== id,
     };
+  }
+
+  function soundFor(id: string): VideoSoundState {
+    return mediaSound(id);
   }
 
   function activateSound(id: string) {
@@ -556,8 +562,8 @@ export default function FeedPage() {
               images={p.images}
               overlay
               className="absolute inset-0"
-              muted={soundFor(p.id).muted}
-              volume={soundFor(p.id).volume}
+              muted={mediaSound(p.id).muted}
+              volume={mediaSound(p.id).volume}
               hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
               clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
               motions={p.imageMotions}
@@ -577,7 +583,7 @@ export default function FeedPage() {
               <FeedSoundtrackPlayer
                 audioUrl={p.soundtrack.audioUrl}
                 startMs={p.soundtrackStartMs}
-                sound={soundFor(p.id)}
+                sound={mediaSound(p.id)}
                 active={audioFocusId === p.id}
               />
             ) : null}

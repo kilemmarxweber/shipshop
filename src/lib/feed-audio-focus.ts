@@ -10,8 +10,15 @@ import {
 import {
   FEED_ROW_PX,
   SOUND_UNLOCK_EVENT,
+  canAttemptUnmute,
   isFeedSoundLive,
+  noteUnmutedPlayOk,
+  pickCardSoundSource,
   pickFrontRowLeft,
+  playFirstVisibleFeedSound,
+  silenceFeedMediaExcept,
+  haltTrackedFeedMedia,
+  isIosDevice,
 } from "@/lib/try-play-media";
 
 /**
@@ -75,30 +82,49 @@ function pickWinner(): string | null {
 
 function applyDomMute() {
   if (typeof document === "undefined") return;
-  document.querySelectorAll("audio, video").forEach((node) => {
-    if (!(node instanceof HTMLMediaElement)) return;
-    if (node.dataset.scrollAd === "1") return;
-    const key = node
-      .closest("[data-audio-key]")
-      ?.getAttribute("data-audio-key");
-    const iconOn = Boolean(node.closest("[data-feed-sound-on]"));
-    const live = Boolean(
-      !audioHeld && isFeedSoundLive() && iconOn && activeId && key === activeId,
-    );
-    if (live) return;
-    node.muted = true;
-    node.dataset.wantSound = "0";
-    if (node instanceof HTMLAudioElement) node.pause();
-  });
+  const card =
+    !audioHeld && activeId
+      ? document.querySelector(`[data-audio-key="${CSS.escape(activeId)}"]`)
+      : null;
+  const keep =
+    card && canAttemptUnmute() ? pickCardSoundSource(card) : null;
+  silenceFeedMediaExcept(keep);
+  if (!keep) return;
+  if (!keep.paused && !keep.muted) {
+    keep.dataset.wantSound = "1";
+    noteUnmutedPlayOk();
+    return;
+  }
+  keep.dataset.wantSound = "1";
+  keep.muted = false;
+  void keep.play().then(
+    () => {
+      if (keep.dataset.wantSound === "0") {
+        keep.muted = true;
+        if (!keep.paused) keep.pause();
+        return;
+      }
+      if (!keep.muted && !keep.paused) noteUnmutedPlayOk();
+    },
+    () => undefined,
+  );
 }
 
 function commit() {
   const next = audioHeld ? null : pickWinner();
   const changed = next !== activeId;
-  activeId = next;
-  applyDomMute();
-  if (!changed) return;
-  for (const listener of listeners) listener(activeId);
+  if (changed) {
+    activeId = next;
+    applyDomMute();
+    for (const listener of listeners) listener(activeId);
+    return;
+  }
+  if (!next || !canAttemptUnmute()) return;
+  const card = document.querySelector(
+    `[data-audio-key="${CSS.escape(next)}"]`,
+  );
+  const keep = pickCardSoundSource(card);
+  if (keep && (keep.paused || keep.muted)) applyDomMute();
 }
 
 /** Mute le fil (popup ouvert). Relâche pour redémarrer le son. */
@@ -106,13 +132,7 @@ export function holdFeedAudio(held: boolean) {
   ensurePageMediaBinding();
   if (audioHeld === held) return;
   audioHeld = held;
-  if (held && typeof document !== "undefined") {
-    document.querySelectorAll("audio, video").forEach((node) => {
-      if (!(node instanceof HTMLMediaElement)) return;
-      if (node.dataset.scrollAd === "1") return;
-      node.muted = true;
-    });
-  }
+  if (held) silenceFeedMediaExcept(null);
   commit();
 }
 
@@ -178,6 +198,8 @@ export function subscribeFeedAudioFocus(listener: Listener) {
 export function resetFeedAudioFocus() {
   scores.clear();
   pinnedId = null;
+  if (isIosDevice()) haltTrackedFeedMedia();
+  silenceFeedMediaExcept(null);
   if (activeId === null) return;
   activeId = null;
   for (const listener of listeners) listener(null);
@@ -187,25 +209,40 @@ export function useFeedAudioFocus() {
   const live = usePageMediaLive();
   const [id, setId] = useState<string | null>(null);
   useEffect(() => {
-    const unsub = subscribeFeedAudioFocus(setId);
-    return () => {
-      unsub();
-      if (listeners.size === 0) resetFeedAudioFocus();
-    };
+    return subscribeFeedAudioFocus(setId);
   }, []);
   return live ? id : null;
 }
 
+/** Retour sur le fil : reprend le son de la card visible, sans seek / reload. */
+export function useResumeFeedSoundWhenVisible() {
+  const live = usePageMediaLive();
+  useEffect(() => {
+    if (!live) return;
+    const timer = window.setTimeout(() => {
+      const key = playFirstVisibleFeedSound();
+      if (key) requestFeedAudioFocus(key);
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [live]);
+}
+
 /** Android/desktop : on d’emblée. iOS : après le clic fil. Mute volume : off. */
 export function useFeedSoundLive() {
-  const [on, setOn] = useState(false);
+  const [on, setOn] = useState(() =>
+    typeof window === "undefined" ? false : isFeedSoundLive(),
+  );
   const [kick, setKick] = useState(0);
   useEffect(() => {
+    let last = isFeedSoundLive();
+    setOn(last);
     const sync = () => {
-      setOn(isFeedSoundLive());
+      const next = isFeedSoundLive();
+      if (next === last) return;
+      last = next;
+      setOn(next);
       setKick((n) => n + 1);
     };
-    sync();
     window.addEventListener(SOUND_UNLOCK_EVENT, sync);
     return () => window.removeEventListener(SOUND_UNLOCK_EVENT, sync);
   }, []);

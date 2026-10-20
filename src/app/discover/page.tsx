@@ -28,7 +28,7 @@ import {
   resetFeedAudioFocus,
   unpinFeedAudio,
   useFeedAudioFocus,
-  useFeedSoundLive,
+  useResumeFeedSoundWhenVisible,
 } from "@/lib/feed-audio-focus";
 import {
   disableFeedSound,
@@ -57,10 +57,6 @@ function hasAudio(p: Product) {
   return Boolean(p.soundtrack?.audioUrl) || productHasVideo(p.images);
 }
 
-function hasCoverVideo(p: Product) {
-  return productHasVideo(p.images.slice(0, 1));
-}
-
 export default function DiscoverPage() {
   const { t } = useI18n();
   const appConfig = useAppConfig();
@@ -74,7 +70,7 @@ export default function DiscoverPage() {
   const [userPinned, setUserPinned] = useState<string | null>(null);
   const [audioOff, setAudioOff] = useState(false);
   const audioFocusId = useFeedAudioFocus();
-  const { live: soundLive, kick: soundKick } = useFeedSoundLive();
+  useResumeFeedSoundWhenVisible();
   const prevAudioFocus = useRef<string | null>(null);
   const audioFocusRef = useRef<string | null>(null);
   const userPinnedRef = useRef<string | null>(null);
@@ -115,23 +111,18 @@ export default function DiscoverPage() {
 
   const assignVisibleAudio = useCallback(() => {
     if (audioOffRef.current || userPinnedRef.current) return;
-    const list = productsRef.current;
-    const visible = visibleRef.current;
-    const visibleCover = list.filter((p) => hasCoverVideo(p) && visible.has(p.id));
-    const target =
-      visibleCover[0] ??
-      list.find((p) => hasCoverVideo(p)) ??
-      list.find((p) => productHasVideo(p.images)) ??
-      list.find((p) => hasAudio(p));
-    if (!target) return;
-    if (audioFocusRef.current === target.id) return;
-    requestFeedAudioFocus(target.id);
+    const id = playFirstVisibleFeedSound();
+    if (!id) return;
+    requestFeedAudioFocus(id);
   }, []);
 
   useEffect(() => {
     const root = document.querySelector(".app-main");
     if (!root) return;
-    const onScroll = () => feed.noteUserScroll();
+    const onScroll = () => {
+      feed.noteUserScroll();
+      unpinFeedAudio();
+    };
     root.addEventListener("scroll", onScroll, { passive: true });
     return () => root.removeEventListener("scroll", onScroll);
   }, [feed.noteUserScroll]);
@@ -164,12 +155,16 @@ export default function DiscoverPage() {
     return () => window.clearTimeout(timer);
   }, [products, category, debouncedQ, assignVisibleAudio]);
 
-  function soundFor(id: string): VideoSoundState {
+  function mediaSound(id: string): VideoSoundState {
     const volume = soundById[id]?.volume ?? DEFAULT_VIDEO_SOUND.volume;
     return {
       volume,
-      muted: audioOff || !soundLive || audioFocusId !== id,
+      muted: audioOff || audioFocusId !== id,
     };
+  }
+
+  function soundFor(id: string): VideoSoundState {
+    return mediaSound(id);
   }
 
   function activateSound(id: string) {
@@ -199,9 +194,12 @@ export default function DiscoverPage() {
   const productSoundKey = `${products.length}:${products[0]?.id ?? ""}:${products.at(-1)?.id ?? ""}`;
 
   useEffect(() => {
-    if (!soundLive) return;
-    syncVisibleSoundIcon();
-  }, [soundLive, soundKick, productSoundKey]);
+    const id = window.setTimeout(() => {
+      enableFeedSound(false);
+      syncVisibleSoundIcon();
+    }, 160);
+    return () => window.clearTimeout(id);
+  }, [productSoundKey]);
 
   useEffect(() => {
     const onDiscover = () => {
@@ -310,8 +308,8 @@ export default function DiscoverPage() {
                 className="absolute inset-0"
                 showDots={false}
                 intervalMs={3500}
-                muted={soundFor(p.id).muted}
-                volume={soundFor(p.id).volume}
+                muted={mediaSound(p.id).muted}
+                volume={mediaSound(p.id).volume}
                 hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                 clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
                 motions={p.imageMotions}
@@ -327,7 +325,7 @@ export default function DiscoverPage() {
                 <FeedSoundtrackPlayer
                   audioUrl={p.soundtrack.audioUrl}
                   startMs={p.soundtrackStartMs}
-                  sound={soundFor(p.id)}
+                  sound={mediaSound(p.id)}
                   active={focused}
                   loop={userPinned === p.id}
                   onCycleEnd={() => playNext(p.id)}

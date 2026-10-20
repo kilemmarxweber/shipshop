@@ -109,3 +109,20 @@ export function isValidContactPhone(raw: string) {
   const n = nationalDigits(parts.national, country.max);
   return n.length >= country.min && n.length <= country.max;
 }
+
+export function looksLikeEmail(raw: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim());
+}
+
+/** Saisie identifiant : lettres / @ = e-mail, sinon téléphone. */
+export function looksLikeEmailInput(raw: string) {
+  return /[A-Za-z@]/.test(raw.trim());
+}
+
+export function normalizeAccountPhone(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed || looksLikeEmailInput(trimmed)) return null;
+  const parts = splitPhone(trimmed);
+  const e164 = composePhone(parts.dial, parts.national);
+  return isValidContactPhone(e164) ? e164 : null;
+}
