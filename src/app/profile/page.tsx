@@ -200,7 +200,7 @@ export default function ProfilePage() {
       toast.error(t("auth.emailInvalid"));
       return;
     }
-    if (!isValidContactPhone(phone)) {
+    if (phone && !isValidContactPhone(phone)) {
       toast.error(t("auth.phoneInvalid"));
       return;
     }
@@ -215,7 +215,7 @@ export default function ProfilePage() {
       body: JSON.stringify({
         name,
         ...(email ? { email } : {}),
-        phone,
+        phone: phone || null,
       }),
     });
     setSavingProfile(false);
