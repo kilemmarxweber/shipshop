@@ -32,7 +32,7 @@ export default function WantedListPage() {
         </Link>
       </div>
       {loading ? (
-        <PageLoader className="h-[40dvh]" />
+        <PageLoader />
       ) : items.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
           {t("wanted.empty")}

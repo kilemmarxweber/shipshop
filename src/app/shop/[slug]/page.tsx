@@ -26,6 +26,7 @@ import { uploadCompressedMedia } from "@/lib/compress-media";
 import { colorHex } from "@/lib/product-options";
 import { formatMoney, cn } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
+import { useFeedOrientation } from "@/hooks/use-feed-orientation";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { FollowShopButton } from "@/components/follow-shop-button";
 import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
@@ -41,8 +42,15 @@ import {
 } from "@/components/video-sound-button";
 import {
   requestFeedAudioFocus,
+  unpinFeedAudio,
   useFeedAudioFocus,
+  useFeedSoundLive,
 } from "@/lib/feed-audio-focus";
+import {
+  disableFeedSound,
+  enableFeedSound,
+  isIosDevice,
+} from "@/lib/try-play-media";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { MediaThumb } from "@/components/media-thumb";
@@ -106,6 +114,7 @@ function ShopInner() {
   const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   usePageBack({ fallbackHref: "/" });
+  useFeedOrientation();
   const [shop, setShop] = useState<ShopProfile | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +129,7 @@ function ShopInner() {
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
   const audioFocusId = useFeedAudioFocus();
+  const soundLive = useFeedSoundLive();
   const prevAudioFocus = useRef<string | null>(null);
 
   useEffect(() => {
@@ -142,10 +152,12 @@ function ShopInner() {
   function soundFor(id: string): VideoSoundState {
     const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
     if (audioFocusId !== id) return { ...base, muted: true };
+    if (isIosDevice() && !soundLive) return { ...base, muted: true };
     return base;
   }
 
   function activateSound(id: string) {
+    enableFeedSound();
     if (!soundFor(id).muted) {
       requestFeedAudioFocus(id);
       return;
@@ -379,7 +391,7 @@ function ShopInner() {
   const refCode = shop.slug.toUpperCase().slice(0, 12);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden md:h-auto md:overflow-visible">
+    <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden">
       {/* En-tête boutique */}
       <header className="shrink-0 border-b border-border bg-background/95 px-4 pb-3 pt-1 backdrop-blur">
         <div className="flex items-start gap-3">
@@ -628,12 +640,14 @@ function ShopInner() {
       ) : (
         <div
           id="produits"
-          className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4 md:pb-8"
+          className="feed-snap feed-product-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+          onScroll={() => unpinFeedAudio()}
         >
           {products.map((p) => (
             <article
               key={p.id}
-              className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden md:h-[min(520px,70dvh)] md:min-h-0 md:rounded-2xl"
+              data-audio-key={p.id}
+              className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden"
             >
               <ProductImageCarousel
                 images={p.images}
@@ -776,7 +790,15 @@ function ShopInner() {
                   hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                   sound={soundFor(p.id)}
                   onChange={(next) => {
-                    if (!next.muted) requestFeedAudioFocus(p.id);
+                    if (next.muted) {
+                      disableFeedSound();
+                      setSoundById((prev) =>
+                        applyExclusiveVideoSound(prev, p.id, next),
+                      );
+                      return;
+                    }
+                    enableFeedSound();
+                    requestFeedAudioFocus(p.id);
                     setSoundById((prev) =>
                       applyExclusiveVideoSound(prev, p.id, next),
                     );

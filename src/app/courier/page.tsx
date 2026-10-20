@@ -135,7 +135,7 @@ export default function CourierPortalPage() {
       </div>
     );
   }
-  if (loading) return <PageLoader className="h-[40dvh]" />;
+  if (loading) return <PageLoader />;
   if (!courier) {
     return (
       <p className="px-5 py-16 text-center text-sm text-muted-foreground">

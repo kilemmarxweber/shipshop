@@ -15,7 +15,11 @@ import {
 } from "@/lib/feed-video-playback";
 import { isVideoUrl, videoPosterUrl } from "@/lib/media";
 import { iosInlineVideo } from "@/lib/ios-inline-video";
-import { tryPlayMedia } from "@/lib/try-play-media";
+import {
+  SOUND_UNLOCK_EVENT,
+  isIosDevice,
+  tryPlayMedia,
+} from "@/lib/try-play-media";
 import {
   playbackMotion,
   slideshowSlotMs,
@@ -138,12 +142,25 @@ function SlideMedia({
         if (!ok) onAutoplayBlocked?.();
       });
     } else {
+      el.dataset.wantSound = "0";
+      el.muted = true;
       el.pause();
     }
     return () => {
       el.pause();
     };
   }, [playing, shouldLoad, src, video, muted, onAutoplayBlocked]);
+
+  useEffect(() => {
+    if (!video) return;
+    const retry = () => {
+      const el = videoRef.current;
+      if (!el || !playing || !shouldLoad || document.hidden) return;
+      void tryPlayMedia(el, !muted);
+    };
+    window.addEventListener(SOUND_UNLOCK_EVENT, retry);
+    return () => window.removeEventListener(SOUND_UNLOCK_EVENT, retry);
+  }, [playing, shouldLoad, video, muted]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -399,6 +416,9 @@ export function ProductImageCarousel({
         : el;
     const root = scrollRootFor(el);
 
+    const ios = isIosDevice();
+    const ioRoot = ios ? null : root;
+
     const loadIo = eager
       ? null
       : new IntersectionObserver(
@@ -406,7 +426,7 @@ export function ProductImageCarousel({
             if (!entry) return;
             setNearView(entry.isIntersecting);
           },
-          { root, rootMargin: "120% 0px", threshold: 0.01 },
+          { root: ioRoot, rootMargin: "120% 0px", threshold: 0.01 },
         );
 
     const applyVisibility = (ratio: number, left: number) => {
@@ -433,7 +453,7 @@ export function ProductImageCarousel({
         applyVisibility(entry.intersectionRatio, entry.boundingClientRect.left);
       },
       {
-        root,
+        root: ioRoot,
         threshold: [0, 0.2, LEFT_VIEW_RATIO, IN_VIEW_RATIO, 0.65, 0.85, 1],
       },
     );
@@ -441,7 +461,7 @@ export function ProductImageCarousel({
     loadIo?.observe(target);
     playIo.observe(target);
 
-    const boot = () => {
+    const measure = () => {
       const rect = target.getBoundingClientRect();
       const rootBox = root?.getBoundingClientRect() ?? {
         top: 0,
@@ -460,12 +480,33 @@ export function ProductImageCarousel({
       const area = Math.max(1, rect.width * rect.height);
       applyVisibility((overlapH * overlapW) / area, rect.left);
     };
-    const bootId = window.requestAnimationFrame(boot);
+    const bootId = window.requestAnimationFrame(measure);
+
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        measure();
+      });
+    };
+    const scrollOpts: AddEventListenerOptions = { passive: true, capture: true };
+    root?.addEventListener("scroll", onScroll, scrollOpts);
+    document.addEventListener("scroll", onScroll, scrollOpts);
+    window.addEventListener("scroll", onScroll, scrollOpts);
+    window.visualViewport?.addEventListener("scroll", onScroll);
+    window.visualViewport?.addEventListener("resize", onScroll);
 
     return () => {
       window.cancelAnimationFrame(bootId);
+      if (raf) window.cancelAnimationFrame(raf);
       loadIo?.disconnect();
       playIo.disconnect();
+      root?.removeEventListener("scroll", onScroll, scrollOpts);
+      document.removeEventListener("scroll", onScroll, scrollOpts);
+      window.removeEventListener("scroll", onScroll, scrollOpts);
+      window.visualViewport?.removeEventListener("scroll", onScroll);
+      window.visualViewport?.removeEventListener("resize", onScroll);
       if (hasVideo && !eager) clearFeedVideoScore(feedId);
       if (audioKey) clearFeedAudioScore(audioKey);
     };
@@ -595,6 +636,7 @@ export function ProductImageCarousel({
   return (
     <div
       ref={rootRef}
+      data-audio-key={audioKey}
       className={cn(
         "relative touch-pan-y overflow-hidden bg-black select-none",
         className,

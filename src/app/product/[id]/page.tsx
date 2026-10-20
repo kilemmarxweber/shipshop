@@ -892,7 +892,7 @@ function ProductInner() {
 
 export default function ProductPage() {
   return (
-    <Suspense fallback={<PageLoader className="h-[60dvh]" />}>
+    <Suspense fallback={<PageLoader />}>
       <ProductInner />
     </Suspense>
   );

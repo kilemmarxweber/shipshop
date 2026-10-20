@@ -7,6 +7,10 @@ import {
   subscribePageMedia,
   usePageMediaLive,
 } from "@/lib/page-media-session";
+import {
+  SOUND_UNLOCK_EVENT,
+  isFeedSoundLive,
+} from "@/lib/try-play-media";
 
 /**
  * Un seul son dans le feed : vidéo ou soundtrack.
@@ -54,10 +58,27 @@ function pickWinner(): string | null {
   return visible[0]![0];
 }
 
+function applyDomMute() {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll("audio, video").forEach((node) => {
+    if (!(node instanceof HTMLMediaElement)) return;
+    if (node.dataset.scrollAd === "1") return;
+    const key = node
+      .closest("[data-audio-key]")
+      ?.getAttribute("data-audio-key");
+    const live = Boolean(!audioHeld && activeId && key === activeId);
+    if (live) return;
+    node.muted = true;
+    node.dataset.wantSound = "0";
+  });
+}
+
 function commit() {
   const next = audioHeld ? null : pickWinner();
-  if (next === activeId) return;
+  const changed = next !== activeId;
   activeId = next;
+  applyDomMute();
+  if (!changed) return;
   for (const listener of listeners) listener(activeId);
 }
 
@@ -144,4 +165,16 @@ export function useFeedAudioFocus() {
     };
   }, []);
   return live ? id : null;
+}
+
+/** iPhone : false tant que le tap son n’a pas eu lieu. */
+export function useFeedSoundLive() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const sync = () => setOn(isFeedSoundLive());
+    sync();
+    window.addEventListener(SOUND_UNLOCK_EVENT, sync);
+    return () => window.removeEventListener(SOUND_UNLOCK_EVENT, sync);
+  }, []);
+  return on;
 }

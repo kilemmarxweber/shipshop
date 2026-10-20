@@ -21,7 +21,7 @@ export function PageLoader({
     <div
       className={cn(
         "flex flex-col items-center justify-center gap-3 text-muted-foreground",
-        fullScreen ? "min-h-dvh" : "h-[50dvh]",
+        fullScreen ? "min-h-full flex-1" : "min-h-[12rem] flex-1",
         className,
       )}
       role="status"

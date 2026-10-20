@@ -58,12 +58,12 @@ export default function MessagesPage() {
   }, [session, isPending]);
 
   if (isPending || loading) {
-    return <PageLoader className="h-[40dvh]" />;
+    return <PageLoader />;
   }
 
   if (!session) {
     return (
-      <div className="px-5 py-16 text-center">
+      <div className="flex min-h-full flex-1 flex-col items-center justify-center px-5 py-16 text-center">
         <p className="text-muted-foreground">{t("messages.guestHint")}</p>
         <Link
           href="/auth/login"

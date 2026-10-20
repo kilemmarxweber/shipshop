@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Bell,
@@ -26,6 +26,8 @@ import { FoxScrollAdOverlay } from "@/components/fox-scroll-ad-overlay";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { useInboxUnread } from "@/hooks/use-inbox-unread";
+import { useVisualViewportLock } from "@/hooks/use-visual-viewport";
+import { armFeedSoundUnlock, enableFeedSound } from "@/lib/try-play-media";
 import { useI18n } from "@/components/i18n-provider";
 import { CART_UPDATED_EVENT, cartCountFromEvent } from "@/lib/cart-events";
 import { WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
@@ -63,6 +65,7 @@ export function AppShell({
   appName: string;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   useBindPageMediaSession();
   const { t } = useI18n();
   const { data: session } = authClient.useSession();
@@ -73,6 +76,10 @@ export function AppShell({
   const inbox = useInboxUnread(userId, pathname);
   const [walletTick, setWalletTick] = useState(0);
   const [hasShop, setHasShop] = useState(false);
+  useVisualViewportLock();
+  useEffect(() => {
+    armFeedSoundUnlock();
+  }, []);
 
   useEffect(() => {
     const bumpWallet = () => setWalletTick((n) => n + 1);
@@ -247,11 +254,11 @@ export function AppShell({
                 <BackButton inline />
               </div>
             )}
-            {children}
+            <div className="app-page">{children}</div>
           </main>
 
           {!hideChrome && (
-            <nav className="absolute bottom-0 left-0 right-0 z-40 shrink-0 border-t border-border bg-background px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <nav className="app-tabbar absolute bottom-0 left-0 right-0 z-40 shrink-0 border-t border-border bg-background px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
               <div className="grid grid-cols-5 gap-0.5">
                 {NAV.map((item) => {
                   const active =
@@ -264,6 +271,11 @@ export function AppShell({
                       key={item.href}
                       href={item.href}
                       prefetch={false}
+                      data-feed-sound={
+                        item.href === "/" || item.href === "/discover"
+                          ? ""
+                          : undefined
+                      }
                       onClick={(e) => {
                         if (
                           e.metaKey ||
@@ -274,13 +286,21 @@ export function AppShell({
                         ) {
                           return;
                         }
+                        const unlockSound =
+                          item.href === "/" || item.href === "/discover";
+                        if (unlockSound) enableFeedSound();
                         e.preventDefault();
                         if (pathname === item.href) {
                           if (item.href === "/") {
                             window.dispatchEvent(new Event("ss:home-feed"));
                             return;
                           }
+                          if (item.href === "/discover") return;
                           window.location.reload();
+                          return;
+                        }
+                        if (unlockSound) {
+                          router.push(item.href);
                           return;
                         }
                         window.location.assign(item.href);

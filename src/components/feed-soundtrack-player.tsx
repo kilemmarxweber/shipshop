@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { VideoSoundState } from "@/components/video-sound-button";
 import { useAppConfig } from "@/lib/use-app-config";
 import { usePageMediaLive } from "@/lib/page-media-session";
-import { tryPlayMedia } from "@/lib/try-play-media";
+import { SOUND_UNLOCK_EVENT, tryPlayMedia } from "@/lib/try-play-media";
 
 type Props = {
   audioUrl: string;
@@ -68,6 +68,16 @@ export function FeedSoundtrackPlayer({
       audio.pause();
     };
   }, [canPlay, sound.muted, sound.volume, audioUrl]);
+
+  useEffect(() => {
+    const retry = () => {
+      const audio = ref.current;
+      if (!audio || !canPlay) return;
+      void tryPlayMedia(audio, !sound.muted);
+    };
+    window.addEventListener(SOUND_UNLOCK_EVENT, retry);
+    return () => window.removeEventListener(SOUND_UNLOCK_EVENT, retry);
+  }, [canPlay, sound.muted]);
 
   useEffect(() => {
     const audio = ref.current;

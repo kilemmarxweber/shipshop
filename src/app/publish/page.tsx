@@ -122,7 +122,7 @@ function PublishInner() {
   }
 
   if (isPending) {
-    return <PageLoader className="h-[40dvh]" />;
+    return <PageLoader />;
   }
 
   if (!session) {

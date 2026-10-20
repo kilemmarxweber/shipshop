@@ -250,7 +250,7 @@ export default function AdminDeliveryPage() {
       </div>
     );
   }
-  if (loading) return <PageLoader className="h-[40dvh]" />;
+  if (loading) return <PageLoader />;
   if (allowed === false) {
     return (
       <div className="px-5 py-16 text-center">

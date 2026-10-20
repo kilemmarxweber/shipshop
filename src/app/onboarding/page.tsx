@@ -69,7 +69,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md px-5 py-10">
+    <div className="mx-auto min-h-full w-full max-w-md flex-1 px-5 py-10">
       <BackButton fallbackHref="/" />
       <h1 className="font-heading text-2xl font-bold">Devenir vendeur</h1>
       <p className="mt-2 text-sm text-muted-foreground">

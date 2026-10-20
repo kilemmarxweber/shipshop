@@ -28,7 +28,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   colorScheme: "dark",
-  interactiveWidget: "resizes-content",
+  // iOS : resizes-content réduit trop le layout (nav au milieu de l’écran).
+  interactiveWidget: "resizes-visual",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f3f3f7" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0f" },
@@ -74,9 +75,9 @@ export default function RootLayout({
     <html
       lang="fr"
       suppressHydrationWarning
-      className={`${dmSans.variable} ${spaceGrotesk.variable} dark h-full`}
+      className={`${dmSans.variable} ${spaceGrotesk.variable} dark`}
     >
-      <body className="h-full overflow-hidden font-sans antialiased">
+      <body className="overflow-hidden font-sans antialiased">
         <Suspense fallback={<PageLoader fullScreen />}>
           <LocaleProviders>{children}</LocaleProviders>
         </Suspense>

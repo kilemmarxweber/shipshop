@@ -25,10 +25,19 @@ import {
 import {
   requestFeedAudioFocus,
   resetFeedAudioFocus,
+  unpinFeedAudio,
   useFeedAudioFocus,
+  useFeedSoundLive,
 } from "@/lib/feed-audio-focus";
+import {
+  disableFeedSound,
+  enableFeedSound,
+  isIosDevice,
+  playFirstVisibleFeedSound,
+} from "@/lib/try-play-media";
 import { resetAllPageMedia } from "@/lib/page-media-session";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+import { useFeedOrientation } from "@/hooks/use-feed-orientation";
 import { colorHex } from "@/lib/product-options";
 import { AuthInline } from "@/components/auth-inline";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
@@ -84,6 +93,17 @@ type Product = {
 
 type FeedTab = "foryou" | "following" | "wanted";
 
+function resetHomeFeedScroll() {
+  if (typeof document === "undefined") return;
+  document
+    .querySelectorAll(".feed-snap, .app-main, .feed-wanted-scroll")
+    .forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      node.scrollTop = 0;
+      node.scrollLeft = 0;
+    });
+}
+
 function categoryLabel(
   t: (path: MessagePath) => string,
   id: string,
@@ -99,6 +119,7 @@ export default function FeedPage() {
   const { data: session } = authClient.useSession();
   const [tab, setTab] = useState<FeedTab>("foryou");
   const [audioEpoch, setAudioEpoch] = useState(0);
+  useFeedOrientation();
 
   useEffect(() => {
     void getCurrentGeoCoords()
@@ -165,6 +186,7 @@ export default function FeedPage() {
   );
   const [commentProductId, setCommentProductId] = useState<string | null>(null);
   const audioFocusId = useFeedAudioFocus();
+  const soundLive = useFeedSoundLive();
   const prevAudioFocus = useRef<string | null>(null);
 
   useEffect(() => {
@@ -182,11 +204,16 @@ export default function FeedPage() {
     );
   }, [audioFocusId]);
 
-  function mediaKey(id: string) {
-    return `${tab}:${id}`;
-  }
-
   function selectTab(next: FeedTab) {
+    if (next === "foryou" || next === "following") {
+      enableFeedSound();
+    }
+    if (next === tab) {
+      if (next === "foryou" || next === "following") {
+        syncVisibleSoundIcon();
+      }
+      return;
+    }
     resetFeedAudioFocus();
     resetAllPageMedia();
     setSoundById({});
@@ -196,6 +223,7 @@ export default function FeedPage() {
 
   useEffect(() => {
     const goHome = () => {
+      enableFeedSound();
       resetFeedAudioFocus();
       resetAllPageMedia();
       setSoundById({});
@@ -210,36 +238,47 @@ export default function FeedPage() {
     resetFeedAudioFocus();
     resetAllPageMedia();
     setSoundById({});
+    resetHomeFeedScroll();
+    const id = window.setTimeout(resetHomeFeedScroll, 0);
+    return () => window.clearTimeout(id);
   }, [tab, audioEpoch]);
 
-  const bootAudioId =
-    tab === "wanted"
-      ? null
-      : (products.find(
-          (p) => productHasVideo(p.images) || Boolean(p.soundtrack?.audioUrl),
-        )?.id ?? null);
+  function syncVisibleSoundIcon() {
+    const id = playFirstVisibleFeedSound();
+    if (!id) return;
+    requestFeedAudioFocus(id);
+    setSoundById((prev) =>
+      applyExclusiveVideoSound(prev, id, {
+        muted: false,
+        volume: (prev[id] ?? DEFAULT_VIDEO_SOUND).volume,
+      }),
+    );
+  }
 
   useEffect(() => {
-    if (!bootAudioId) return;
-    const key = `${tab}:${bootAudioId}`;
-    const timer = window.setTimeout(() => requestFeedAudioFocus(key), 80);
-    return () => window.clearTimeout(timer);
-  }, [tab, audioEpoch, bootAudioId]);
+    if (tab === "wanted") return;
+    if (isIosDevice() && !soundLive) return;
+    const id = window.setTimeout(syncVisibleSoundIcon, 80);
+    return () => window.clearTimeout(id);
+  }, [tab, audioEpoch, products, soundLive, audioFocusId]);
+
+  /* Son auto = card la plus visible (scores IO / scroll). Pas de pin 1re card :
+     sur iOS le pin restait collé et le fil ne démutait plus au scroll. */
 
   function soundFor(id: string): VideoSoundState {
-    const key = mediaKey(id);
-    const base = soundById[key] ?? DEFAULT_VIDEO_SOUND;
-    if (audioFocusId !== key) return { ...base, muted: true };
+    const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
+    if (audioFocusId !== id) return { ...base, muted: true };
+    if (isIosDevice() && !soundLive) return { ...base, muted: true };
     return base;
   }
 
   function activateSound(id: string) {
-    const key = mediaKey(id);
-    requestFeedAudioFocus(key);
+    enableFeedSound();
+    requestFeedAudioFocus(id);
     setSoundById((prev) =>
-      applyExclusiveVideoSound(prev, key, {
+      applyExclusiveVideoSound(prev, id, {
         muted: false,
-        volume: (prev[key] ?? DEFAULT_VIDEO_SOUND).volume,
+        volume: (prev[id] ?? DEFAULT_VIDEO_SOUND).volume,
       }),
     );
   }
@@ -337,9 +376,13 @@ export default function FeedPage() {
   const tabs = (
     <>
     <ScrollAdFeedSurface on={tab !== "wanted"} />
-    <div className="flex shrink-0 justify-center gap-6 border-b border-border px-4 py-2 text-sm font-semibold">
+    <div
+      data-feed-tabs
+      className="flex shrink-0 justify-center gap-6 border-b border-border px-4 py-2 text-sm font-semibold"
+    >
       <button
         type="button"
+        data-feed-sound
         onClick={() => selectTab("following")}
         className={cn(
           "cursor-pointer pb-1",
@@ -352,6 +395,7 @@ export default function FeedPage() {
       </button>
       <button
         type="button"
+        data-feed-sound
         onClick={() => selectTab("foryou")}
         className={cn(
           "cursor-pointer pb-1",
@@ -382,7 +426,7 @@ export default function FeedPage() {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         {tabs}
-        <PageLoader className="h-[70dvh]" />
+        <PageLoader />
       </div>
     );
   }
@@ -483,20 +527,24 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden md:h-auto md:overflow-visible">
+    <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden">
       {tabs}
 
       <div
-        className="feed-snap min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:grid md:h-auto md:flex-none md:grid-cols-2 md:gap-3 md:overflow-visible md:overscroll-auto md:p-4 md:pb-8"
+        key={tab}
+        className="feed-snap feed-product-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
         data-experiment-id={appConfig.experimentId ?? undefined}
-        onScroll={productFeed.noteUserScroll}
+        onScroll={() => {
+          productFeed.noteUserScroll();
+          unpinFeedAudio();
+        }}
       >
         {products.map((p, index) => (
           <DwellArticle
-            key={p.id}
+            key={`${tab}:${p.id}`}
             productId={p.id}
             enabled={Boolean(session)}
-            className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden md:h-[min(520px,70dvh)] md:min-h-0 md:rounded-2xl"
+            className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden"
           >
             <ProductImageCarousel
               images={p.images}
@@ -509,7 +557,7 @@ export default function FeedPage() {
               motions={p.imageMotions}
               audioKey={
                 productHasVideo(p.images) || p.soundtrack?.audioUrl
-                  ? mediaKey(p.id)
+                  ? p.id
                   : undefined
               }
               onActivateSound={
@@ -524,7 +572,7 @@ export default function FeedPage() {
                 audioUrl={p.soundtrack.audioUrl}
                 startMs={p.soundtrackStartMs}
                 sound={soundFor(p.id)}
-                active={audioFocusId === mediaKey(p.id)}
+                active={audioFocusId === p.id}
               />
             ) : null}
             {index === prefetchAt || index === products.length - 1 ? (
@@ -610,10 +658,17 @@ export default function FeedPage() {
                 hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                 sound={soundFor(p.id)}
                 onChange={(next) => {
-                  const key = mediaKey(p.id);
-                  if (!next.muted) requestFeedAudioFocus(key);
+                  if (next.muted) {
+                    disableFeedSound();
+                    setSoundById((prev) =>
+                      applyExclusiveVideoSound(prev, p.id, next),
+                    );
+                    return;
+                  }
+                  enableFeedSound();
+                  requestFeedAudioFocus(p.id);
                   setSoundById((prev) =>
-                    applyExclusiveVideoSound(prev, key, next),
+                    applyExclusiveVideoSound(prev, p.id, next),
                   );
                 }}
               />

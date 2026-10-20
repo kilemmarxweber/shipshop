@@ -17,7 +17,7 @@ export function DwellArticle({
   const ref = useRef<HTMLElement>(null);
   useVisibleProductDwell(productId, enabled, ref);
   return (
-    <article ref={ref} className={className}>
+    <article ref={ref} className={className} data-audio-key={productId}>
       {children}
     </article>
   );

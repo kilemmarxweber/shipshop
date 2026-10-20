@@ -27,7 +27,14 @@ import {
   resetFeedAudioFocus,
   unpinFeedAudio,
   useFeedAudioFocus,
+  useFeedSoundLive,
 } from "@/lib/feed-audio-focus";
+import {
+  disableFeedSound,
+  enableFeedSound,
+  isIosDevice,
+  playFirstVisibleFeedSound,
+} from "@/lib/try-play-media";
 
 type Product = {
   id: string;
@@ -67,6 +74,7 @@ export default function DiscoverPage() {
   const [userPinned, setUserPinned] = useState<string | null>(null);
   const [audioOff, setAudioOff] = useState(false);
   const audioFocusId = useFeedAudioFocus();
+  const soundLive = useFeedSoundLive();
   const prevAudioFocus = useRef<string | null>(null);
   const audioFocusRef = useRef<string | null>(null);
   const userPinnedRef = useRef<string | null>(null);
@@ -159,10 +167,12 @@ export default function DiscoverPage() {
   function soundFor(id: string): VideoSoundState {
     const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
     if (audioOff || audioFocusId !== id) return { ...base, muted: true };
+    if (isIosDevice() && !soundLive) return { ...base, muted: true };
     return base;
   }
 
   function activateSound(id: string) {
+    enableFeedSound();
     requestFeedAudioFocus(id);
     setSoundById((prev) =>
       applyExclusiveVideoSound(prev, id, {
@@ -171,6 +181,19 @@ export default function DiscoverPage() {
       }),
     );
   }
+
+  useEffect(() => {
+    if (isIosDevice() && !soundLive) return;
+    const id = playFirstVisibleFeedSound();
+    if (!id) return;
+    requestFeedAudioFocus(id);
+    setSoundById((prev) =>
+      applyExclusiveVideoSound(prev, id, {
+        muted: false,
+        volume: 1,
+      }),
+    );
+  }, [soundLive, products, audioFocusId]);
 
   const playNext = useCallback((fromId: string) => {
     if (userPinnedRef.current || audioOffRef.current) return;
@@ -274,6 +297,7 @@ export default function DiscoverPage() {
                 hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                 clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
                 motions={p.imageMotions}
+                audioKey={audio ? p.id : undefined}
                 forcePlay={focused}
                 loop={userPinned === p.id}
                 onActivateSound={audio ? () => onTileActivate(p.id) : undefined}
@@ -298,13 +322,17 @@ export default function DiscoverPage() {
                     hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
                     sound={soundFor(p.id)}
                     onChange={(next) => {
-                      setAudioOff(false);
-                      if (!next.muted) {
+                      setAudioOff(next.muted);
+                      if (next.muted) {
+                        disableFeedSound();
+                        if (userPinned === p.id) {
+                          setUserPinned(null);
+                          unpinFeedAudio();
+                        }
+                      } else {
+                        enableFeedSound();
                         setUserPinned(p.id);
                         requestFeedAudioFocus(p.id);
-                      } else if (userPinned === p.id) {
-                        setUserPinned(null);
-                        unpinFeedAudio();
                       }
                       setSoundById((prev) =>
                         applyExclusiveVideoSound(prev, p.id, next),
@@ -412,6 +440,8 @@ function DiscoverTile({
   return (
     <article
       ref={ref}
+      data-feed-card
+      data-audio-key={id}
       className="group relative aspect-[3/4] overflow-hidden rounded-2xl"
     >
       {children}

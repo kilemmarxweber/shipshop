@@ -165,7 +165,7 @@ export default function MessagingSettingsPage() {
 
   if (!config) {
     return (
-      <PageLoader className="h-[30dvh]" />
+      <PageLoader />
     );
   }
 

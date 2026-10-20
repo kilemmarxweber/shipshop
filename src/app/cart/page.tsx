@@ -231,7 +231,7 @@ export default function CartPage() {
   }
 
   if (isPending || loading) {
-    return <PageLoader className="h-[40dvh]" />;
+    return <PageLoader />;
   }
 
   if (!session) {

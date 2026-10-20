@@ -261,7 +261,7 @@ export default function ShopDeliveryPage() {
       </div>
     );
   }
-  if (loading) return <PageLoader className="h-[40dvh]" />;
+  if (loading) return <PageLoader />;
   if (shops.length === 0) {
     return (
       <div className="px-5 py-16 text-center">

@@ -55,7 +55,7 @@ export default function ShopTicketPage() {
       .catch(() => setError("QR introuvable"));
   }, [id]);
 
-  if (!ticket && !error) return <PageLoader className="h-[40dvh]" />;
+  if (!ticket && !error) return <PageLoader />;
   if (error || !ticket) {
     return (
       <p className="px-4 py-10 text-center text-sm text-muted-foreground">

@@ -32,7 +32,14 @@ function ensurePageMediaBinding() {
 
 function maxSlots() {
   if (typeof window === "undefined") return 1;
-  return window.matchMedia(`(min-width: ${MD_MIN_PX}px)`).matches ? 2 : 1;
+  if (window.matchMedia(`(min-width: ${MD_MIN_PX}px)`).matches) return 2;
+  if (
+    window.matchMedia("(orientation: landscape) and (min-width: 640px)")
+      .matches
+  ) {
+    return 2;
+  }
+  return 1;
 }
 
 function ensureResizeListener() {
