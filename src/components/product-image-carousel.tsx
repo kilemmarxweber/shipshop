@@ -190,30 +190,49 @@ function SlideMedia({
         />
       ) : null}
       {video ? (
-        <video
-          ref={videoRef}
-          muted={muted}
-          loop={loop}
-          {...iosInlineVideo}
-          preload="none"
-          poster={poster}
-          disablePictureInPicture
-          onLoadedMetadata={(e) => {
-            const el = e.currentTarget;
-            if (el.videoWidth > 0 && el.videoHeight > 0) {
-              setMediaRatio(el.videoWidth / el.videoHeight);
-            }
-          }}
-          onEnded={() => {
-            if (!loop) onPlaybackEnded?.();
-          }}
-          className={mediaClass(fit)}
-          style={
-            mediaRatio
-              ? { aspectRatio: `${mediaRatio}`, height: "auto" }
-              : undefined
-          }
-        />
+        fill ? (
+          <div className="absolute inset-0 z-[1] overflow-hidden">
+            <video
+              ref={videoRef}
+              muted={muted}
+              loop={loop}
+              {...iosInlineVideo}
+              preload="metadata"
+              poster={poster}
+              disablePictureInPicture
+              onLoadedMetadata={(e) => {
+                const el = e.currentTarget;
+                if (el.videoWidth > 0 && el.videoHeight > 0) {
+                  setMediaRatio(el.videoWidth / el.videoHeight);
+                }
+              }}
+              onEnded={() => {
+                if (!loop) onPlaybackEnded?.();
+              }}
+              className="ss-reel-fg-video"
+            />
+          </div>
+        ) : (
+          <video
+            ref={videoRef}
+            muted={muted}
+            loop={loop}
+            {...iosInlineVideo}
+            preload="metadata"
+            poster={poster}
+            disablePictureInPicture
+            onLoadedMetadata={(e) => {
+              const el = e.currentTarget;
+              if (el.videoWidth > 0 && el.videoHeight > 0) {
+                setMediaRatio(el.videoWidth / el.videoHeight);
+              }
+            }}
+            onEnded={() => {
+              if (!loop) onPlaybackEnded?.();
+            }}
+            className={mediaClass(fit)}
+          />
+        )
       ) : fill ? (
         <div className="absolute inset-0 z-[1] overflow-hidden">
           <div

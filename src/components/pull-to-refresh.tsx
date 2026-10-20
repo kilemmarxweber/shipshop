@@ -154,7 +154,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
   return (
     <div
       ref={rootRef}
-      className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+      className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden [touch-action:pan-y]"
     >
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-[60] flex items-start justify-center overflow-hidden"

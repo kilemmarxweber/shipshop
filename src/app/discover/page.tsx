@@ -342,10 +342,10 @@ export default function DiscoverPage() {
         />
       ) : null}
       {feed.loadingMore ? (
-        <p className="py-4 text-center text-xs text-muted-foreground">�</p>
+        <p className="py-4 text-center text-xs text-muted-foreground">...</p>
       ) : null}
       {feed.loading && products.length === 0 ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">�</p>
+        <p className="py-12 text-center text-sm text-muted-foreground">...</p>
       ) : null}
       {products.length === 0 && !feed.loading && (
         <p className="py-12 text-center text-sm text-muted-foreground">
