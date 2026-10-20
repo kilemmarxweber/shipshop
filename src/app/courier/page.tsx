@@ -73,10 +73,10 @@ export default function CourierPortalPage() {
       setCourier(null);
       return;
     }
-    setCourier(data.courier ?? null);
-    setJobs(data.jobs ?? []);
-    setPayouts(data.payouts ?? []);
-    setWallet(data.wallet ?? null);
+    setCourier(data?.courier ?? null);
+    setJobs(data?.jobs ?? []);
+    setPayouts(data?.payouts ?? []);
+    setWallet(data?.wallet ?? null);
   }, []);
 
   useEffect(() => {

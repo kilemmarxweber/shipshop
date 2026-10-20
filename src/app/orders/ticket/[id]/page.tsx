@@ -131,7 +131,6 @@ export default function ShopTicketPage() {
                     (item.saleFeeCents ?? 50) + (item.shippingFeeCents ?? 0),
                   )}
                 </p>
-                </Link>
               </li>
             );
           })}

@@ -314,9 +314,12 @@ export async function purchaseProduct(
       };
       working = { ...working, ...bucketData };
     } else if (delta < 0) {
+      const credit = applyBucketDelta(working, code, -delta, "BUYER");
       bucketData = {
         ...bucketData,
-        ...applyBucketDelta(working, code, -delta, "BUYER"),
+        ...Object.fromEntries(
+          Object.entries(credit).filter(([, value]) => typeof value === "number"),
+        ) as Record<string, number>,
       };
       working = { ...working, ...bucketData };
     }

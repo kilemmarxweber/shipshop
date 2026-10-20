@@ -37,7 +37,7 @@ export function PendingBuyerOrders() {
       "/api/orders?period=all&status=active",
     ).then(({ res, data }) => {
       if (!res.ok) return;
-      const list = (data.orders ?? []).filter((o) => VISIBLE.has(o.status));
+      const list = (data?.orders ?? []).filter((o) => VISIBLE.has(o.status));
       list.sort((a, b) =>
         a.status === "AWAITING_CONFIRM" ? -1 : b.status === "AWAITING_CONFIRM" ? 1 : 0,
       );

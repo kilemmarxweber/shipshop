@@ -1,4 +1,4 @@
-import type { AppCurrency } from "@/lib/money";
+import type { AppCurrency, WalletBalances } from "@/lib/money";
 import { parseCurrency, walletCents, walletCreditData } from "@/lib/money";
 
 export type WalletBucketName = "BUYER" | "VENDOR" | "COURIER";
@@ -27,6 +27,26 @@ function bucketField(bucket: WalletBucketName, currency: AppCurrency) {
   return `${b}${cur}Cents` as const;
 }
 
+function asBalances(wallet: BucketWallet): WalletBalances {
+  return {
+    usdCents: wallet.usdCents ?? undefined,
+    cdfCents: wallet.cdfCents ?? undefined,
+    kwCents: wallet.kwCents ?? undefined,
+    balanceCents: wallet.balanceCents ?? undefined,
+    currency: wallet.currency,
+  };
+}
+
+function numericPatch(
+  patch: ReturnType<typeof walletCreditData>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (typeof value === "number") out[key] = value;
+  }
+  return out;
+}
+
 function storedBucket(
   wallet: BucketWallet,
   bucket: WalletBucketName,
@@ -44,7 +64,7 @@ export function materializedBuckets(wallet: BucketWallet, currency?: string | nu
   const vendor = storedBucket(wallet, "VENDOR", code);
   const courier = storedBucket(wallet, "COURIER", code);
   if (buyer + vendor + courier === 0) {
-    return { BUYER: walletCents(wallet, code), VENDOR: 0, COURIER: 0 };
+    return { BUYER: walletCents(asBalances(wallet), code), VENDOR: 0, COURIER: 0 };
   }
   return { BUYER: buyer, VENDOR: vendor, COURIER: courier };
 }
@@ -63,7 +83,7 @@ export function applyBucketDelta(
   delta: number,
   bucket: WalletBucketName,
 ) {
-  const nextTotal = walletCents(wallet, currency) + delta;
+  const nextTotal = walletCents(asBalances(wallet), currency) + delta;
   const buckets = materializedBuckets(wallet, currency);
   const nextBucket = buckets[bucket] + delta;
   if (nextTotal < 0 || nextBucket < 0) {
@@ -71,7 +91,11 @@ export function applyBucketDelta(
   }
   buckets[bucket] = nextBucket;
   return {
-    ...walletCreditData(wallet, currency, nextTotal, { setDisplay: false }),
+    ...numericPatch(
+      walletCreditData(asBalances(wallet), currency, nextTotal, {
+        setDisplay: false,
+      }),
+    ),
     [bucketField("BUYER", currency)]: buckets.BUYER,
     [bucketField("VENDOR", currency)]: buckets.VENDOR,
     [bucketField("COURIER", currency)]: buckets.COURIER,
@@ -87,11 +111,13 @@ export function drainBucketsData(
 ) {
   let remaining = Math.max(0, amountCents);
   const data: Record<string, number> = {
-    ...walletCreditData(
-      wallet,
-      currency,
-      walletCents(wallet, currency) - remaining,
-      { setDisplay: false },
+    ...numericPatch(
+      walletCreditData(
+        asBalances(wallet),
+        currency,
+        walletCents(asBalances(wallet), currency) - remaining,
+        { setDisplay: false },
+      ),
     ),
   };
   const snapshot = materializedBuckets(wallet, currency);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { PlatformFeeKind, Prisma } from "@/generated/prisma/client";
 import { assertChipShopOwner } from "@/lib/kyc";
 import { parsePeriod, periodStart } from "@/lib/reports";
 import { prisma, withDbRetry } from "@/lib/prisma";
@@ -20,12 +21,14 @@ export async function GET(req: Request) {
   const kind = url.searchParams.get("kind");
   const csv = url.searchParams.get("csv") === "1";
 
-  const where = {
+  const feeKind =
+    kind === "SALE" || kind === "SHIPPING" || kind === "WITHDRAWAL"
+      ? (kind as PlatformFeeKind)
+      : undefined;
+  const where: Prisma.PlatformFeeWhereInput = {
     reversedAt: null,
     ...(from ? { createdAt: { gte: from } } : {}),
-    ...(kind === "SALE" || kind === "SHIPPING" || kind === "WITHDRAWAL"
-      ? { kind }
-      : {}),
+    ...(feeKind ? { kind: feeKind } : {}),
   };
 
   const fees = await withDbRetry(() =>
