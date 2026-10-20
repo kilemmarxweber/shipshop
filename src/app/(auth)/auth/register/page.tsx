@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
+import { signUpEmailWithPhone } from "@/lib/auth-client";
 import { mapAuthError } from "@/lib/auth-errors";
 import { emailFromPhone, registerSchema } from "@/lib/auth-register";
 import { AuthPrefsBar } from "@/components/auth-prefs-bar";
@@ -42,7 +42,7 @@ export default function RegisterPage() {
       return;
     }
     setLoading(true);
-    const { error } = await authClient.signUp.email({
+    const { error } = await signUpEmailWithPhone({
       name: parsed.data.name,
       email: parsed.data.email || emailFromPhone(parsed.data.phone),
       password: parsed.data.password,

@@ -12,3 +12,14 @@ export const authClient = createAuthClient({
     }),
   ],
 });
+
+type SignUpEmail = Parameters<typeof authClient.signUp.email>[0];
+
+export function signUpEmailWithPhone(input: {
+  name: string;
+  email: string;
+  password: string;
+  phone: string;
+}) {
+  return authClient.signUp.email(input as SignUpEmail);
+}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
+import { authClient, signUpEmailWithPhone } from "@/lib/auth-client";
 import { mapAuthError } from "@/lib/auth-errors";
 import { emailFromPhone, registerSchema } from "@/lib/auth-register";
 import {
@@ -53,7 +53,7 @@ export function AuthInline({ onSuccess }: Props) {
         return;
       }
       setLoading(true);
-      const result = await authClient.signUp.email({
+      const result = await signUpEmailWithPhone({
         name: parsed.data.name,
         email: parsed.data.email || emailFromPhone(parsed.data.phone),
         password: parsed.data.password,
