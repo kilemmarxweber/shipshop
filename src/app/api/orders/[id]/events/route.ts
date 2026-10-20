@@ -10,6 +10,7 @@ import { notifyOrderEvent } from "@/lib/messaging/notify";
 import type { DeliveryEventKey } from "@/lib/messaging/templates";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { canStaffShop } from "@/lib/shop-access";
 
 const schema = z.object({
   status: z.enum([
@@ -25,16 +26,7 @@ const schema = z.object({
 });
 
 async function assertShopMember(userId: string, shopId: string) {
-  const shop = await withDbRetry(() =>
-    prisma.shop.findUnique({ where: { id: shopId } }),
-  );
-  if (!shop) return false;
-  const member = await withDbRetry(() =>
-    prisma.member.findFirst({
-      where: { userId, organizationId: shop.organizationId },
-    }),
-  );
-  return Boolean(member);
+  return canStaffShop(userId, shopId);
 }
 
 export async function POST(

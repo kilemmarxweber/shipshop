@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Bell, MessageCircle } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
@@ -49,11 +49,30 @@ export function NotificationsBell({
   comments,
   userId,
 }: Props) {
+  const [notices, setNotices] = useState<
+    { id: string; title: string; body: string; href: string | null; readAt: string | null }[]
+  >([]);
+  const unreadNotices = notices.filter((n) => !n.readAt).length;
+
+  useEffect(() => {
+    if (!userId) return;
+    fetch("/api/notices")
+      .then((r) => r.json())
+      .then((json) => setNotices(json.notices ?? []))
+      .catch(() => undefined);
+    const t = setInterval(() => {
+      fetch("/api/notices")
+        .then((r) => r.json())
+        .then((json) => setNotices(json.notices ?? []))
+        .catch(() => undefined);
+    }, 8000);
+    return () => clearInterval(t);
+  }, [userId]);
   const { t, locale } = useI18n();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"messages" | "comments">("messages");
-  const combined = unreadMessages + unreadComments;
+  const combined = unreadMessages + unreadComments + unreadNotices;
   const badge = urgentCount > 0 ? urgentCount : combined;
   const hasBadge = urgentCount > 0 || combined > 0;
 
@@ -138,12 +157,41 @@ export function NotificationsBell({
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {tab === "messages" ? (
-            recent.length === 0 ? (
+            recent.length === 0 && notices.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
                 {t("notifications.empty")}
               </p>
             ) : (
               <ul>
+                {notices.slice(0, 8).map((n) => (
+                  <li key={n.id} className="border-b border-border">
+                    <button
+                      type="button"
+                      className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-muted/50"
+                      onClick={() => {
+                        void fetchJson("/api/notices", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ ids: [n.id] }),
+                        });
+                        setNotices((prev) =>
+                          prev.map((x) =>
+                            x.id === n.id
+                              ? { ...x, readAt: new Date().toISOString() }
+                              : x,
+                          ),
+                        );
+                        setOpen(false);
+                        if (n.href) router.push(n.href);
+                      }}
+                    >
+                      <span className="text-sm font-bold">{n.title}</span>
+                      <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                        {n.body}
+                      </span>
+                    </button>
+                  </li>
+                ))}
                 {recent.map((c) => {
                   const last = c.messages[0];
                   const title = previewTitle(c, userId);

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { metersBetween, estimateCourierEta } from "@/lib/delivery-eta";
-import { notifyOrderEvent } from "@/lib/messaging/notify";
+import {
+  notifyBuyerProximityInApp,
+  notifyOrderEvent,
+} from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -34,6 +37,9 @@ export async function POST(
     );
     if (!courier) {
       return NextResponse.json({ error: "Livreur introuvable" }, { status: 404 });
+    }
+    if (courier.userId && courier.userId !== session.user.id) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
 
     await withDbRetry(() =>
@@ -117,7 +123,10 @@ export async function POST(
             },
           }),
         );
-        void notifyOrderEvent(order.id, "COURIER_NEAR_100M").catch(console.error);
+        void Promise.allSettled([
+          notifyOrderEvent(order.id, "COURIER_NEAR_100M"),
+          notifyBuyerProximityInApp(order.id),
+        ]);
         proximity = true;
       }
 

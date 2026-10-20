@@ -4,9 +4,13 @@ import {
   HANDOVER_CLOSED_STATUSES,
   parseHandoverQrPayload,
 } from "@/lib/handover";
-import { notifyOrderEvent } from "@/lib/messaging/notify";
+import {
+  notifyBuyerConfirmInApp,
+  notifyOrderEvent,
+} from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { canStaffShop } from "@/lib/shop-access";
 
 const schema = z.object({
   orderId: z.string().optional(),
@@ -15,17 +19,13 @@ const schema = z.object({
   note: z.string().max(300).optional(),
 });
 
-async function assertShopMember(userId: string, shopId: string) {
-  const shop = await withDbRetry(() =>
-    prisma.shop.findUnique({ where: { id: shopId } }),
-  );
-  if (!shop) return false;
-  const member = await withDbRetry(() =>
-    prisma.member.findFirst({
-      where: { userId, organizationId: shop.organizationId },
-    }),
-  );
-  return Boolean(member);
+async function assertCanScanHandover(
+  userId: string,
+  shopId: string,
+  courierUserId?: string | null,
+) {
+  if (courierUserId && courierUserId === userId) return true;
+  return canStaffShop(userId, shopId);
 }
 
 function isClosed(status: string) {
@@ -62,6 +62,7 @@ async function scanOrder(input: {
         product: { select: { title: true, images: true } },
         shop: { select: { id: true, name: true } },
         buyer: { select: { id: true, name: true } },
+        courier: { select: { userId: true } },
         handover: true,
       },
     }),
@@ -73,10 +74,14 @@ async function scanOrder(input: {
     );
   }
 
-  const isVendor = await assertShopMember(input.userId, order.shopId);
-  if (!isVendor) {
+  const canScan = await assertCanScanHandover(
+    input.userId,
+    order.shopId,
+    order.courier?.userId,
+  );
+  if (!canScan) {
     return NextResponse.json(
-      { error: "Seul le vendeur / boutique peut scanner la remise" },
+      { error: "Seul le vendeur ou le livreur assigné peut scanner la remise" },
       { status: 403 },
     );
   }
@@ -140,7 +145,10 @@ async function scanOrder(input: {
     }),
   );
 
-  void notifyOrderEvent(order.id, "HANDOVER_SCANNED").catch(console.error);
+  void Promise.allSettled([
+    notifyOrderEvent(order.id, "HANDOVER_SCANNED"),
+    notifyBuyerConfirmInApp(order.id),
+  ]);
 
   const siblings = order.handoverId
     ? await withDbRetry(() =>
@@ -224,7 +232,7 @@ export async function POST(req: Request) {
           { status: 403 },
         );
       }
-      const isVendor = await assertShopMember(session.user.id, handover.shopId);
+      const isVendor = await canStaffShop(session.user.id, handover.shopId);
       if (!isVendor) {
         return NextResponse.json(
           { error: "Seul le vendeur de cette boutique peut valider ce QR" },
@@ -291,7 +299,7 @@ export async function POST(req: Request) {
         }),
       );
       if (byShopCode) {
-        const isVendor = await assertShopMember(
+        const isVendor = await canStaffShop(
           session.user.id,
           byShopCode.shopId,
         );

@@ -39,6 +39,8 @@ function motoIcon(heading: number) {
 
 type Point = { lat: number; lng: number };
 
+type Seg = { lat: number; lng: number; color: string };
+
 type Props = {
   courier: Point | null;
   destination: Point | null;
@@ -46,6 +48,7 @@ type Props = {
   distanceKm?: number | null;
   onTheWayLabel?: string;
   className?: string;
+  mode?: "buyer" | "courier";
 };
 
 function FitBounds({ a, b }: { a: Point; b: Point }) {
@@ -76,10 +79,30 @@ export default function CourierLiveMap({
   distanceKm,
   onTheWayLabel = "En route",
   className,
+  mode = "buyer",
 }: Props) {
   const prev = useRef<Point | null>(null);
   const [heading, setHeading] = useState(0);
   const [display, setDisplay] = useState<Point | null>(courier);
+  const [segments, setSegments] = useState<Seg[]>([]);
+  const [routeNote, setRouteNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "courier" || !courier || !destination) return;
+    const q = new URLSearchParams({
+      fromLat: String(courier.lat),
+      fromLng: String(courier.lng),
+      toLat: String(destination.lat),
+      toLng: String(destination.lng),
+    });
+    fetch(`/api/directions?${q}`)
+      .then((r) => r.json())
+      .then((json) => {
+        setSegments(Array.isArray(json.segments) ? json.segments : []);
+        setRouteNote(typeof json.note === "string" ? json.note : null);
+      })
+      .catch(() => undefined);
+  }, [mode, courier?.lat, courier?.lng, destination?.lat, destination?.lng]);
 
   // Interpolation douce entre positions GPS
   useEffect(() => {
@@ -157,18 +180,28 @@ export default function CourierLiveMap({
           )}
           {display && destination && (
             <>
-              <Polyline
-                positions={[
-                  [display.lat, display.lng],
-                  [destination.lat, destination.lng],
-                ]}
-                pathOptions={{
-                  color: "#ff5722",
-                  weight: 3,
-                  dashArray: "8 10",
-                  opacity: 0.85,
-                }}
-              />
+              {mode === "courier" && segments.length > 1
+                ? groupByColor(segments).map((g, i) => (
+                    <Polyline
+                      key={i}
+                      positions={g.points.map((p) => [p.lat, p.lng] as [number, number])}
+                      pathOptions={{ color: g.color, weight: 5, opacity: 0.9 }}
+                    />
+                  ))
+                : (
+                    <Polyline
+                      positions={[
+                        [display.lat, display.lng],
+                        [destination.lat, destination.lng],
+                      ]}
+                      pathOptions={{
+                        color: "#ff5722",
+                        weight: 3,
+                        dashArray: "8 10",
+                        opacity: 0.85,
+                      }}
+                    />
+                  )}
               <FitBounds a={display} b={destination} />
               <FollowCourier point={display} />
             </>
@@ -183,7 +216,20 @@ export default function CourierLiveMap({
           <span className="text-white/80">{distanceKm} km</span>
         )}
         {etaText && <span className="text-trust">ETA {etaText}</span>}
+        {routeNote && (
+          <span className="basis-full text-[10px] text-white/60">{routeNote}</span>
+        )}
       </div>
     </div>
   );
+}
+
+function groupByColor(segments: Seg[]) {
+  const groups: { color: string; points: Seg[] }[] = [];
+  for (const s of segments) {
+    const last = groups[groups.length - 1];
+    if (last && last.color === s.color) last.points.push(s);
+    else groups.push({ color: s.color, points: [s] });
+  }
+  return groups;
 }

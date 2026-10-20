@@ -32,15 +32,21 @@ type Courier = {
   id: string;
   name: string;
   phone: string;
+  email?: string | null;
   address?: string | null;
   lat: number;
   lng: number;
   zoneId: string | null;
   shopId: string | null;
+  companyId?: string | null;
+  archivedAt?: string | null;
   isAvailable: boolean;
   zone?: { id: string; commune: string } | null;
   shop?: { id: string; name: string } | null;
+  company?: { id: string; legalName: string } | null;
 };
+
+type Company = { id: string; legalName: string; isActive: boolean };
 
 type ShopOpt = { id: string; name: string; slug: string };
 
@@ -69,6 +75,9 @@ export default function AdminDeliveryPage() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [shops, setShops] = useState<ShopOpt[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [newCompany, setNewCompany] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editZone, setEditZone] = useState<Zone | null>(null);
   const [newCourier, setNewCourier] = useState({
@@ -79,16 +88,20 @@ export default function AdminDeliveryPage() {
     lng: "15.311",
     zoneId: "",
     shopId: "",
+    email: "",
+    companyId: "",
+    userId: "",
   });
 
   async function load() {
-    const [z, c] = await Promise.all([
+    const [z, c, co] = await Promise.all([
       fetchJson<{ zones?: Zone[]; error?: string }>("/api/admin/delivery-zones"),
       fetchJson<{
         couriers?: Courier[];
         shops?: ShopOpt[];
         error?: string;
       }>("/api/shops/delivery/couriers"),
+      fetchJson<{ companies?: Company[] }>("/api/admin/courier-companies"),
     ]);
     if (z.res.status === 403 || c.res.status === 403) {
       setAllowed(false);
@@ -98,6 +111,7 @@ export default function AdminDeliveryPage() {
     setZones(z.data?.zones ?? []);
     setCouriers(c.data?.couriers ?? []);
     setShops(c.data?.shops ?? []);
+    setCompanies(co.data?.companies ?? []);
   }
 
   useEffect(() => {
@@ -168,6 +182,9 @@ export default function AdminDeliveryPage() {
           lng: Number(newCourier.lng),
           zoneId: newCourier.zoneId || null,
           shopId: newCourier.shopId || null,
+          email: newCourier.email || null,
+          companyId: newCourier.companyId || null,
+          userId: newCourier.userId || null,
         }),
       },
     );
@@ -185,6 +202,9 @@ export default function AdminDeliveryPage() {
       lng: "15.311",
       zoneId: "",
       shopId: "",
+      email: "",
+      companyId: "",
+      userId: "",
     });
     await load();
   }
@@ -479,6 +499,47 @@ export default function AdminDeliveryPage() {
 
       {tab === "couriers" && (
         <div className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Nouvelle entreprise (raison sociale)"
+              value={newCompany}
+              onChange={(e) => setNewCompany(e.target.value)}
+            />
+            <Button
+              type="button"
+              disabled={!newCompany.trim()}
+              onClick={async () => {
+                const { res, data } = await fetchJson<{ error?: string }>(
+                  "/api/admin/courier-companies",
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ legalName: newCompany }),
+                  },
+                );
+                if (!res.ok) {
+                  toast.error(data?.error ?? "Échec");
+                  return;
+                }
+                setNewCompany("");
+                await load();
+              }}
+            >
+              Entreprise
+            </Button>
+          </div>
+          <select
+            className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm"
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+          >
+            <option value="">Toutes les entreprises</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.legalName}
+              </option>
+            ))}
+          </select>
           <div className="space-y-2 rounded-xl border border-dashed border-border p-3">
             <p className="text-xs font-semibold">Nouveau livreur</p>
             <div className="grid grid-cols-2 gap-2">
@@ -543,8 +604,38 @@ export default function AdminDeliveryPage() {
               >
                 <option value="">Plateforme (toutes boutiques)</option>
                 {shops.map((s) => (
-                  <option key={s.id} value={s.id}>
+                    <option key={s.id} value={s.id}>
                     {s.name}
+                  </option>
+                ))}
+              </select>
+              <Input
+                className="col-span-2"
+                placeholder="E-mail livreur"
+                value={newCourier.email}
+                onChange={(e) =>
+                  setNewCourier({ ...newCourier, email: e.target.value })
+                }
+              />
+              <Input
+                className="col-span-2"
+                placeholder="userId compte login (optionnel)"
+                value={newCourier.userId}
+                onChange={(e) =>
+                  setNewCourier({ ...newCourier, userId: e.target.value })
+                }
+              />
+              <select
+                className="col-span-2 flex h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+                value={newCourier.companyId}
+                onChange={(e) =>
+                  setNewCourier({ ...newCourier, companyId: e.target.value })
+                }
+              >
+                <option value="">Sans entreprise</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.legalName}
                   </option>
                 ))}
               </select>
@@ -566,7 +657,9 @@ export default function AdminDeliveryPage() {
           </div>
 
           <ul className="space-y-2">
-            {couriers.map((c) => (
+            {couriers
+              .filter((c) => !companyFilter || c.companyId === companyFilter)
+              .map((c) => (
               <li
                 key={c.id}
                 className="flex items-center gap-3 rounded-xl border border-border p-3"
@@ -577,6 +670,8 @@ export default function AdminDeliveryPage() {
                     {c.phone}
                     {c.zone ? ` · ${c.zone.commune}` : ""}
                     {c.shop ? ` · ${c.shop.name}` : " · Plateforme"}
+                    {c.company ? ` · ${c.company.legalName}` : ""}
+                    {c.archivedAt ? " · archivé" : ""}
                   </p>
                   {c.address && (
                     <p className="truncate text-[11px] text-muted-foreground">
@@ -599,6 +694,23 @@ export default function AdminDeliveryPage() {
                 >
                   {c.isAvailable ? "Dispo" : "Off"}
                 </button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="px-2"
+                  disabled={busyId === c.id}
+                  onClick={() =>
+                    void patchCourier(c.id, {
+                      archivedAt: c.archivedAt
+                        ? null
+                        : new Date().toISOString(),
+                      archivedReason: c.archivedAt ? null : "archive owner",
+                    } as Partial<Courier>)
+                  }
+                >
+                  {c.archivedAt ? "Rétablir" : "Archiver"}
+                </Button>
                 <Button
                   type="button"
                   size="sm"

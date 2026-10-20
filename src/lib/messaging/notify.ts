@@ -19,7 +19,9 @@ import {
   type TemplateVars,
   type WalletEventKey,
 } from "@/lib/messaging/templates";
-import { formatMoney } from "@/lib/money";
+import { createAppNotice } from "@/lib/app-notice";
+import { formatMoney, shopFxRates } from "@/lib/money";
+import { courierNetCents } from "@/lib/platform-fees";
 import { railLabel, type RailProvider } from "@/lib/payments/provider";
 import { prisma, withDbRetry } from "@/lib/prisma";
 
@@ -298,6 +300,88 @@ export async function notifyOrderEvent(
     phone: String(vars.customer_phone || ""),
     email: String(vars.customer_email || ""),
     orderId,
+  });
+}
+
+export async function notifyCourierJob(orderId: string) {
+  const order = await withDbRetry(() =>
+    prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        product: true,
+        shop: true,
+        courier: true,
+        buyer: { select: { name: true } },
+      },
+    }),
+  );
+  if (!order?.courier) return { sent: 0 };
+  const vars = await buildOrderNotifyVars(orderId);
+  const fx = shopFxRates(order.shop);
+  const net = courierNetCents(
+    order.shippingCents,
+    order.product.currency,
+    fx,
+  );
+  const courierUrl = `${appBase()}/courier`;
+  const payload = {
+    ...vars,
+    courier_net: formatMoney(net, order.product.currency),
+    courier_url: courierUrl,
+  };
+  if (order.courier.userId) {
+    await createAppNotice({
+      userId: order.courier.userId,
+      title: "Nouvelle course",
+      body: `${order.shop.name} · ${order.product.title} · ${formatMoney(net, order.product.currency)}`,
+      href: "/courier",
+    });
+  }
+  return notifyContact({
+    eventKey: "COURIER_JOB",
+    vars: payload,
+    phone: order.courier.phone,
+    email: order.courier.email,
+    orderId,
+  });
+}
+
+export async function notifyBuyerConfirmInApp(orderId: string) {
+  const order = await withDbRetry(() =>
+    prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        product: { select: { title: true } },
+        shop: { select: { name: true } },
+      },
+    }),
+  );
+  if (!order) return;
+  await createAppNotice({
+    userId: order.buyerId,
+    title: "Confirmer la réception",
+    body: `${order.shop.name} · ${order.product.title} a été scanné. Confirmez la réception pour clôturer la commande.`,
+    href: `/orders/${order.id}`,
+  });
+}
+
+export async function notifyBuyerProximityInApp(orderId: string) {
+  const order = await withDbRetry(() =>
+    prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        product: { select: { title: true } },
+        shop: { select: { name: true } },
+        courier: { select: { name: true } },
+      },
+    }),
+  );
+  if (!order) return;
+  await createAppNotice({
+    userId: order.buyerId,
+    title: "Livreur à moins de 100 m",
+    body: `Votre livreur ${order.courier?.name ?? ""} est proche. Préparez-vous à réceptionner ${order.product.title}.`,
+    href: `/orders/${order.id}`,
   });
 }
 

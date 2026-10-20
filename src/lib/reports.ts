@@ -102,6 +102,7 @@ export type OrderRow = {
   productCents: number;
   shippingCents: number;
   protectionFeeCents: number;
+  saleFeeCents: number;
   totalCents: number;
   amountCents: number;
   createdAt: Date;
@@ -199,6 +200,7 @@ export function summarizeOrders(orders: OrderRow[]) {
   let soldCents = 0;
   let shippingCents = 0;
   let protectionCents = 0;
+  let saleFees = 0;
   let refundedCents = 0;
   let cancelledCents = 0;
   let inProgressCents = 0;
@@ -213,6 +215,7 @@ export function summarizeOrders(orders: OrderRow[]) {
       soldCents += amount;
       shippingCents += o.shippingCents;
       protectionCents += o.protectionFeeCents;
+      saleFees += o.saleFeeCents || 0;
       soldCount += 1;
     } else if (o.status === "REFUNDED") {
       refundedCents += amount;
@@ -228,10 +231,8 @@ export function summarizeOrders(orders: OrderRow[]) {
 
   return {
     soldCents,
-    /** Approximation bénéfice vendeur = CA produit (pas de COGS). */
-    vendorGainCents: soldCents,
-    /** Frais plateforme / protection (vue owner). */
-    platformFeeCents: protectionCents,
+    vendorGainCents: Math.max(0, soldCents - saleFees),
+    platformFeeCents: saleFees,
     shippingCents,
     refundedCents,
     cancelledCents,
@@ -261,6 +262,7 @@ export async function loadOrdersForShops(
         productCents: true,
         shippingCents: true,
         protectionFeeCents: true,
+        saleFeeCents: true,
         totalCents: true,
         amountCents: true,
         createdAt: true,

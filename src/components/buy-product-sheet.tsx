@@ -30,6 +30,7 @@ import {
 } from "@/components/product-image-zoom";
 import { holdFeedAudio } from "@/lib/feed-audio-focus";
 import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import { VendorNetLine } from "@/components/vendor-net-line";
 import type { ShopHoursFields } from "@/lib/shop-hours";
 
 export type BuyProductTarget = {
@@ -330,6 +331,11 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
                   <p className="font-heading text-sm font-bold text-trust">
                     {formatMoney(product.priceCents, product.currency)}
                   </p>
+                  <VendorNetLine
+                    priceCents={product.priceCents}
+                    currency={product.currency}
+                    className="mt-1 text-[11px] leading-snug text-muted-foreground"
+                  />
                   <ShopHoursNotice hours={shopHours ?? product.shop} className="mt-1" />
                 </SheetHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-3">

@@ -55,6 +55,9 @@ model User {
   paymentAudits     PaymentAudit[]
   shopHandovers     ShopHandover[]
   productDwells     ProductDwell[]
+  courierProfile    Courier?
+  withdrawals       Withdrawal[]
+  appNotices        AppNotice[]
 
   @@unique([email])
   @@map("user")
@@ -662,10 +665,29 @@ model ShopDeliveryRate {
   @@map("shop_delivery_rate")
 }
 
+model CourierCompany {
+  id        String    @id @default(cuid())
+  legalName String
+  rccm      String?
+  idnat     String?
+  phone     String?
+  email     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  couriers  Courier[]
+
+  @@map("courier_company")
+}
+
 model Courier {
   id          String   @id @default(cuid())
   name        String
+  firstName   String?
+  lastName    String?
+  postnom     String?
   phone       String
+  email       String?
   /// Adresse physique de base du livreur (quartier / avenue)
   address     String?
   lat         Float
@@ -675,6 +697,15 @@ model Courier {
   /// null = livreur plateforme ; sinon rattaché à une boutique
   shopId      String?
   shop        Shop?    @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  userId      String?  @unique
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  companyId   String?
+  company     CourierCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  passportPhotoUrl String?
+  idFrontUrl  String?
+  idBackUrl   String?
+  archivedAt  DateTime?
+  archivedReason String?
   isAvailable Boolean  @default(true)
   /// Dernière position GPS (mise à jour livreur / mock)
   lastLat     Float?
@@ -687,6 +718,8 @@ model Courier {
 
   @@index([isAvailable])
   @@index([shopId, isAvailable])
+  @@index([companyId])
+  @@index([archivedAt])
   @@map("courier")
 }
 
@@ -701,6 +734,15 @@ model Wallet {
   usdCents     Int      @default(0)
   cdfCents     Int      @default(0)
   kwCents      Int      @default(0)
+  buyerUsdCents   Int   @default(0)
+  vendorUsdCents  Int   @default(0)
+  courierUsdCents Int   @default(0)
+  buyerCdfCents   Int   @default(0)
+  vendorCdfCents  Int   @default(0)
+  courierCdfCents Int   @default(0)
+  buyerKwCents    Int   @default(0)
+  vendorKwCents   Int   @default(0)
+  courierKwCents  Int   @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -717,6 +759,9 @@ enum WalletTxnType {
   TRANSFER_IN
   TRANSFER_OUT
   ESCROW_RELEASE
+  WITHDRAWAL
+  PLATFORM_FEE
+  COURIER_PAYOUT
 }
 
 enum MobileMoneyProvider {
@@ -918,6 +963,9 @@ model Order {
   productCents       Int
   shippingCents      Int             @default(0)
   protectionFeeCents Int             @default(0)
+  saleFeeCents       Int             @default(0)
+  shippingFeeCents   Int             @default(0)
+  shippingFeePending Boolean         @default(false)
   totalCents         Int
   /// @deprecated use productCents / totalCents — kept for legacy rows
   amountCents        Int             @default(0)
@@ -957,6 +1005,7 @@ model Order {
   deliveryEvents DeliveryEvent[]
   notifications  NotificationLog[]
   issues         OrderIssue[]
+  platformFees   PlatformFee[]
 
   @@index([buyerId, createdAt])
   @@index([shopId, status])
@@ -1111,4 +1160,88 @@ model SellerKyc {
 
   @@index([status])
   @@map("seller_kyc")
+}
+
+enum PlatformFeeKind {
+  SALE
+  SHIPPING
+  WITHDRAWAL
+}
+
+enum WalletBucket {
+  BUYER
+  VENDOR
+  COURIER
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model PlatformTreasury {
+  id       String @id @default("chipshop")
+  usdCents Int    @default(0)
+  cdfCents Int    @default(0)
+  kwCents  Int    @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_treasury")
+}
+
+model PlatformFee {
+  id             String          @id @default(cuid())
+  kind           PlatformFeeKind
+  amountCents    Int
+  currency       String          @default("USD")
+  amountUsdCents Int
+  reversedAt     DateTime?
+  orderId        String?
+  order          Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  withdrawalId   String?
+  withdrawal     Withdrawal?     @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+  shopId         String?
+  courierId      String?
+  createdAt      DateTime        @default(now())
+
+  @@unique([orderId, kind])
+  @@index([kind, createdAt])
+  @@index([shopId])
+  @@map("platform_fee")
+}
+
+model Withdrawal {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bucket     WalletBucket
+  currency   String           @default("USD")
+  grossCents Int
+  feeCents   Int              @default(0)
+  netCents   Int
+  status     WithdrawalStatus @default(PENDING)
+  provider   MobileMoneyProvider
+  phone      String
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  paidAt     DateTime?
+  platformFees PlatformFee[]
+
+  @@index([userId, status])
+  @@map("withdrawal")
+}
+
+model AppNotice {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@map("app_notice")
 }

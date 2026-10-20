@@ -77,6 +77,15 @@ export default function WalletPage() {
   const [balance, setBalance] = useState(0);
   const [displayCurrency, setDisplayCurrency] = useState<AppCurrency>("USD");
   const [balances, setBalances] = useState({ USD: 0, CDF: 0, KW: 0 });
+  const [pots, setPots] = useState({
+    BUYER: 0,
+    VENDOR: 0,
+    COURIER: 0,
+  });
+  const [withdrawBucket, setWithdrawBucket] = useState<
+    "BUYER" | "VENDOR" | "COURIER"
+  >("BUYER");
+  const [withdrawing, setWithdrawing] = useState(false);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [contacts, setContacts] = useState<Record<RailProvider, string>>({
     MPESA: "",
@@ -124,6 +133,14 @@ export default function WalletPage() {
       KW: walletCents(wallet, "KW"),
     });
     setBalance(walletCents(wallet, code));
+    const potRow = json.pots?.[code] ?? json.pots?.USD;
+    if (potRow) {
+      setPots({
+        BUYER: potRow.BUYER ?? 0,
+        VENDOR: potRow.VENDOR ?? 0,
+        COURIER: potRow.COURIER ?? 0,
+      });
+    }
     setTxns(json.transactions ?? []);
     const next: Record<RailProvider, string> = {
       MPESA: "",
@@ -479,6 +496,92 @@ export default function WalletPage() {
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
           {t("wallet.payHint")}
         </p>
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[11px]">
+          <button
+            type="button"
+            onClick={() => setWithdrawBucket("BUYER")}
+            className={cn(
+              "rounded-xl border px-1 py-2",
+              withdrawBucket === "BUYER"
+                ? "border-primary bg-primary/10"
+                : "border-white/10",
+            )}
+          >
+            <p className="text-muted-foreground">À dépenser</p>
+            <p className="font-bold">{formatMoney(pots.BUYER, displayCurrency)}</p>
+            <p className="text-[10px] text-amber-300">retrait 5 %</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setWithdrawBucket("VENDOR")}
+            className={cn(
+              "rounded-xl border px-1 py-2",
+              withdrawBucket === "VENDOR"
+                ? "border-primary bg-primary/10"
+                : "border-white/10",
+            )}
+          >
+            <p className="text-muted-foreground">Ventes</p>
+            <p className="font-bold">{formatMoney(pots.VENDOR, displayCurrency)}</p>
+            <p className="text-[10px] text-trust">retrait 0 %</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setWithdrawBucket("COURIER")}
+            className={cn(
+              "rounded-xl border px-1 py-2",
+              withdrawBucket === "COURIER"
+                ? "border-primary bg-primary/10"
+                : "border-white/10",
+            )}
+          >
+            <p className="text-muted-foreground">Courses</p>
+            <p className="font-bold">{formatMoney(pots.COURIER, displayCurrency)}</p>
+            <p className="text-[10px] text-amber-300">retrait 5 %</p>
+          </button>
+        </div>
+        <Button
+          className="mt-3 w-full"
+          disabled={withdrawing || pots[withdrawBucket] <= 0}
+          onClick={async () => {
+            const phone =
+              contacts[provider ?? "MPESA"] || Object.values(contacts).find(Boolean);
+            if (!provider || !phone) {
+              toast.error("Choisissez un réseau et un numéro");
+              return;
+            }
+            setWithdrawing(true);
+            const feePct = withdrawBucket === "VENDOR" ? 0 : 5;
+            const gross = pots[withdrawBucket];
+            const fee = Math.floor((gross * feePct) / 100);
+            const { res, data } = await fetchJson<{ error?: string }>(
+              "/api/wallet/withdraw",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  bucket: withdrawBucket,
+                  amountCents: gross,
+                  currency: displayCurrency,
+                  provider,
+                  phone,
+                }),
+              },
+            );
+            setWithdrawing(false);
+            if (!res.ok) {
+              toast.error(data?.error ?? "Retrait impossible");
+              return;
+            }
+            toast.success(
+              `Retrait ${formatMoney(gross - fee, displayCurrency)} (frais ${formatMoney(fee, displayCurrency)})`,
+            );
+            notifyWalletUpdated();
+            await refresh();
+          }}
+        >
+          Retirer le pot {withdrawBucket === "BUYER" ? "à dépenser" : withdrawBucket === "VENDOR" ? "ventes" : "courses"}
+        </Button>
       </div>
 
       <div className="mt-8 space-y-4">

@@ -16,6 +16,17 @@ const patchSchema = z.object({
   zoneId: z.string().optional().nullable(),
   shopId: z.string().optional().nullable(),
   isAvailable: z.boolean().optional(),
+  archivedAt: z.string().datetime().optional().nullable(),
+  archivedReason: z.string().max(240).optional().nullable(),
+  companyId: z.string().optional().nullable(),
+  userId: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
+  firstName: z.string().max(80).optional(),
+  lastName: z.string().max(80).optional(),
+  postnom: z.string().max(80).optional(),
+  passportPhotoUrl: z.string().max(500).optional().nullable(),
+  idFrontUrl: z.string().max(500).optional().nullable(),
+  idBackUrl: z.string().max(500).optional().nullable(),
 });
 
 async function assertCourierAccess(userId: string, courierId: string) {
@@ -90,6 +101,26 @@ export async function PATCH(
           ...(body.isAvailable !== undefined
             ? { isAvailable: body.isAvailable }
             : {}),
+          ...(body.archivedAt !== undefined
+            ? {
+                archivedAt: body.archivedAt ? new Date(body.archivedAt) : null,
+                isAvailable: body.archivedAt ? false : undefined,
+              }
+            : {}),
+          ...(body.archivedReason !== undefined
+            ? { archivedReason: body.archivedReason }
+            : {}),
+          ...(body.companyId !== undefined ? { companyId: body.companyId } : {}),
+          ...(body.userId !== undefined ? { userId: body.userId } : {}),
+          ...(body.email !== undefined ? { email: body.email } : {}),
+          ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
+          ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
+          ...(body.postnom !== undefined ? { postnom: body.postnom } : {}),
+          ...(body.passportPhotoUrl !== undefined
+            ? { passportPhotoUrl: body.passportPhotoUrl }
+            : {}),
+          ...(body.idFrontUrl !== undefined ? { idFrontUrl: body.idFrontUrl } : {}),
+          ...(body.idBackUrl !== undefined ? { idBackUrl: body.idBackUrl } : {}),
         },
         include: {
           zone: { select: { id: true, commune: true, kind: true } },

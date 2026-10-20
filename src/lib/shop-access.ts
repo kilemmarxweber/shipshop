@@ -39,6 +39,12 @@ export async function assertCanManageShop(userId: string, shopId: string) {
   };
 }
 
+/** Vendeur de la boutique (owner) ou owner ChipShop — pas tout membre de l’org système. */
+export async function canStaffShop(userId: string, shopId: string) {
+  const access = await assertCanManageShop(userId, shopId);
+  return access.ok;
+}
+
 export async function managedShopsWhere(
   userId: string,
 ): Promise<{ where: Prisma.ShopWhereInput; isPlatform: boolean }> {

@@ -34,7 +34,10 @@ export async function POST(
     }
     if (order.buyerId !== session.user.id) {
       return NextResponse.json(
-        { error: "Seul l’acheteur peut confirmer la réception" },
+        {
+          error:
+            "Connectez-vous avec le compte acheteur qui a payé cette commande pour confirmer la réception.",
+        },
         { status: 403 },
       );
     }

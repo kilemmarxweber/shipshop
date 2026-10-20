@@ -186,6 +186,24 @@ export default function ReportsPage() {
   const [tab, setTab] = useState<"overview" | "products" | "attention">(
     "overview",
   );
+  const [platform, setPlatform] = useState<{
+    summary: {
+      saleUsdCents: number;
+      shippingUsdCents: number;
+      withdrawalUsdCents: number;
+      totalUsdCents: number;
+      saleCount: number;
+      shippingCount: number;
+    };
+    fees: {
+      id: string;
+      kind: string;
+      amountUsdCents: number;
+      createdAt: string;
+      shopName: string | null;
+      courierName: string | null;
+    }[];
+  } | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -202,6 +220,15 @@ export default function ReportsPage() {
           return;
         }
         setReport(data as Report);
+        if ((data as Report).role === "owner") {
+          fetchJson<NonNullable<typeof platform>>(
+            `/api/reports/platform-fees?period=${period}`,
+          ).then(({ res, data: fees }) => {
+            if (res.ok) setPlatform(fees);
+          });
+        } else {
+          setPlatform(null);
+        }
       })
       .finally(() => setLoading(false));
   }, [session, period, shopId]);
@@ -292,7 +319,7 @@ export default function ReportsPage() {
                   ? report.summary.platformFeeCents
                   : report.summary.vendorGainCents,
               )}
-              hint={isOwner ? "protection" : "produits remis"}
+              hint={isOwner ? "0,50 $US × ventes (ledger)" : "CA − 0,50 $US / vente"}
             />
             <Kpi
               icon={<Package className="size-4 text-amber-400" />}
@@ -313,6 +340,58 @@ export default function ReportsPage() {
               hint={`${report.summary.cancelledCount} annul. · ${report.summary.refundedCount} remb.`}
             />
           </div>
+
+          {isOwner && platform && (
+            <div className="mb-4 rounded-2xl border border-border bg-surface p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-bold">Gains ShipShop (ledger)</p>
+                <a
+                  href={`/api/reports/platform-fees?period=${period}&csv=1`}
+                  className="text-[11px] text-primary"
+                >
+                  Export CSV
+                </a>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <p>
+                  Ventes 0,50 × {platform.summary.saleCount}
+                  <br />
+                  <span className="font-bold">
+                    {formatMoney(platform.summary.saleUsdCents, "USD")}
+                  </span>
+                </p>
+                <p>
+                  Livraisons 0,50 × {platform.summary.shippingCount}
+                  <br />
+                  <span className="font-bold">
+                    {formatMoney(platform.summary.shippingUsdCents, "USD")}
+                  </span>
+                </p>
+                <p>
+                  Retraits 5 %
+                  <br />
+                  <span className="font-bold">
+                    {formatMoney(platform.summary.withdrawalUsdCents, "USD")}
+                  </span>
+                </p>
+                <p>
+                  Total USD
+                  <br />
+                  <span className="font-bold text-trust">
+                    {formatMoney(platform.summary.totalUsdCents, "USD")}
+                  </span>
+                </p>
+              </div>
+              <ul className="mt-3 max-h-40 space-y-1 overflow-auto text-[11px] text-muted-foreground">
+                {platform.fees.slice(0, 20).map((f) => (
+                  <li key={f.id}>
+                    {f.kind} · {formatMoney(f.amountUsdCents, "USD")} ·{" "}
+                    {f.shopName ?? f.courierName ?? "—"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {(report.insights.peakWeekday || report.insights.peakHour) && (
             <div className="mb-4 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-xs">

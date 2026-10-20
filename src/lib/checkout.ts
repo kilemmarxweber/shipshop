@@ -24,10 +24,22 @@ import {
   toUsdCents,
   usdCentsNeeded,
   walletCents,
-  walletCreditData,
   walletEquivalentCents,
   type AppCurrency,
 } from "@/lib/money";
+import {
+  courierNetCents,
+  refundProductCents,
+  saleFeeCents,
+  shippingFeeCents,
+  shouldRefundShipping,
+  vendorNetCents,
+} from "@/lib/platform-fees";
+import { creditTreasury, reverseSaleFee } from "@/lib/platform-ledger";
+import {
+  applyBucketDelta,
+  drainBucketsData,
+} from "@/lib/wallet-buckets";
 
 type Tx = Prisma.TransactionClient;
 
@@ -286,6 +298,30 @@ export async function purchaseProduct(
   pockets[currency] -= totalCents;
   const newBalance = pockets[currency];
 
+  const originalPockets: Record<AppCurrency, number> = {
+    USD: walletCents(wallet, "USD"),
+    CDF: walletCents(wallet, "CDF"),
+    KW: walletCents(wallet, "KW"),
+  };
+  let bucketData: Record<string, number> = {};
+  let working = { ...wallet };
+  for (const code of APP_CURRENCIES) {
+    const delta = originalPockets[code] - pockets[code];
+    if (delta > 0) {
+      bucketData = {
+        ...bucketData,
+        ...drainBucketsData(working, code, delta),
+      };
+      working = { ...working, ...bucketData };
+    } else if (delta < 0) {
+      bucketData = {
+        ...bucketData,
+        ...applyBucketDelta(working, code, -delta, "BUYER"),
+      };
+      working = { ...working, ...bucketData };
+    }
+  }
+
   await tx.wallet.update({
     where: { id: wallet.id },
     data: {
@@ -293,6 +329,7 @@ export async function purchaseProduct(
       cdfCents: pockets.CDF,
       kwCents: pockets.KW,
       balanceCents: pockets.USD,
+      ...bucketData,
     },
   });
 
@@ -452,16 +489,15 @@ async function refundOrderInternal(
   if (!order || order.buyerId !== opts.buyerId) {
     throw new Error("Commande introuvable");
   }
-  if (order.escrowReleasedAt) {
-    throw new Error("Le vendeur a déjà été payé — remboursement impossible");
+  if (order.status === "CANCELLED" || order.status === "REFUNDED") {
+    throw new Error("Commande déjà remboursée");
   }
-  if (
-    !isOrderCancellable(
-      order.status,
-      order.pickupReceipt?.redeemedAt,
-      order.pickupReceipt?.scannedAt,
-    )
-  ) {
+  const cancellable = isOrderCancellable(
+    order.status,
+    order.pickupReceipt?.redeemedAt,
+    order.pickupReceipt?.scannedAt,
+  );
+  if (!cancellable && !order.escrowReleasedAt) {
     if (order.status === "DELIVERED" || order.status === "PICKED_UP") {
       throw new Error("Commande déjà livrée — annulation impossible");
     }
@@ -477,8 +513,46 @@ async function refundOrderInternal(
     throw new Error("Commande non annulable / déjà remboursée");
   }
 
-  const refundCents = order.totalCents || order.amountCents;
   const currency = parseCurrency(order.product.currency);
+  const shopFx = shopFxRates();
+  const productRefund = refundProductCents(order);
+  const shipRefund = shouldRefundShipping(order) ? order.shippingCents : 0;
+  const refundCents = productRefund + shipRefund;
+
+  if (order.escrowReleasedAt && productRefund > 0) {
+    const shop = await tx.shop.findUnique({
+      where: { id: order.shopId },
+      select: { ownerUserId: true },
+    });
+    const sellerId = shop?.ownerUserId;
+    if (sellerId) {
+      const vendorWallet = await tx.wallet.findUnique({
+        where: { userId: sellerId },
+      });
+      if (vendorWallet) {
+        const net = vendorNetCents(order.productCents, currency, shopFx);
+        await tx.wallet.update({
+          where: { id: vendorWallet.id },
+          data: applyBucketDelta(vendorWallet, currency, -net, "VENDOR"),
+        });
+        await tx.walletTransaction.create({
+          data: {
+            walletId: vendorWallet.id,
+            type: "ADJUSTMENT",
+            amountCents: -net,
+            currency,
+            balanceAfterCents: walletCents(vendorWallet, currency) - net,
+            provider: "INTERNAL",
+            status: "SUCCESS",
+            reference: `CLW-${order.id.slice(0, 8)}`,
+            metadata: { orderId: order.id, clawback: true },
+          },
+        });
+      }
+    }
+    await reverseSaleFee(tx, order.id);
+  }
+
   const wallet = await tx.wallet.findUnique({
     where: { userId: opts.buyerId },
   });
@@ -488,7 +562,7 @@ async function refundOrderInternal(
 
   await tx.wallet.update({
     where: { id: wallet.id },
-    data: walletCreditData(wallet, currency, newBalance, { setDisplay: false }),
+    data: applyBucketDelta(wallet, currency, refundCents, "BUYER"),
   });
 
   await tx.walletTransaction.create({
@@ -505,6 +579,9 @@ async function refundOrderInternal(
         orderId: order.id,
         productId: order.productId,
         toStatus: opts.toStatus,
+        productRefund,
+        shippingRefund: shipRefund,
+        fee: 0,
       },
     },
   });
@@ -667,12 +744,104 @@ export async function cancelOrderByVendor(
   };
 }
 
-/** Crédite le vendeur (prix produit) une fois la réception confirmée. */
+/** Crédite le livreur (transport − 0,50 $US) — idempotent par commande. */
+export async function releaseShippingToCourier(tx: Tx, orderId: string) {
+  const order = await tx.order.findUnique({
+    where: { id: orderId },
+    include: {
+      product: { select: { currency: true } },
+      shop: { select: { fxCdfPerUsd: true, fxKwPerUsd: true } },
+      courier: { select: { id: true, userId: true } },
+    },
+  });
+  if (!order || order.shippingCents <= 0) return null;
+  const existing = await tx.platformFee.findUnique({
+    where: { orderId_kind: { orderId: order.id, kind: "SHIPPING" } },
+  });
+  if (existing && !existing.reversedAt) return null;
+
+  const currency = parseCurrency(order.product.currency);
+  const fx = shopFxRates(order.shop);
+  const fee = shippingFeeCents(order.shippingCents, currency, fx);
+  const net = courierNetCents(order.shippingCents, currency, fx);
+
+  if (!order.courier?.userId) {
+    await tx.order.update({
+      where: { id: order.id },
+      data: { shippingFeePending: true, shippingFeeCents: fee },
+    });
+    return { pending: true, fee };
+  }
+
+  const wallet = await tx.wallet.upsert({
+    where: { userId: order.courier.userId },
+    create: { userId: order.courier.userId, balanceCents: 0, currency: "USD" },
+    update: {},
+  });
+  await lockWallet(tx, wallet.id);
+  const locked = await tx.wallet.findUnique({ where: { id: wallet.id } });
+  if (!locked) throw new Error("Portefeuille livreur introuvable");
+
+  if (net > 0) {
+    const newBalance = walletCents(locked, currency) + net;
+    await tx.wallet.update({
+      where: { id: locked.id },
+      data: applyBucketDelta(locked, currency, net, "COURIER"),
+    });
+    await tx.walletTransaction.create({
+      data: {
+        walletId: locked.id,
+        type: "COURIER_PAYOUT",
+        amountCents: net,
+        currency,
+        balanceAfterCents: newBalance,
+        provider: "INTERNAL",
+        status: "SUCCESS",
+        reference: `CRR-${order.id.slice(0, 8)}`,
+        metadata: {
+          orderId: order.id,
+          gross: order.shippingCents,
+          fee,
+          net,
+        },
+      },
+    });
+  }
+
+  if (fee > 0) {
+    await creditTreasury(tx, {
+      amountCents: fee,
+      currency,
+      kind: "SHIPPING",
+      orderId: order.id,
+      shopId: order.shopId,
+      courierId: order.courierId,
+      fx,
+    });
+  }
+
+  await tx.order.update({
+    where: { id: order.id },
+    data: {
+      shippingFeeCents: fee,
+      shippingFeePending: false,
+    },
+  });
+  return { net, fee };
+}
+
+/** Crédite le vendeur (prix − 0,50 $US) une fois la réception confirmée. */
 export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
   const order = await tx.order.findUnique({
     where: { id: orderId },
     include: {
-      shop: { select: { ownerUserId: true } },
+      shop: {
+        select: {
+          ownerUserId: true,
+          fxCdfPerUsd: true,
+          fxKwPerUsd: true,
+        },
+      },
       product: { select: { currency: true } },
     },
   });
@@ -681,12 +850,16 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
   if (!sellerId) return null;
 
   const currency = parseCurrency(order.product.currency);
-  const creditCents = order.productCents;
-  if (creditCents <= 0) {
+  const fx = shopFxRates(order.shop);
+  const fee = saleFeeCents(order.productCents, currency, fx);
+  const creditCents = vendorNetCents(order.productCents, currency, fx);
+
+  if (order.productCents <= 0) {
     await tx.order.update({
       where: { id: order.id },
-      data: { escrowReleasedAt: new Date() },
+      data: { escrowReleasedAt: new Date(), saleFeeCents: 0 },
     });
+    await releaseShippingToCourier(tx, order.id);
     return { credited: 0 };
   }
 
@@ -695,16 +868,14 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
     create: { userId: sellerId, balanceCents: 0, currency: "USD" },
     update: {},
   });
-  await tx.$queryRaw`
-    SELECT id FROM "wallet" WHERE id = ${wallet.id} FOR UPDATE
-  `;
+  await lockWallet(tx, wallet.id);
   const locked = await tx.wallet.findUnique({ where: { id: wallet.id } });
   if (!locked) throw new Error("Portefeuille vendeur introuvable");
 
   const newBalance = walletCents(locked, currency) + creditCents;
   await tx.wallet.update({
     where: { id: locked.id },
-    data: walletCreditData(locked, currency, newBalance, { setDisplay: false }),
+    data: applyBucketDelta(locked, currency, creditCents, "VENDOR"),
   });
   await tx.walletTransaction.create({
     data: {
@@ -721,13 +892,29 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
         productId: order.productId,
         shopId: order.shopId,
         buyerId: order.buyerId,
+        gross: order.productCents,
+        fee,
+        net: creditCents,
       },
     },
   });
+
+  if (fee > 0) {
+    await creditTreasury(tx, {
+      amountCents: fee,
+      currency,
+      kind: "SALE",
+      orderId: order.id,
+      shopId: order.shopId,
+      fx,
+    });
+  }
+
   await tx.order.update({
     where: { id: order.id },
-    data: { escrowReleasedAt: new Date() },
+    data: { escrowReleasedAt: new Date(), saleFeeCents: fee },
   });
+  await releaseShippingToCourier(tx, order.id);
   await maybeCompleteShopHandover(tx, order.handoverId);
-  return { credited: creditCents, sellerBalance: newBalance, currency };
+  return { credited: creditCents, sellerBalance: newBalance, currency, fee };
 }

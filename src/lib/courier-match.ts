@@ -43,6 +43,7 @@ export async function proposeCouriers(input: {
     prisma.courier.findMany({
       where: {
         isAvailable: true,
+        archivedAt: null,
         ...(input.shopId
           ? { OR: [{ shopId: input.shopId }, { shopId: null }] }
           : {}),

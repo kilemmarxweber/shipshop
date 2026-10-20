@@ -51,6 +51,8 @@ type OrderDetail = {
   escrowReleasedAt?: string | null;
   productCents: number;
   shippingCents: number;
+  saleFeeCents?: number;
+  shippingFeeCents?: number;
   totalCents: number;
   amountCents: number;
   fulfillmentType: "DELIVERY" | "PICKUP";
@@ -106,6 +108,8 @@ type OrderDetail = {
     createdAt: string;
   }[];
   issues?: OrderIssue[];
+  buyerId?: string;
+  buyer?: { id: string; name?: string | null };
 };
 
 const REFUNDABLE = new Set([
@@ -177,7 +181,7 @@ function OrderInner() {
   const liveTracking =
     order?.fulfillmentType === "DELIVERY" &&
     order.courier &&
-    ["ASSIGNED", "FULFILLING", "OUT_FOR_DELIVERY"].includes(order.status);
+    order.status === "OUT_FOR_DELIVERY";
 
   useEffect(() => {
     if (!session || (!liveTracking && !awaitingConfirm)) return;
@@ -273,6 +277,10 @@ function OrderInner() {
 
   const total = order.totalCents || order.amountCents;
   const handedOver = Boolean(order.pickupReceipt?.redeemedAt);
+  const isBuyer =
+    Boolean(session?.user?.id) &&
+    (order.buyerId === session?.user?.id ||
+      order.buyer?.id === session?.user?.id);
   const canRefund =
     REFUNDABLE.has(order.status) && !handedOver && !awaitingConfirm;
   const canReport =
@@ -348,6 +356,14 @@ function OrderInner() {
             <ShopHoursNotice hours={order.shop} className="mt-1" />
             <p className="mt-1 font-heading font-bold text-trust">
               {formatMoney(total)}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Produit {formatMoney(order.productCents)} · Vendeur{" "}
+              {formatMoney(Math.max(0, order.productCents - (order.saleFeeCents ?? 50)))}{" "}
+              · ShipShop {formatMoney(order.saleFeeCents ?? 50)}
+              {order.shippingCents > 0
+                ? ` · Livreur ${formatMoney(Math.max(0, order.shippingCents - (order.shippingFeeCents ?? 50)))} · Course ShipShop ${formatMoney(order.shippingFeeCents ?? 50)}`
+                : ""}
             </p>
           </div>
         </div>
@@ -465,17 +481,27 @@ function OrderInner() {
               <p className="text-sm font-semibold text-amber-300">
                 QR scanné par le vendeur
               </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Confirmez que vous avez bien reçu le colis. Le statut boutique
-                passera alors à livré (SUCCESS).
-              </p>
-              <Button
-                className="mt-3 h-10 w-full cursor-pointer"
-                disabled={busy}
-                onClick={confirmReceipt}
-              >
-                {busy ? "…" : "Confirmer la réception"}
-              </Button>
+              {isBuyer ? (
+                <>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Confirmez que vous avez bien reçu le colis. Le statut boutique
+                    passera alors à livré (SUCCESS).
+                  </p>
+                  <Button
+                    className="mt-3 h-10 w-full cursor-pointer"
+                    disabled={busy}
+                    onClick={confirmReceipt}
+                  >
+                    {busy ? "…" : "Confirmer la réception"}
+                  </Button>
+                </>
+              ) : (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  En attente de l’acheteur (
+                  {order.buyer?.name ?? "compte qui a payé"}). Seul ce compte
+                  peut confirmer la réception.
+                </p>
+              )}
             </div>
           ) : null}
           {!handedOver ? (

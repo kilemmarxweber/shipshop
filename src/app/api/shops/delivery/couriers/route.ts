@@ -17,6 +17,15 @@ const createSchema = z.object({
   zoneId: z.string().optional().nullable(),
   shopId: z.string().optional().nullable(),
   isAvailable: z.boolean().optional(),
+  firstName: z.string().max(80).optional(),
+  lastName: z.string().max(80).optional(),
+  postnom: z.string().max(80).optional(),
+  email: z.string().email().optional().nullable(),
+  companyId: z.string().optional().nullable(),
+  userId: z.string().optional().nullable(),
+  passportPhotoUrl: z.string().max(500).optional().nullable(),
+  idFrontUrl: z.string().max(500).optional().nullable(),
+  idBackUrl: z.string().max(500).optional().nullable(),
 });
 
 export async function GET(req: Request) {
@@ -35,6 +44,7 @@ export async function GET(req: Request) {
         include: {
           zone: { select: { id: true, commune: true, kind: true } },
           shop: { select: { id: true, name: true, slug: true } },
+          company: { select: { id: true, legalName: true } },
         },
         orderBy: { name: "asc" },
       }),
@@ -67,6 +77,7 @@ export async function GET(req: Request) {
       include: {
         zone: { select: { id: true, commune: true, kind: true } },
         shop: { select: { id: true, name: true, slug: true } },
+        company: { select: { id: true, legalName: true } },
       },
       orderBy: { name: "asc" },
     }),
@@ -88,6 +99,12 @@ export async function POST(req: Request) {
   try {
     const body = createSchema.parse(await req.json());
     const platform = await requirePlatformDeliveryAdmin(session.user.id);
+    if (!platform.ok) {
+      return NextResponse.json(
+        { error: "Seul le owner ChipShop enregistre un livreur" },
+        { status: 403 },
+      );
+    }
 
     let shopId = body.shopId ?? null;
     if (shopId) {
@@ -110,17 +127,27 @@ export async function POST(req: Request) {
       prisma.courier.create({
         data: {
           name: body.name.trim(),
+          firstName: body.firstName?.trim() || null,
+          lastName: body.lastName?.trim() || null,
+          postnom: body.postnom?.trim() || null,
           phone: body.phone.trim(),
+          email: body.email?.trim() || null,
           address: body.address.trim(),
           lat: body.lat,
           lng: body.lng,
           zoneId: body.zoneId ?? null,
           shopId,
+          companyId: body.companyId ?? null,
+          userId: body.userId ?? null,
+          passportPhotoUrl: body.passportPhotoUrl ?? null,
+          idFrontUrl: body.idFrontUrl ?? null,
+          idBackUrl: body.idBackUrl ?? null,
           isAvailable: body.isAvailable ?? true,
         },
         include: {
           zone: { select: { id: true, commune: true, kind: true } },
           shop: { select: { id: true, name: true, slug: true } },
+          company: { select: { id: true, legalName: true } },
         },
       }),
     );

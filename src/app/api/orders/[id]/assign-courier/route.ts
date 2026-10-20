@@ -5,7 +5,8 @@ import {
   formatCourierAssignNote,
   proposeCouriers,
 } from "@/lib/courier-match";
-import { notifyOrderEvent } from "@/lib/messaging/notify";
+import { releaseShippingToCourier } from "@/lib/checkout";
+import { notifyCourierJob, notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -129,7 +130,7 @@ export async function POST(
       const courier = await withDbRetry(() =>
         prisma.courier.findUnique({ where: { id: courierId! } }),
       );
-      if (!courier || !courier.isAvailable) {
+      if (!courier || !courier.isAvailable || courier.archivedAt) {
         return NextResponse.json({ error: "Livreur indisponible" }, { status: 400 });
       }
       const { estimateCourierEta } = await import("@/lib/delivery-eta");
@@ -167,11 +168,17 @@ export async function POST(
             actorUserId: session.user.id,
           },
         });
+        if (next.escrowReleasedAt) {
+          await releaseShippingToCourier(tx, id);
+        }
         return next;
       }),
     );
 
-    void notifyOrderEvent(id, "COURIER_ASSIGNED").catch(console.error);
+    void Promise.allSettled([
+      notifyOrderEvent(id, "COURIER_ASSIGNED"),
+      notifyCourierJob(id),
+    ]);
 
     return NextResponse.json({ order: updated, eta });
   } catch (error) {

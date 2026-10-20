@@ -45,6 +45,7 @@ export function valuesForPlaceholderKeys(
 
 export const DELIVERY_EVENT_KEYS = [
   "COURIER_ASSIGNED",
+  "COURIER_JOB",
   "OUT_FOR_DELIVERY",
   "COURIER_NEAR_100M",
   "DELIVERED",
@@ -79,6 +80,11 @@ export const DEFAULT_TEMPLATES: {
     eventKey: "COURIER_ASSIGNED",
     name: "Livreur assigné",
     body: "{{brand}} · {{shop_name}}\nBonjour {{customer_name}}, votre commande {{product_title}} est prise en charge par {{courier_name}} ({{courier_phone}}).\nDistance estimée : {{distance_km}} km · Arrivée ~{{eta_text}}.\nSuivi : {{tracking_url}}",
+  },
+  {
+    eventKey: "COURIER_JOB",
+    name: "Course assignée (livreur)",
+    body: "{{brand}} · Nouvelle course\nBoutique {{shop_name}} · {{product_title}}\nAdresse : {{address}} {{commune}}\nCourse nette : {{courier_net}}\nOuvrir : {{courier_url}}",
   },
   {
     eventKey: "OUT_FOR_DELIVERY",

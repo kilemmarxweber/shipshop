@@ -5,9 +5,9 @@ import type { WalletNotifyInput } from "@/lib/messaging/notify";
 import {
   parseCurrency,
   walletCents,
-  walletCreditData,
   type AppCurrency,
 } from "@/lib/money";
+import { applyBucketDelta, drainBucketsData } from "@/lib/wallet-buckets";
 
 export const MOVEMENT_TTL_MS = 30 * 60 * 1000;
 export const IDEMPOTENCY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
@@ -261,7 +261,10 @@ export async function creditWalletLocked(
   const next = walletCents(locked, currency) + amountCents;
   await tx.wallet.update({
     where: { id: locked.id },
-    data: walletCreditData(locked, currency, next, { setDisplay: true }),
+    data: {
+      ...applyBucketDelta(locked, currency, amountCents, "BUYER"),
+      currency,
+    },
   });
   return { wallet: locked, nextCents: next };
 }
@@ -282,7 +285,10 @@ export async function debitWalletLocked(
   const next = available - amountCents;
   await tx.wallet.update({
     where: { id: locked.id },
-    data: walletCreditData(locked, currency, next, { setDisplay: true }),
+    data: {
+      ...drainBucketsData(locked, currency, amountCents),
+      currency,
+    },
   });
   return { wallet: locked, nextCents: next };
 }

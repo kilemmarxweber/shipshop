@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cancelOrder } from "@/lib/checkout";
+import { canStaffShop } from "@/lib/shop-access";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -36,17 +37,9 @@ async function canViewOrder(userId: string, orderId: string) {
   );
   if (!order) return null;
   if (order.buyerId === userId) return order;
-
-  const member = await withDbRetry(() =>
-    prisma.member.findFirst({
-      where: {
-        userId,
-        organizationId: order.shop.organizationId,
-      },
-    }),
-  );
-  if (!member) return null;
-  return order;
+  if (order.courier?.userId === userId) return order;
+  if (await canStaffShop(userId, order.shopId)) return order;
+  return null;
 }
 
 export async function GET(

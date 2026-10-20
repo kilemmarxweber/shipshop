@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateWallet, getSession } from "@/lib/session";
 import { expireStaleMovements, flushNotifyOutbox } from "@/lib/payments/ledger";
+import { getBucketCents } from "@/lib/wallet-buckets";
+import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
 
 export async function GET() {
   const session = await getSession();
@@ -29,8 +31,21 @@ export async function GET() {
     }),
   ]);
 
+  const pots = Object.fromEntries(
+    APP_CURRENCIES.map((code) => [
+      code,
+      {
+        BUYER: getBucketCents(wallet, "BUYER", code),
+        VENDOR: getBucketCents(wallet, "VENDOR", code),
+        COURIER: getBucketCents(wallet, "COURIER", code),
+      },
+    ]),
+  );
+
   return NextResponse.json({
     wallet,
+    pots,
+    displayCurrency: parseCurrency(wallet.currency),
     transactions,
     contacts,
     accountPhone: user?.phone ?? null,

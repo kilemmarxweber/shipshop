@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { QrCode } from "lucide-react";
 import { fetchJson } from "@/lib/fetch-json";
 import { qrImageUrl } from "@/lib/handover";
+import { formatMoney } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
 import { ShopHoursNotice } from "@/components/shop-hours-notice";
@@ -21,6 +22,10 @@ type Ticket = {
   orders: {
     id: string;
     status: string;
+    productCents?: number;
+    shippingCents?: number;
+    saleFeeCents?: number;
+    shippingFeeCents?: number;
     product: { title: string; images: string[]; priceCents: number };
     pickupReceipt: { scannedAt: string | null; redeemedAt: string | null } | null;
   }[];
@@ -104,6 +109,28 @@ export default function ShopTicketPage() {
                   <span className="text-[10px] text-muted-foreground">
                     {done ? "OK" : "À remettre"}
                   </span>
+                </Link>
+                <p className="px-3 pb-2 text-[10px] text-muted-foreground">
+                  Vendeur{" "}
+                  {formatMoney(
+                    Math.max(
+                      0,
+                      (item.productCents ?? item.product.priceCents) -
+                        (item.saleFeeCents ?? 50),
+                    ),
+                  )}{" "}
+                  · Livreur{" "}
+                  {formatMoney(
+                    Math.max(
+                      0,
+                      (item.shippingCents ?? 0) - (item.shippingFeeCents ?? 0),
+                    ),
+                  )}{" "}
+                  · ShipShop{" "}
+                  {formatMoney(
+                    (item.saleFeeCents ?? 50) + (item.shippingFeeCents ?? 0),
+                  )}
+                </p>
                 </Link>
               </li>
             );

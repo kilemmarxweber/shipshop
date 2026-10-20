@@ -92,13 +92,20 @@ export async function GET(req: Request) {
 
     const byShop = new Map<
       string,
-      { shopId: string; shopName: string; soldCents: number; orders: number }
+      {
+        shopId: string;
+        shopName: string;
+        soldCents: number;
+        feeCents: number;
+        orders: number;
+      }
     >();
     for (const s of vendorShops) {
       byShop.set(s.id, {
         shopId: s.id,
         shopName: s.name,
         soldCents: 0,
+        feeCents: 0,
         orders: 0,
       });
     }
@@ -107,6 +114,7 @@ export async function GET(req: Request) {
       const row = byShop.get(o.shopId);
       if (!row) continue;
       row.soldCents += o.productCents || o.amountCents || 0;
+      row.feeCents += o.saleFeeCents || 0;
       row.orders += 1;
     }
 
@@ -118,8 +126,8 @@ export async function GET(req: Request) {
           ...v,
           ownerName: bal?.ownerName ?? null,
           balanceCents: bal?.balanceCents ?? 0,
-          gainCents: v.soldCents,
-          profitCents: v.soldCents,
+          gainCents: Math.max(0, v.soldCents - v.feeCents),
+          profitCents: Math.max(0, v.soldCents - v.feeCents),
         };
       })
       .sort((a, b) => b.soldCents - a.soldCents);

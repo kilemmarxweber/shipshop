@@ -37,6 +37,8 @@ type Order = {
   status: string;
   totalCents: number;
   amountCents: number;
+  productCents?: number;
+  saleFeeCents?: number;
   shippingCents: number;
   fulfillmentType: string;
   deliveryCommune: string | null;
@@ -517,6 +519,17 @@ export default function VendorOrdersPage() {
                     </span>{" "}
                     · {o.fulfillmentType} ·{" "}
                     {formatMoney(o.totalCents || o.amountCents)}
+                    {o.productCents != null && (
+                      <span className="ml-1 text-muted-foreground">
+                        · net vendeur{" "}
+                        {formatMoney(
+                          Math.max(
+                            0,
+                            o.productCents - (o.saleFeeCents ?? 50),
+                          ),
+                        )}
+                      </span>
+                    )}
                     {awaitingClient && (
                       <span className="ml-1 text-amber-400">
                         · Attente confirmation client
