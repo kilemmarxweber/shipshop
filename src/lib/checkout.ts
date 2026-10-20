@@ -4,6 +4,7 @@ import {
   findBestCourier,
   formatCourierAssignNote,
 } from "@/lib/courier-match";
+import { buildHandoverQrPayload } from "@/lib/handover";
 import {
   createShopHandover,
   maybeCompleteShopHandover,
@@ -424,13 +425,18 @@ export async function purchaseProduct(
     },
   });
 
-  // QR boutique (partagé) + reçu article pour suivre chaque remise
+  // QR unique par article : la remise et le paiement ne concernent que ce produit.
   {
+    const itemCode = `${handover.code}-${order.id.slice(-4).toUpperCase()}`;
     await tx.pickupReceipt.create({
       data: {
         orderId: order.id,
-        code: `${handover.code}-${order.id.slice(-4).toUpperCase()}`,
-        qrPayload: handover.qrPayload,
+        code: itemCode,
+        qrPayload: buildHandoverQrPayload({
+          orderId: order.id,
+          code: itemCode,
+          shopId: product.shopId,
+        }),
       },
     });
   }

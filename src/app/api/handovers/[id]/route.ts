@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { ensureOrderItemQr } from "@/lib/shop-handover";
 
 export async function GET(
   _req: Request,
@@ -52,5 +53,15 @@ export async function GET(
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
     }
   }
-  return NextResponse.json({ handover });
+  const orders = await Promise.all(
+    handover.orders.map(async (order) => {
+      const pickupReceipt = await ensureOrderItemQr({
+        orderId: order.id,
+        shopId: handover.shopId,
+        pickupReceipt: order.pickupReceipt,
+      });
+      return { ...order, pickupReceipt };
+    }),
+  );
+  return NextResponse.json({ handover: { ...handover, orders } });
 }

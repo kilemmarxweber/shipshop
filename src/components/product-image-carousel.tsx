@@ -390,34 +390,28 @@ export function ProductImageCarousel({
           { root, rootMargin: "120% 0px", threshold: 0.01 },
         );
 
+    const applyVisibility = (ratio: number, left: number) => {
+      if (hasVideo && !eager) {
+        setFeedVideoScore(feedId, ratio, pageKey);
+      }
+      if (audioKey) {
+        setFeedAudioScore(audioKey, { ratio, left }, pageKey);
+      }
+      if (ratio < LEFT_VIEW_RATIO) {
+        setInView(false);
+        setManualHold(false);
+        setUserPaused(false);
+        return;
+      }
+      if (ratio >= IN_VIEW_RATIO) {
+        setInView(true);
+      }
+    };
+
     const playIo = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
-        const ratio = entry.intersectionRatio;
-
-        if (hasVideo && !eager) {
-          setFeedVideoScore(feedId, ratio, pageKey);
-        }
-        if (audioKey) {
-          setFeedAudioScore(
-            audioKey,
-            {
-              ratio,
-              left: entry.boundingClientRect.left,
-            },
-            pageKey,
-          );
-        }
-
-        if (ratio < LEFT_VIEW_RATIO) {
-          setInView(false);
-          setManualHold(false);
-          setUserPaused(false);
-          return;
-        }
-        if (ratio >= IN_VIEW_RATIO) {
-          setInView(true);
-        }
+        applyVisibility(entry.intersectionRatio, entry.boundingClientRect.left);
       },
       {
         root,
@@ -427,7 +421,30 @@ export function ProductImageCarousel({
 
     loadIo?.observe(target);
     playIo.observe(target);
+
+    const boot = () => {
+      const rect = target.getBoundingClientRect();
+      const rootBox = root?.getBoundingClientRect() ?? {
+        top: 0,
+        left: 0,
+        bottom: window.innerHeight,
+        right: window.innerWidth,
+      };
+      const overlapH = Math.max(
+        0,
+        Math.min(rect.bottom, rootBox.bottom) - Math.max(rect.top, rootBox.top),
+      );
+      const overlapW = Math.max(
+        0,
+        Math.min(rect.right, rootBox.right) - Math.max(rect.left, rootBox.left),
+      );
+      const area = Math.max(1, rect.width * rect.height);
+      applyVisibility((overlapH * overlapW) / area, rect.left);
+    };
+    const bootId = window.requestAnimationFrame(boot);
+
     return () => {
+      window.cancelAnimationFrame(bootId);
       loadIo?.disconnect();
       playIo.disconnect();
       if (hasVideo && !eager) clearFeedVideoScore(feedId);

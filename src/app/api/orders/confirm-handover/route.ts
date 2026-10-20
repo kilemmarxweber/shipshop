@@ -11,6 +11,7 @@ import {
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { canStaffShop } from "@/lib/shop-access";
+import { maybeCompleteShopHandover } from "@/lib/shop-handover";
 
 const schema = z.object({
   orderId: z.string().optional(),
@@ -135,11 +136,13 @@ async function scanOrder(input: {
           note:
             input.note ??
             (input.fromQr
-              ? "QR boutique — article déduit, en attente confirmation client"
+              ? "QR article — remis, en attente confirmation client"
               : "Code saisi — en attente confirmation client"),
           actorUserId: input.userId,
         },
       });
+
+      await maybeCompleteShopHandover(tx, order.handoverId);
 
       return next;
     }),
@@ -163,7 +166,10 @@ async function scanOrder(input: {
     : [updated];
 
   const remaining = siblings.filter(
-    (o) => !isClosed(o.status) && !o.pickupReceipt?.redeemedAt,
+    (o) =>
+      !isClosed(o.status) &&
+      !o.pickupReceipt?.redeemedAt &&
+      !o.pickupReceipt?.scannedAt,
   ).length;
 
   return NextResponse.json({
@@ -172,17 +178,16 @@ async function scanOrder(input: {
     remaining,
     handoverCompleted: remaining === 0,
     message:
-      remaining > 1
-        ? `Article « ${updated.product.title} » déduit. ${remaining - 1} autre(s) à remettre avec le même QR.`
-        : remaining === 1
-          ? `Article « ${updated.product.title} » déduit. Dernier article : le client confirme, puis le QR se termine.`
-          : "Dernier article remis — QR boutique terminé après confirmation client.",
+      remaining > 0
+        ? `« ${updated.product.title} » remis. Le client confirme pour payer ce produit. ${remaining} autre(s) article(s) de cette boutique ont encore leur QR.`
+        : `« ${updated.product.title} » remis — QR de cette boutique terminé. Le client confirme pour payer ce produit uniquement.`,
   });
 }
 
 /**
- * Étape 1 — le vendeur scanne le QR boutique / saisit le code.
- * Un article est déduit. Le QR reste actif jusqu’au dernier remis ou annulé.
+ * Étape 1 — le vendeur / livreur scanne le QR de l’article (ou le QR boutique).
+ * Cet article est déduit et payé à la confirmation client. Les autres boutiques
+ * et les autres articles gardent leur propre QR.
  */
 export async function POST(req: Request) {
   const session = await getSession();

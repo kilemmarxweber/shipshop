@@ -48,7 +48,6 @@ import { usePaginatedList } from "@/lib/use-paginated-list";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { DwellArticle } from "@/components/dwell-article";
 import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
-import { PendingBuyerOrders } from "@/components/pending-buyer-orders";
 
 type Product = {
   id: string;
@@ -184,6 +183,17 @@ export default function FeedPage() {
     setSoundById({});
   }, [tab]);
 
+  useEffect(() => {
+    if (tab === "wanted" || products.length === 0) return;
+    if (audioFocusId) return;
+    const first = products.find(
+      (p) => productHasVideo(p.images) || Boolean(p.soundtrack?.audioUrl),
+    );
+    if (!first) return;
+    const timer = window.setTimeout(() => requestFeedAudioFocus(first.id), 60);
+    return () => window.clearTimeout(timer);
+  }, [tab, products, audioFocusId]);
+
   function soundFor(id: string): VideoSoundState {
     const base = soundById[id] ?? DEFAULT_VIDEO_SOUND;
     if (audioFocusId !== id) return { ...base, muted: true };
@@ -297,7 +307,6 @@ export default function FeedPage() {
   const tabs = (
     <>
     <ScrollAdFeedSurface on={tab !== "wanted"} />
-    <PendingBuyerOrders />
     <div className="flex shrink-0 justify-center gap-6 border-b border-border px-4 py-2 text-sm font-semibold">
       <button
         type="button"

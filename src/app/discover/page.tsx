@@ -18,7 +18,6 @@ import {
 } from "@/components/video-sound-button";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { Input } from "@/components/ui/input";
-import { getCurrentGeoCoords } from "@/lib/browser-geolocation";
 import { FeedLoadSentinel } from "@/components/feed-load-trigger";
 import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
 import { usePaginatedList } from "@/lib/use-paginated-list";
@@ -61,8 +60,6 @@ export default function DiscoverPage() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [category, setCategory] = useState<string | null>(null);
-  const [nearMe, setNearMe] = useState(false);
-  const [near, setNear] = useState<{ lat: number; lng: number } | null>(null);
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
     {},
@@ -84,8 +81,8 @@ export default function DiscoverPage() {
 
   const feed = usePaginatedList<Product>({
     prefetchRemaining: 4,
-    cacheKey: `discover:${category ?? ""}:${debouncedQ}:${nearMe ? "near" : "all"}`,
-    deps: [debouncedQ, category, nearMe, near?.lat, near?.lng],
+    cacheKey: `discover:${category ?? ""}:${debouncedQ}`,
+    deps: [debouncedQ, category],
     buildUrl: (cursor) => {
       const params = new URLSearchParams({
         status: "ACTIVE",
@@ -93,10 +90,6 @@ export default function DiscoverPage() {
       });
       if (debouncedQ) params.set("q", debouncedQ);
       if (category) params.set("category", category);
-      if (nearMe && near) {
-        params.set("nearLat", String(near.lat));
-        params.set("nearLng", String(near.lng));
-      }
       if (cursor) params.set("cursor", cursor);
       return `/api/products?${params}`;
     },
@@ -216,13 +209,6 @@ export default function DiscoverPage() {
     activateSound(id);
   }
 
-  function muteWantedBanner() {
-    setAudioOff(true);
-    setUserPinned(null);
-    setSoundById({});
-    resetFeedAudioFocus();
-  }
-
   return (
     <div className="discover-scroll px-4 pb-4 pt-3 md:px-8">
       <ScrollAdFeedSurface on />
@@ -236,47 +222,6 @@ export default function DiscoverPage() {
         />
       </div>
 
-      <Link
-        href="/wanted"
-        onClick={muteWantedBanner}
-        className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-surface-2 px-4 py-3"
-      >
-        <span>
-          <span className="block font-heading text-sm font-bold">
-            {t("wanted.title")}
-          </span>
-          <span className="text-[11px] text-muted-foreground">
-            Demandes d’achat — neuf ou occasion
-          </span>
-        </span>
-        <span className="text-xs font-semibold text-primary">Voir</span>
-      </Link>
-
-      <div className="mb-4">
-        <button
-          type="button"
-          onClick={() => {
-            if (nearMe) {
-              setNearMe(false);
-              return;
-            }
-            void getCurrentGeoCoords()
-              .then((coords) => {
-                setNear({ lat: coords.latitude, lng: coords.longitude });
-                setNearMe(true);
-              })
-              .catch(() => setNearMe(false));
-          }}
-          className={cn(
-            "h-10 rounded-full px-4 text-xs font-bold",
-            nearMe
-              ? "bg-primary text-primary-foreground"
-              : "border border-border bg-surface-2",
-          )}
-        >
-          {t("discover.nearMe")}
-        </button>
-      </div>
       <h2 className="mb-3 font-heading text-sm font-bold">
         {t("discover.categoriesHeading")}
       </h2>
@@ -397,10 +342,10 @@ export default function DiscoverPage() {
         />
       ) : null}
       {feed.loadingMore ? (
-        <p className="py-4 text-center text-xs text-muted-foreground">…</p>
+        <p className="py-4 text-center text-xs text-muted-foreground">�</p>
       ) : null}
       {feed.loading && products.length === 0 ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">…</p>
+        <p className="py-12 text-center text-sm text-muted-foreground">�</p>
       ) : null}
       {products.length === 0 && !feed.loading && (
         <p className="py-12 text-center text-sm text-muted-foreground">

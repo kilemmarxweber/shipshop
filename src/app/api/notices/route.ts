@@ -23,10 +23,19 @@ export async function GET() {
     prisma.order.findMany({
       where: {
         buyerId: session.user.id,
-        status: { in: ["AWAITING_CONFIRM", "OUT_FOR_DELIVERY", "READY_FOR_PICKUP"] },
+        status: {
+          in: [
+            "PAID",
+            "ASSIGNED",
+            "FULFILLING",
+            "OUT_FOR_DELIVERY",
+            "READY_FOR_PICKUP",
+            "AWAITING_CONFIRM",
+          ],
+        },
       },
       include: {
-        product: { select: { title: true } },
+        product: { select: { title: true, images: true } },
         shop: { select: { name: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -41,11 +50,17 @@ export async function GET() {
         ? "Confirmer la réception"
         : order.status === "OUT_FOR_DELIVERY"
           ? "Livreur en route"
-          : "Prêt au retrait",
+          : order.status === "READY_FOR_PICKUP"
+            ? "Prêt au retrait"
+            : "Colis en cours",
     body: `${order.shop.name} · ${order.product.title}`,
     href: `/orders/${order.id}`,
     readAt: null as Date | null,
     createdAt: order.createdAt,
+    orderId: order.id,
+    status: order.status,
+    product: order.product,
+    shop: order.shop,
   }));
 
   const seen = new Set(pendingNotices.map((n) => n.href));

@@ -24,6 +24,7 @@ import { LocaleToggle } from "@/components/locale-toggle";
 import { NewListingFlash } from "@/components/new-listing-flash";
 import { FoxScrollAdOverlay } from "@/components/fox-scroll-ad-overlay";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { useInboxUnread } from "@/hooks/use-inbox-unread";
 import { useI18n } from "@/components/i18n-provider";
 import { CART_UPDATED_EVENT, cartCountFromEvent } from "@/lib/cart-events";
@@ -143,6 +144,7 @@ export function AppShell({
     <BackNavProvider>
       <div className="app-viewport">
         <div className="app-shell">
+          <PullToRefresh>
           {!hideChrome && (
             <header className="z-40 shrink-0 border-b border-border bg-background px-3 pb-1.5 pt-[max(0.65rem,env(safe-area-inset-top))] sm:px-4">
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
@@ -339,6 +341,7 @@ export function AppShell({
               </div>
             </nav>
           )}
+          </PullToRefresh>
         </div>
       </div>
     </BackNavProvider>

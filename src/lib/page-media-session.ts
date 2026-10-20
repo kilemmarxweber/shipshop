@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 /**
@@ -51,19 +51,24 @@ export function bindPageMediaRoute(next: string) {
   return true;
 }
 
+function readClientPageKey() {
+  if (typeof window === "undefined") return "";
+  return getPageMediaRoute() || window.location.pathname;
+}
+
 /** À monter une fois dans le shell. */
 export function useBindPageMediaSession() {
   const pathname = usePathname();
+  const prevPath = useRef<string | null>(null);
 
-  // Met à jour la route pendant le render, sans setState chez les enfants.
   bindPageMediaRoute(pathname);
 
   useLayoutEffect(() => {
     bindPageMediaRoute(pathname);
-    pauseAllPageMedia();
-  }, [pathname]);
-
-  useEffect(() => {
+    if (prevPath.current && prevPath.current !== pathname) {
+      pauseAllPageMedia();
+    }
+    prevPath.current = pathname;
     notify();
   }, [pathname]);
 
@@ -81,25 +86,29 @@ export function useBindPageMediaSession() {
   }, []);
 }
 
-/** Clé figée au montage : une page cachée (cache Next) reste muette. */
+/** Clé figée au montage (page en cache Next reste muette), corrigée après hydratation. */
+export function useFrozenPageKey() {
+  const [pageKey, setPageKey] = useState(readClientPageKey);
+
+  useLayoutEffect(() => {
+    const next = readClientPageKey();
+    if (next && next !== pageKey) setPageKey(next);
+  }, [pageKey]);
+
+  return pageKey;
+}
+
 export function usePageMediaLive() {
-  const [pageKey] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return getPageMediaRoute() || window.location.pathname;
-  });
+  const pageKey = useFrozenPageKey();
   const [live, setLive] = useState(() => isPageMediaLive(pageKey));
+
+  useLayoutEffect(() => {
+    setLive(isPageMediaLive(pageKey));
+  }, [pageKey]);
 
   useEffect(() => {
     return subscribePageMedia(() => setLive(isPageMediaLive(pageKey)));
   }, [pageKey]);
 
   return live;
-}
-
-export function useFrozenPageKey() {
-  const [pageKey] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return getPageMediaRoute() || window.location.pathname;
-  });
-  return pageKey;
 }

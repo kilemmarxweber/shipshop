@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cancelOrder } from "@/lib/checkout";
 import { canStaffShop } from "@/lib/shop-access";
+import { ensureOrderItemQr } from "@/lib/shop-handover";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -56,7 +57,14 @@ export async function GET(
   if (!order) {
     return NextResponse.json({ error: "Commande introuvable" }, { status: 404 });
   }
-  return NextResponse.json({ order });
+  const receipt = await ensureOrderItemQr({
+    orderId: order.id,
+    shopId: order.shopId,
+    pickupReceipt: order.pickupReceipt,
+  });
+  return NextResponse.json({
+    order: receipt ? { ...order, pickupReceipt: receipt } : order,
+  });
 }
 
 export async function DELETE(

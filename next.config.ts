@@ -19,8 +19,9 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "100mb",
     },
-    // Moins de pics RAM sur VPS (Studio Sanity + next build)
-    turbopackGc: true,
+    // GC Turbopack en prod seulement — en `next dev` il peut paniquer
+    // (stale TaskId / already-collected) après un build.
+    turbopackGc: process.env.NODE_ENV === "production",
     turbopackPluginRuntimeStrategy: "workerThreads",
   },
   async rewrites() {

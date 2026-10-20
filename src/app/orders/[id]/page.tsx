@@ -468,13 +468,12 @@ function OrderInner() {
           <div className="mb-2 flex items-center justify-center gap-2 text-primary">
             <QrCode className="size-4" />
             <p className="text-xs font-bold tracking-wide uppercase">
-              {order.handover ? "QR boutique" : "QR de remise"}
+              QR de cet article
             </p>
           </div>
           <p className="mb-4 text-[11px] text-muted-foreground">
-            {order.handover
-              ? "Un seul QR pour cette boutique. Il se termine quand le dernier article est remis ou annulé."
-              : "Présentez ce QR au vendeur ou livreur. Après le scan, confirmez la réception ici."}
+            Présentez ce QR chez {order.shop.name}. Une fois scanné et confirmé,
+            ce produit est payé. Les autres boutiques gardent leur propre QR.
           </p>
           {awaitingConfirm && !handedOver ? (
             <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-left">

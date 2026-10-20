@@ -140,7 +140,7 @@ export function useFeedAudioFocus() {
     const unsub = subscribeFeedAudioFocus(setId);
     return () => {
       unsub();
-      resetFeedAudioFocus();
+      if (listeners.size === 0) resetFeedAudioFocus();
     };
   }, []);
   return live ? id : null;

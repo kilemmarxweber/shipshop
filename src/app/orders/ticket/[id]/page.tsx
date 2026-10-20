@@ -27,7 +27,11 @@ type Ticket = {
     saleFeeCents?: number;
     shippingFeeCents?: number;
     product: { title: string; images: string[]; priceCents: number };
-    pickupReceipt: { scannedAt: string | null; redeemedAt: string | null } | null;
+    pickupReceipt: {
+      scannedAt: string | null;
+      redeemedAt: string | null;
+      qrPayload?: string | null;
+    } | null;
   }[];
 };
 
@@ -73,29 +77,27 @@ export default function ShopTicketPage() {
           <span className="text-xs font-bold uppercase">{ticket.code}</span>
         </div>
         {ticket.completedAt ? (
-          <p className="py-8 text-sm font-semibold text-trust">QR terminé</p>
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={qrImageUrl(ticket.qrPayload, 220)}
-            alt=""
-            width={220}
-            height={220}
-            className="mx-auto rounded-2xl bg-white p-3"
-          />
-        )}
-        <ul className="mt-4 space-y-2 text-left">
+          <p className="py-8 text-sm font-semibold text-trust">
+            Boutique terminée — plus d’article à remettre ici
+          </p>
+        ) : null}
+        <ul className="mt-4 space-y-3 text-left">
           {ticket.orders.map((item) => {
             const done =
               Boolean(item.pickupReceipt?.redeemedAt) ||
               ["DELIVERED", "PICKED_UP", "CANCELLED", "REFUNDED"].includes(
                 item.status,
               );
+            const scanned = Boolean(item.pickupReceipt?.scannedAt);
+            const payload = item.pickupReceipt?.qrPayload ?? ticket.qrPayload;
             return (
-              <li key={item.id}>
+              <li
+                key={item.id}
+                className="rounded-xl border border-border px-3 py-2"
+              >
                 <Link
                   href={`/orders/${item.id}`}
-                  className="flex items-center gap-2 rounded-xl border border-border px-3 py-2"
+                  className="flex items-center gap-2"
                 >
                   <div
                     className="size-10 shrink-0 rounded-lg bg-cover bg-center"
@@ -107,10 +109,14 @@ export default function ShopTicketPage() {
                     {item.product.title}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
-                    {done ? "OK" : "À remettre"}
+                    {done
+                      ? "Payé"
+                      : scanned
+                        ? "À confirmer"
+                        : "À remettre"}
                   </span>
                 </Link>
-                <p className="px-3 pb-2 text-[10px] text-muted-foreground">
+                <p className="pb-2 pt-1 text-[10px] text-muted-foreground">
                   Vendeur{" "}
                   {formatMoney(
                     Math.max(
@@ -119,18 +125,18 @@ export default function ShopTicketPage() {
                         (item.saleFeeCents ?? 50),
                     ),
                   )}{" "}
-                  · Livreur{" "}
-                  {formatMoney(
-                    Math.max(
-                      0,
-                      (item.shippingCents ?? 0) - (item.shippingFeeCents ?? 0),
-                    ),
-                  )}{" "}
-                  · ShipShop{" "}
-                  {formatMoney(
-                    (item.saleFeeCents ?? 50) + (item.shippingFeeCents ?? 0),
-                  )}
+                  · ce produit seulement
                 </p>
+                {!done && !scanned && payload ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={qrImageUrl(payload, 180)}
+                    alt={`QR ${item.product.title}`}
+                    width={180}
+                    height={180}
+                    className="mx-auto rounded-xl bg-white p-2"
+                  />
+                ) : null}
               </li>
             );
           })}

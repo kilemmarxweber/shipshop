@@ -1,4 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { buildHandoverQrPayload, parseHandoverQrPayload } from "@/lib/handover";
+import { prisma } from "@/lib/prisma";
 
 type Tx = Prisma.TransactionClient;
 
@@ -46,15 +48,38 @@ export async function maybeCompleteShopHandover(
   handoverId?: string | null,
 ) {
   if (!handoverId) return null;
-  const open = await tx.order.count({
+  const stillToHandOver = await tx.order.count({
     where: {
       handoverId,
       status: { notIn: [...CLOSED] },
+      pickupReceipt: { is: { scannedAt: null } },
     },
   });
-  if (open > 0) return null;
+  if (stillToHandOver > 0) return null;
   return tx.shopHandover.update({
     where: { id: handoverId },
     data: { completedAt: new Date() },
+  });
+}
+
+/** Anciens tickets partageaient le QR boutique : chaque article a le sien. */
+export async function ensureOrderItemQr(input: {
+  orderId: string;
+  shopId: string;
+  pickupReceipt: { id: string; code: string; qrPayload: string; scannedAt: Date | null } | null;
+}) {
+  const rec = input.pickupReceipt;
+  if (!rec || rec.scannedAt) return rec;
+  const parsed = parseHandoverQrPayload(rec.qrPayload);
+  if (parsed?.v === 1 && parsed.o === input.orderId) return rec;
+  return prisma.pickupReceipt.update({
+    where: { id: rec.id },
+    data: {
+      qrPayload: buildHandoverQrPayload({
+        orderId: input.orderId,
+        code: rec.code,
+        shopId: input.shopId,
+      }),
+    },
   });
 }
