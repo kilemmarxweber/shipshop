@@ -87,13 +87,18 @@ export function playFirstVisibleFeedSound(): string | null {
 
   const winner = pickFrontRowLeft(ranked)?.el ?? null;
 
+  const live = isFeedSoundLive();
   document.querySelectorAll("audio, video").forEach((node) => {
     if (!(node instanceof HTMLMediaElement)) return;
     if (node.dataset.scrollAd === "1") return;
     const inWinner = Boolean(winner && winner.contains(node));
-    if (!inWinner) {
+    const iconOn = Boolean(
+      inWinner && (winner?.hasAttribute("data-feed-sound-on") ?? false),
+    );
+    if (!inWinner || !live || !iconOn) {
       node.muted = true;
       node.dataset.wantSound = "0";
+      if (node instanceof HTMLAudioElement) node.pause();
       return;
     }
     node.dataset.wantSound = "1";

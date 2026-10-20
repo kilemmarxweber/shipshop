@@ -81,17 +81,14 @@ function applyDomMute() {
     const key = node
       .closest("[data-audio-key]")
       ?.getAttribute("data-audio-key");
-    const live = Boolean(!audioHeld && activeId && key === activeId);
-    if (live) {
-      if (isFeedSoundLive()) {
-        node.dataset.wantSound = "1";
-        node.muted = false;
-        void node.play().catch(() => undefined);
-      }
-      return;
-    }
+    const iconOn = Boolean(node.closest("[data-feed-sound-on]"));
+    const live = Boolean(
+      !audioHeld && isFeedSoundLive() && iconOn && activeId && key === activeId,
+    );
+    if (live) return;
     node.muted = true;
     node.dataset.wantSound = "0";
+    if (node instanceof HTMLAudioElement) node.pause();
   });
 }
 

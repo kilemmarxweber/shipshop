@@ -647,6 +647,7 @@ function ShopInner() {
             <article
               key={p.id}
               data-audio-key={p.id}
+              {...(!soundFor(p.id).muted ? { "data-feed-sound-on": "1" } : {})}
               className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden"
             >
               <ProductImageCarousel

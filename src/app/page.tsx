@@ -549,6 +549,7 @@ export default function FeedPage() {
             key={`${tab}:${p.id}`}
             productId={p.id}
             enabled={Boolean(session)}
+            soundOn={!soundFor(p.id).muted}
             className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden"
           >
             <ProductImageCarousel

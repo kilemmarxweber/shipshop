@@ -299,6 +299,7 @@ export default function DiscoverPage() {
               key={p.id}
               id={p.id}
               onVisible={onTileVisible}
+              soundOn={!soundFor(p.id).muted}
             >
               <ProductImageCarousel
                 images={
@@ -425,10 +426,12 @@ export default function DiscoverPage() {
 function DiscoverTile({
   id,
   onVisible,
+  soundOn = false,
   children,
 }: {
   id: string;
   onVisible: (id: string, visible: boolean) => void;
+  soundOn?: boolean;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -459,6 +462,7 @@ function DiscoverTile({
       ref={ref}
       data-feed-card
       data-audio-key={id}
+      {...(soundOn ? { "data-feed-sound-on": "1" } : {})}
       className="group relative aspect-[3/4] overflow-hidden rounded-2xl"
     >
       {children}
