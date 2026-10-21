@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { ISSUE_TYPE_LABELS, qrImageUrl } from "@/lib/handover";
+import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fees";
 import { formatMoney, cn } from "@/lib/utils";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { usePageBack } from "@/components/back-nav-context";
@@ -52,6 +53,7 @@ type OrderDetail = {
   productCents: number;
   shippingCents: number;
   saleFeeCents?: number;
+  saleFeeBps?: number;
   shippingFeeCents?: number;
   totalCents: number;
   amountCents: number;
@@ -276,6 +278,13 @@ function OrderInner() {
   }
 
   const total = order.totalCents || order.amountCents;
+  const estimatedSaleFeeCents = Math.floor(
+    (Math.max(0, order.productCents) * (order.saleFeeBps ?? SALE_FEE_BPS_DEFAULT)) /
+      10_000,
+  );
+  const saleFeeCents =
+    (order.saleFeeCents ?? 0) > 0 ? (order.saleFeeCents ?? 0) : estimatedSaleFeeCents;
+  const vendorNetCents = Math.max(0, order.productCents - saleFeeCents);
   const handedOver = Boolean(order.pickupReceipt?.redeemedAt);
   const isBuyer =
     Boolean(session?.user?.id) &&
@@ -359,8 +368,7 @@ function OrderInner() {
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">
               Produit {formatMoney(order.productCents)} · Vendeur{" "}
-              {formatMoney(Math.max(0, order.productCents - (order.saleFeeCents ?? 0)))}{" "}
-              · ShipShop {formatMoney(order.saleFeeCents ?? 0)}
+              {formatMoney(vendorNetCents)} · ShipShop {formatMoney(saleFeeCents)}
               {order.shippingCents > 0
                 ? ` · Livreur ${formatMoney(Math.max(0, order.shippingCents - (order.shippingFeeCents ?? 50)))} · Course ShipShop ${formatMoney(order.shippingFeeCents ?? 50)}`
                 : ""}

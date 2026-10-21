@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { QrCode } from "lucide-react";
 import { fetchJson } from "@/lib/fetch-json";
 import { qrImageUrl } from "@/lib/handover";
+import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fees";
 import { formatMoney } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";
@@ -25,6 +26,7 @@ type Ticket = {
     productCents?: number;
     shippingCents?: number;
     saleFeeCents?: number;
+    saleFeeBps?: number;
     shippingFeeCents?: number;
     product: { title: string; images: string[]; priceCents: number };
     pickupReceipt: {
@@ -34,6 +36,17 @@ type Ticket = {
     } | null;
   }[];
 };
+
+function resolveSaleFeeCents(
+  productCents: number,
+  saleFeeCents?: number,
+  saleFeeBps?: number,
+) {
+  if ((saleFeeCents ?? 0) > 0) return saleFeeCents ?? 0;
+  return Math.floor(
+    (Math.max(0, productCents) * (saleFeeBps ?? SALE_FEE_BPS_DEFAULT)) / 10_000,
+  );
+}
 
 export default function ShopTicketPage() {
   const { id } = useParams<{ id: string }>();
@@ -122,7 +135,11 @@ export default function ShopTicketPage() {
                     Math.max(
                       0,
                       (item.productCents ?? item.product.priceCents) -
-                        (item.saleFeeCents ?? 0),
+                        resolveSaleFeeCents(
+                          item.productCents ?? item.product.priceCents,
+                          item.saleFeeCents,
+                          item.saleFeeBps,
+                        ),
                     ),
                   )}{" "}
                   · ce produit seulement

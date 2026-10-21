@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { QrScanCamera } from "@/components/qr-scan-camera";
 import { parseHandoverQrPayload } from "@/lib/handover";
+import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fees";
 import {
   CANCEL_REASONS,
   type CancelReasonCode,
@@ -39,6 +40,7 @@ type Order = {
   amountCents: number;
   productCents?: number;
   saleFeeCents?: number;
+  saleFeeBps?: number;
   shippingCents: number;
   fulfillmentType: string;
   deliveryCommune: string | null;
@@ -63,6 +65,17 @@ type Order = {
     completedAt: string | null;
   } | null;
 };
+
+function resolveSaleFeeCents(
+  productCents: number,
+  saleFeeCents?: number,
+  saleFeeBps?: number,
+) {
+  if ((saleFeeCents ?? 0) > 0) return saleFeeCents ?? 0;
+  return Math.floor(
+    (Math.max(0, productCents) * (saleFeeBps ?? SALE_FEE_BPS_DEFAULT)) / 10_000,
+  );
+}
 
 export default function VendorOrdersPage() {
   const { t } = useI18n();
@@ -525,7 +538,12 @@ export default function VendorOrdersPage() {
                         {formatMoney(
                           Math.max(
                             0,
-                            o.productCents - (o.saleFeeCents ?? 0),
+                            o.productCents -
+                              resolveSaleFeeCents(
+                                o.productCents,
+                                o.saleFeeCents,
+                                o.saleFeeBps,
+                              ),
                           ),
                         )}
                       </span>
