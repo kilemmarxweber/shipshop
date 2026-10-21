@@ -402,7 +402,7 @@ function ShopInner() {
   const refCode = shop.slug.toUpperCase().slice(0, 12);
 
   return (
-    <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden md:h-auto md:overflow-visible">
       {/* En-tête boutique */}
       <header className="shrink-0 border-b border-border bg-background/95 px-4 pb-3 pt-1 backdrop-blur">
         <div className="flex items-start gap-3">
@@ -651,7 +651,7 @@ function ShopInner() {
       ) : (
         <div
           id="produits"
-          className="feed-snap feed-product-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+          className="feed-snap feed-product-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:h-auto md:min-h-0 md:flex-none md:overflow-visible md:overscroll-y-auto"
           onScroll={() => unpinFeedAudio()}
         >
           {products.map((p) => (

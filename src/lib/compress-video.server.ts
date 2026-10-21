@@ -93,7 +93,12 @@ export async function compressVideoBuffer(
   input: Buffer,
 ): Promise<{ buffer: Buffer; ext: "mp4" }> {
   const trimSeconds = await clipSeconds();
-  if (!(await isFfmpegAvailable())) {
+  const ffmpegReady = await isFfmpegAvailable();
+  if (!ffmpegReady) {
+    if (input.length <= VIDEO_STORED_MAX_BYTES) {
+      // Fallback historique: accepter les vidéos déjà assez légères même sans ffmpeg.
+      return { buffer: input, ext: "mp4" };
+    }
     throw new Error(
       "ffmpeg requis pour traiter les vidéos (découpe max 60s). Installez ffmpeg ou définissez FFMPEG_PATH.",
     );

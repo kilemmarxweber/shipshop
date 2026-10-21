@@ -600,6 +600,28 @@
   max-height: none;
   object-fit: cover;
 }
+.ss-reel-fg-portrait {
+  object-position: 50% clamp(12%, var(--ss-portrait-y, 18%), 30%);
+}
+.ss-reel-fg.ss-reel-fg-portrait {
+  top: clamp(52%, var(--ss-portrait-top, 56%), 62%);
+}
+.ss-reel-fg-cover.ss-reel-fg-portrait,
+.ss-reel-fg-video.ss-reel-fg-portrait {
+  object-position: 50% clamp(12%, var(--ss-portrait-y, 18%), 30%);
+}
+/* iOS Safari: garder le meme cadrage portrait que Android/tablette. */
+@supports (-webkit-touch-callout: none) {
+  .ss-reel-fg-portrait,
+  .ss-reel-fg-cover.ss-reel-fg-portrait,
+  .ss-reel-fg-video.ss-reel-fg-portrait {
+    object-position: 50% clamp(12%, var(--ss-portrait-y, 18%), 30%);
+  }
+
+  .ss-reel-fg.ss-reel-fg-portrait {
+    top: clamp(52%, var(--ss-portrait-top, 56%), 62%);
+  }
+}
 .ss-reel-vignette {
   pointer-events: none;
   position: absolute;

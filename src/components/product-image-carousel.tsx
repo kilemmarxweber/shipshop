@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
 import { Heart } from "lucide-react";
 import {
   clearFeedAudioScore,
@@ -86,6 +86,18 @@ function mediaClass(fit: "cover" | "contain" | "reel") {
   );
 }
 
+function portraitFocusVars(mediaRatio: number | null): CSSProperties | undefined {
+  if (!mediaRatio || mediaRatio >= 0.9) return undefined;
+  // 0 at ratio 0.9, 1 at ratio 0.5: tighter portraits get stronger top focus.
+  const strength = Math.min(1, Math.max(0, (0.9 - mediaRatio) / 0.4));
+  const objectY = 22 - strength * 8; // 22% -> 14%
+  const topY = 54 + strength * 4; // 54% -> 58%
+  return {
+    ["--ss-portrait-y" as string]: `${objectY.toFixed(1)}%`,
+    ["--ss-portrait-top" as string]: `${topY.toFixed(1)}%`,
+  } as CSSProperties;
+}
+
 function SlideMedia({
   src,
   playing,
@@ -117,6 +129,8 @@ function SlideMedia({
   const video = isVideoUrl(src);
   const poster = video ? videoPosterUrl(src) : src;
   const [mediaRatio, setMediaRatio] = useState<number | null>(null);
+  const portraitFocus = Boolean(mediaRatio && mediaRatio < 0.9);
+  const portraitVars = portraitFocusVars(mediaRatio);
   const applied = video ? undefined : motion;
   const fill = fit === "reel";
   const applyRatio = !fill;
@@ -233,7 +247,14 @@ function SlideMedia({
               onEnded={() => {
                 if (!loop) onPlaybackEnded?.();
               }}
-              className="ss-reel-fg-video"
+              onLoadedMetadata={(e) => {
+                const el = e.currentTarget;
+                if (el.videoWidth > 0 && el.videoHeight > 0) {
+                  setMediaRatio(el.videoWidth / el.videoHeight);
+                }
+              }}
+              className={cn("ss-reel-fg-video", portraitFocus && "ss-reel-fg-portrait")}
+              style={portraitVars}
             />
           </div>
         ) : (
@@ -246,7 +267,6 @@ function SlideMedia({
             poster={poster}
             disablePictureInPicture
             onLoadedMetadata={(e) => {
-              if (!applyRatio) return;
               const el = e.currentTarget;
               if (el.videoWidth > 0 && el.videoHeight > 0) {
                 setMediaRatio(el.videoWidth / el.videoHeight);
@@ -256,6 +276,7 @@ function SlideMedia({
               if (!loop) onPlaybackEnded?.();
             }}
             className={mediaClass(fit)}
+            style={portraitVars}
           />
         )
       ) : fill ? (
@@ -274,9 +295,8 @@ function SlideMedia({
               loading={playing ? "eager" : "lazy"}
               decoding="async"
               fetchPriority={playing ? "high" : "low"}
-              className={mediaClass(fit)}
+              className={cn(mediaClass(fit), portraitFocus && "ss-reel-fg-portrait")}
               onLoad={(e) => {
-                if (!applyRatio) return;
                 const el = e.currentTarget;
                 if (el.naturalWidth > 0 && el.naturalHeight > 0) {
                   setMediaRatio(el.naturalWidth / el.naturalHeight);
@@ -284,7 +304,7 @@ function SlideMedia({
               }}
               style={
                 applyRatio && mediaRatio
-                  ? { aspectRatio: `${mediaRatio}`, height: "auto" }
+                  ? { aspectRatio: `${mediaRatio}`, height: "auto", ...portraitVars }
                   : undefined
               }
             />
@@ -300,10 +320,15 @@ function SlideMedia({
           loading={playing ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={playing ? "high" : "low"}
-          className={cn(mediaClass(fit), ken && kenClass)}
+          className={cn(
+            mediaClass(fit),
+            ken && kenClass,
+            portraitFocus && "ss-reel-fg-portrait",
+          )}
           data-motion={ken ? applied : undefined}
           style={{
             ...kenStyle,
+            ...portraitVars,
             ...(applyRatio && mediaRatio
               ? { aspectRatio: `${mediaRatio}`, height: "auto" }
               : {}),
