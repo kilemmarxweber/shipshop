@@ -27,6 +27,9 @@ type Report = {
   selectedShopId: string | null;
   summary: {
     soldCents: number;
+    gmvCents?: number;
+    aovCents?: number;
+    takeRateBps?: number;
     vendorGainCents: number;
     platformFeeCents: number;
     shippingCents: number;
@@ -51,6 +54,15 @@ type Report = {
     inventoryValueCents: number;
     soldInventoryCents: number;
   };
+  funnel?: {
+    feed: number;
+    product: number;
+    purchase: number;
+    feedToCardBps: number;
+    cardToBuyBps: number;
+  };
+  wantedIntent?: { category: string; count: number; avgBudgetCents: number }[];
+  shopsPro?: boolean;
   products: {
     id: string;
     title: string;
@@ -319,7 +331,11 @@ export default function ReportsPage() {
                   ? report.summary.platformFeeCents
                   : report.summary.vendorGainCents,
               )}
-              hint={isOwner ? "0,50 $US × ventes (ledger)" : "CA − 0,50 $US / vente"}
+              hint={
+                isOwner
+                  ? `Take rate ${((report.summary.takeRateBps ?? 0) / 100).toFixed(1)} %`
+                  : "CA − commission ShipShop"
+              }
             />
             <Kpi
               icon={<Package className="size-4 text-amber-400" />}
@@ -354,7 +370,7 @@ export default function ReportsPage() {
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                 <p>
-                  Ventes 0,50 × {platform.summary.saleCount}
+                  Commission ventes × {platform.summary.saleCount}
                   <br />
                   <span className="font-bold">
                     {formatMoney(platform.summary.saleUsdCents, "USD")}
@@ -392,6 +408,63 @@ export default function ReportsPage() {
               </ul>
             </div>
           )}
+
+          <div className="mb-4 rounded-2xl border border-border bg-surface p-4">
+            <p className="text-sm font-bold">Funnel contenu → achat</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              GMV {formatMoney(report.summary.gmvCents ?? report.summary.soldCents)}
+              {" · "}
+              panier moyen {formatMoney(report.summary.aovCents ?? 0)}
+              {" · "}
+              take rate {((report.summary.takeRateBps ?? 0) / 100).toFixed(1)} %
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+              <p>
+                Vues feed
+                <br />
+                <span className="font-bold">{report.funnel?.feed ?? 0}</span>
+              </p>
+              <p>
+                Fiches
+                <br />
+                <span className="font-bold">{report.funnel?.product ?? 0}</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  ({((report.funnel?.feedToCardBps ?? 0) / 100).toFixed(1)} %)
+                </span>
+              </p>
+              <p>
+                Achats
+                <br />
+                <span className="font-bold">{report.funnel?.purchase ?? 0}</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  ({((report.funnel?.cardToBuyBps ?? 0) / 100).toFixed(1)} %)
+                </span>
+              </p>
+            </div>
+            {(report.wantedIntent?.length ?? 0) > 0 ? (
+              <ul className="mt-3 space-y-1 text-[11px] text-muted-foreground">
+                {report.wantedIntent!.slice(0, 6).map((row) => (
+                  <li key={row.category}>
+                    Besoin {row.category} · {row.count} · budget moy.{" "}
+                    {formatMoney(row.avgBudgetCents)}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                ShipNeeds reste gratuit — l&apos;intention d&apos;achat alimente le reco.
+              </p>
+            )}
+            {report.shopsPro ? (
+              <p className="mt-2 text-[11px] text-trust">ShipPro actif — outils étendus.</p>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                ShipPro est optionnel (productivité, pas l&apos;accès au marché).
+              </p>
+            )}
+          </div>
 
           {(report.insights.peakWeekday || report.insights.peakHour) && (
             <div className="mb-4 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-xs">

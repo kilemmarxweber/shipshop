@@ -9,6 +9,7 @@ import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { PageLoader } from "@/components/page-loader";
 import { ShopPicker } from "@/components/shop-picker";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -76,6 +77,7 @@ export default function ShopDeliveryPage() {
   const [zones, setZones] = useState<ZoneRef[]>([]);
   const [rates, setRates] = useState<Rate[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const [newCourier, setNewCourier] = useState({
     name: "",
     phone: "",
@@ -205,7 +207,12 @@ export default function ShopDeliveryPage() {
   }
 
   async function deleteCourier(id: string) {
-    if (!confirm("Supprimer ce livreur ?")) return;
+    const ok = await confirm({
+      title: "Supprimer le livreur ?",
+      description: "Supprimer ce livreur ?",
+      confirmLabel: "Supprimer",
+    });
+    if (!ok) return;
     setBusyId(id);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/shops/delivery/couriers/${id}`,
@@ -598,6 +605,7 @@ export default function ShopDeliveryPage() {
           </Button>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   );
 }

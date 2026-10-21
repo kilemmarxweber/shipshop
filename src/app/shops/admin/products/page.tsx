@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MediaUploader } from "@/components/media-uploader";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
 
 type Product = {
   id: string;
@@ -57,6 +58,7 @@ function AdminProductsInner() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   async function load(search = q) {
     const params = new URLSearchParams();
@@ -154,7 +156,12 @@ function AdminProductsInner() {
       toast.error("Lié à un paiement — archivez-le plutôt");
       return;
     }
-    if (!confirm(`Supprimer définitivement « ${p.title} » ?`)) return;
+    const ok = await confirm({
+      title: "Supprimer le produit ?",
+      description: `Supprimer définitivement « ${p.title} » ?`,
+      confirmLabel: "Supprimer",
+    });
+    if (!ok) return;
     setBusy(true);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/products/${p.id}`,
@@ -490,6 +497,7 @@ function AdminProductsInner() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   );
 }

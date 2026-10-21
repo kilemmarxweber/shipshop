@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney } from "@/lib/utils";
 import { PageLoader } from "@/components/page-loader";
+import { usePromptDialog } from "@/components/use-prompt-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -51,6 +52,7 @@ export default function AdminLedgerPage() {
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const { prompt, PromptDialog } = usePromptDialog();
 
   async function load() {
     const query = new URLSearchParams();
@@ -86,7 +88,12 @@ export default function AdminLedgerPage() {
     setBusy(movementId + action);
     const evidenceNote =
       action === "post"
-        ? window.prompt("Preuve caisse (réf. opérateur / note)") ?? ""
+        ? (await prompt({
+            title: "Preuve caisse",
+            description: "Réf. opérateur / note",
+            placeholder: "Ex: MPSA-84522",
+            confirmLabel: "Valider",
+          })) ?? ""
         : undefined;
     if (action === "post" && evidenceNote === "") {
       setBusy(null);
@@ -238,6 +245,7 @@ export default function AdminLedgerPage() {
           </p>
         ) : null}
       </ul>
+      <PromptDialog />
     </div>
   );
 }

@@ -359,8 +359,8 @@ function OrderInner() {
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">
               Produit {formatMoney(order.productCents)} · Vendeur{" "}
-              {formatMoney(Math.max(0, order.productCents - (order.saleFeeCents ?? 50)))}{" "}
-              · ShipShop {formatMoney(order.saleFeeCents ?? 50)}
+              {formatMoney(Math.max(0, order.productCents - (order.saleFeeCents ?? 0)))}{" "}
+              · ShipShop {formatMoney(order.saleFeeCents ?? 0)}
               {order.shippingCents > 0
                 ? ` · Livreur ${formatMoney(Math.max(0, order.shippingCents - (order.shippingFeeCents ?? 50)))} · Course ShipShop ${formatMoney(order.shippingFeeCents ?? 50)}`
                 : ""}

@@ -23,6 +23,7 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [phoneTaken, setPhoneTaken] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +42,7 @@ export default function RegisterPage() {
       );
       return;
     }
+    setPhoneTaken(false);
     setLoading(true);
     const { error } = await authClient.signUp.email({
       name: parsed.data.name,
@@ -50,6 +52,9 @@ export default function RegisterPage() {
     });
     setLoading(false);
     if (error) {
+      if (error.code === "PHONE_TAKEN") {
+        setPhoneTaken(true);
+      }
       toast.error(mapAuthError(error, t, t("auth.registerFailed")));
       return;
     }
@@ -106,6 +111,18 @@ export default function RegisterPage() {
             className="h-11 bg-muted"
           />
         </div>
+        {phoneTaken ? (
+          <div className="rounded-xl border border-primary/35 bg-primary/10 p-3 text-xs">
+            <p className="font-semibold text-primary">{t("auth.phoneTaken")}</p>
+            <p className="mt-1 text-muted-foreground">{t("auth.phoneTakenHelp")}</p>
+            <Link
+              href={`/auth/forgot-password?identifier=${encodeURIComponent(phone)}`}
+              className="mt-2 inline-flex text-sm font-semibold text-primary underline"
+            >
+              {t("auth.goForgotPassword")}
+            </Link>
+          </div>
+        ) : null}
         <Button
           type="submit"
           disabled={loading}

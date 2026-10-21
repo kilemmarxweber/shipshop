@@ -89,6 +89,11 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             className="h-11 bg-muted"
           />
+          <div className="text-right">
+            <Link href="/auth/forgot-password" className="text-xs font-medium text-primary">
+              {t("auth.forgotLink")}
+            </Link>
+          </div>
         </div>
         <Button
           type="submit"

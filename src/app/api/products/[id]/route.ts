@@ -25,6 +25,7 @@ const updateSchema = z.object({
   soundtrackStartMs: z.number().int().min(0).max(SOUNDTRACK_START_MAX_MS).optional(),
   imageMotions: z.array(z.string().max(24)).max(12).optional(),
   status: z.enum(["DRAFT", "ACTIVE", "SOLD", "HIDDEN"]).optional(),
+  creatorCommissionBps: z.number().int().min(0).max(5000).optional(),
 });
 
 async function assertCanEdit(userId: string, shopId: string) {
@@ -211,6 +212,9 @@ export async function PATCH(
             : {}),
           ...(nextMotions !== undefined ? { imageMotions: nextMotions } : {}),
           ...(status !== undefined ? { status } : {}),
+          ...(body.creatorCommissionBps !== undefined
+            ? { creatorCommissionBps: body.creatorCommissionBps }
+            : {}),
         },
         include: {
           shop: { select: { id: true, name: true, slug: true } },

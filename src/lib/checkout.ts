@@ -31,11 +31,15 @@ import {
 import {
   courierNetCents,
   refundProductCents,
+  creatorFeeCents,
+  saleFeeBpsForMonthlyGmvUsd,
   saleFeeCents,
   shippingFeeCents,
   shouldRefundShipping,
   vendorNetCents,
 } from "@/lib/platform-fees";
+import { recordFunnelEvent } from "@/lib/commerce-funnel";
+import { shopMonthGmvUsdCents } from "@/lib/shop-volume";
 import { creditTreasury, reverseSaleFee } from "@/lib/platform-ledger";
 import {
   applyBucketDelta,
@@ -79,6 +83,7 @@ export type PurchaseOpts = {
   handoverId?: string;
   skipShippingQuote?: boolean;
   shippingCents?: number;
+  attributedCreatorId?: string | null;
 };
 
 /** Charge wallet (product + shipping) and create order with fulfillment. */
@@ -402,6 +407,7 @@ export async function purchaseProduct(
       etaAt,
       status: initialStatus,
       paidAt: new Date(),
+      attributedCreatorId: opts?.attributedCreatorId || null,
     },
     include: {
       product: true,
@@ -440,6 +446,13 @@ export async function purchaseProduct(
       },
     });
   }
+
+  await recordFunnelEvent(tx, {
+    kind: "PURCHASE",
+    productId: product.id,
+    userId: buyerId,
+    source: opts?.attributedCreatorId ? "creator" : "checkout",
+  });
 
   const nextQty = product.quantity - 1;
   await tx.product.update({
@@ -839,7 +852,7 @@ export async function releaseShippingToCourier(tx: Tx, orderId: string) {
   return { net, fee };
 }
 
-/** Crédite le vendeur (prix − 0,50 $US) une fois la réception confirmée. */
+/** Crédite le vendeur (prix − commission %) une fois la réception confirmée. */
 export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
   const order = await tx.order.findUnique({
     where: { id: orderId },
@@ -851,7 +864,7 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
           fxKwPerUsd: true,
         },
       },
-      product: { select: { currency: true } },
+      product: { select: { currency: true, creatorCommissionBps: true } },
     },
   });
   if (!order || order.escrowReleasedAt) return null;
@@ -860,13 +873,26 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
 
   const currency = parseCurrency(order.product.currency);
   const fx = shopFxRates(order.shop);
-  const fee = saleFeeCents(order.productCents, currency, fx);
-  const creditCents = vendorNetCents(order.productCents, currency, fx);
+  const monthlyGmvUsd = await shopMonthGmvUsdCents(tx, order.shopId);
+  const feeBps = saleFeeBpsForMonthlyGmvUsd(monthlyGmvUsd);
+  const fee = saleFeeCents(order.productCents, currency, fx, monthlyGmvUsd);
+  const creatorBps =
+    order.attributedCreatorId && order.product.creatorCommissionBps > 0
+      ? order.product.creatorCommissionBps
+      : 0;
+  const creatorFee = creatorFeeCents(order.productCents, creatorBps);
+  const creditCents = vendorNetCents(
+    order.productCents,
+    currency,
+    fx,
+    monthlyGmvUsd,
+    creatorBps,
+  );
 
   if (order.productCents <= 0) {
     await tx.order.update({
       where: { id: order.id },
-      data: { escrowReleasedAt: new Date(), saleFeeCents: 0 },
+      data: { escrowReleasedAt: new Date(), saleFeeCents: 0, saleFeeBps: feeBps, creatorFeeCents: 0 },
     });
     await releaseShippingToCourier(tx, order.id);
     return { credited: 0 };
@@ -919,9 +945,49 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
     });
   }
 
+  if (creatorFee > 0 && order.attributedCreatorId) {
+    const creatorWallet = await tx.wallet.upsert({
+      where: { userId: order.attributedCreatorId },
+      create: { userId: order.attributedCreatorId, balanceCents: 0, currency: "USD" },
+      update: {},
+    });
+    await lockWallet(tx, creatorWallet.id);
+    const creatorLocked = await tx.wallet.findUnique({ where: { id: creatorWallet.id } });
+    if (creatorLocked) {
+      const creatorBalance = walletCents(creatorLocked, currency) + creatorFee;
+      await tx.wallet.update({
+        where: { id: creatorLocked.id },
+        data: applyBucketDelta(creatorLocked, currency, creatorFee, "BUYER"),
+      });
+      await tx.walletTransaction.create({
+        data: {
+          walletId: creatorLocked.id,
+          type: "ESCROW_RELEASE",
+          amountCents: creatorFee,
+          currency,
+          balanceAfterCents: creatorBalance,
+          provider: "INTERNAL",
+          status: "SUCCESS",
+          reference: `CRE-${order.id.slice(0, 8)}`,
+          metadata: {
+            orderId: order.id,
+            productId: order.productId,
+            shopId: order.shopId,
+            role: "creator",
+          },
+        },
+      });
+    }
+  }
+
   await tx.order.update({
     where: { id: order.id },
-    data: { escrowReleasedAt: new Date(), saleFeeCents: fee },
+    data: {
+      escrowReleasedAt: new Date(),
+      saleFeeCents: fee,
+      saleFeeBps: feeBps,
+      creatorFeeCents: creatorFee,
+    },
   });
   await releaseShippingToCourier(tx, order.id);
   await maybeCompleteShopHandover(tx, order.handoverId);

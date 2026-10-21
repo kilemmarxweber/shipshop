@@ -7,7 +7,9 @@ import { Archive, CheckCircle2, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { parseCurrency } from "@/lib/money";
 import { formatMoney, cn } from "@/lib/utils";
+import { CurrencyPicker } from "@/components/currency-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/page-loader";
 import { ShopPicker } from "@/components/shop-picker";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
 
 type Product = {
   id: string;
@@ -69,6 +72,7 @@ function SellerProductsInner() {
   const [busy, setBusy] = useState(false);
   const [republishOpen, setRepublishOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   async function load(selected = shopId) {
     const params = new URLSearchParams({ mine: "1" });
@@ -115,6 +119,7 @@ function SellerProductsInner() {
           title: editing.title,
           description: editing.description,
           priceCents: editing.priceCents,
+          currency: editing.currency,
           quantity: editing.quantity,
           category: editing.category,
           images: editing.images,
@@ -168,7 +173,12 @@ function SellerProductsInner() {
       );
       return;
     }
-    if (!confirm(`Supprimer définitivement « ${p.title} » ?`)) return;
+    const ok = await confirm({
+      title: "Supprimer le produit ?",
+      description: `Supprimer définitivement « ${p.title} » ?`,
+      confirmLabel: "Supprimer",
+    });
+    if (!ok) return;
     setBusy(true);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/products/${p.id}`,
@@ -476,12 +486,41 @@ function SellerProductsInner() {
                   className="bg-surface-2"
                 />
               </div>
+              <div className="space-y-1">
+                <Label>Monnaie</Label>
+                <CurrencyPicker
+                  value={parseCurrency(editing.currency)}
+                  onChange={async (next) => {
+                    const prev = parseCurrency(editing.currency);
+                    if (next === prev) return;
+                    if (
+                      editing.priceCents > 0 &&
+                      !(await confirm({
+                        title: "Changer la monnaie ?",
+                        description:
+                          "Changer de monnaie vide le prix. Continuer ?",
+                      }))
+                    ) {
+                      return;
+                    }
+                    setEditing({
+                      ...editing,
+                      currency: next,
+                      priceCents: 0,
+                    });
+                  }}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label>Prix ($)</Label>
+                  <Label>Prix ({editing.currency ?? "USD"})</Label>
                   <Input
                     type="number"
-                    value={(editing.priceCents / 100).toString()}
+                    value={
+                      editing.priceCents
+                        ? (editing.priceCents / 100).toString()
+                        : ""
+                    }
                     onChange={(e) =>
                       setEditing({
                         ...editing,
@@ -632,6 +671,7 @@ function SellerProductsInner() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog />
     </div>
   );
 }

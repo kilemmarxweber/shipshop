@@ -26,6 +26,7 @@ const schema = z.object({
   deliveryLat: z.number().optional().nullable(),
   deliveryLng: z.number().optional().nullable(),
   contactPhone: z.string().min(10).max(24),
+  attributedCreatorId: z.string().min(1).optional().nullable(),
 });
 
 export async function POST(req: Request) {
@@ -177,6 +178,7 @@ export async function POST(req: Request) {
                   handoverId: handover.id,
                   skipShippingQuote: !first,
                   shippingCents: 0,
+                  attributedCreatorId: fulfillment.attributedCreatorId,
                 },
               );
               orders.push(purchased.order);

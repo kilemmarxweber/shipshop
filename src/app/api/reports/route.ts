@@ -14,6 +14,7 @@ import {
   summarizeOrders,
 } from "@/lib/reports";
 import { getSession } from "@/lib/session";
+import { loadFunnelSummary, loadWantedIntent } from "@/lib/commerce-funnel";
 
 /**
  * Rapport analytics :
@@ -51,6 +52,9 @@ export async function GET(req: Request) {
           failed: [],
           openIssues: [],
         },
+        funnel: { feed: 0, product: 0, purchase: 0, cardToBuyBps: 0, feedToCardBps: 0 },
+        wantedIntent: [],
+        shopsPro: false,
         selectedShopId: null,
       });
     }
@@ -68,11 +72,14 @@ export async function GET(req: Request) {
     }
 
     const shopIds = shops.map((s) => s.id);
-    const [orders, products, attention, balances] = await Promise.all([
+    const [orders, products, attention, balances, funnel, wantedIntent] =
+      await Promise.all([
       loadOrdersForShops(shopIds, from),
       loadProductStats(shopIds, from),
       loadAttentionItems(shopIds, from),
       loadVendorBalances(scope.isOwner ? scope.shops : shops),
+      loadFunnelSummary(shopIds, from),
+      loadWantedIntent(from),
     ]);
 
     const summary = summarizeOrders(orders);
@@ -186,6 +193,9 @@ export async function GET(req: Request) {
       products: topProducts,
       vendors,
       attention,
+      funnel,
+      wantedIntent,
+      shopsPro: shops.some((s) => s.proUntil && s.proUntil > new Date()),
     });
   } catch (error) {
     const message =

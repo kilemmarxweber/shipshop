@@ -122,7 +122,7 @@ export default function ShopTicketPage() {
                     Math.max(
                       0,
                       (item.productCents ?? item.product.priceCents) -
-                        (item.saleFeeCents ?? 50),
+                        (item.saleFeeCents ?? 0),
                     ),
                   )}{" "}
                   · ce produit seulement

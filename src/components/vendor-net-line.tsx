@@ -19,7 +19,7 @@ export function VendorNetLine({
       Prix {formatMoney(priceCents, code)} · Vous encaissez{" "}
       <span className="font-semibold text-trust">{formatMoney(net, code)}</span>
       {" · "}
-      Frais ShipShop {formatMoney(fee, code)}
+      ShipShop {formatMoney(fee, code)} (5 %)
     </p>
   );
 }

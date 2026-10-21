@@ -17,6 +17,7 @@ import {
 } from "@/components/kinshasa-address-form";
 import { cn } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,7 @@ type Shop = {
   isActive?: boolean;
   owner?: { id: string; name: string; email: string } | null;
   _count?: { products: number };
+  proUntil?: string | null;
 };
 
 type Org = { id: string; name: string; slug: string };
@@ -91,6 +93,7 @@ export default function ShopsPage() {
   const [isOrgOwner, setIsOrgOwner] = useState(false);
   const [roleSavingId, setRoleSavingId] = useState<string | null>(null);
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const [shopQuery, setShopQuery] = useState("");
   const activatedOrg = useRef<string | null>(null);
 
@@ -247,11 +250,12 @@ export default function ShopsPage() {
     name: string;
     email: string;
   }) {
-    if (
-      !confirm(
-        `Réinitialiser le mot de passe de ${user.name} (${user.email}) et l'envoyer par e-mail + WhatsApp ?`,
-      )
-    ) {
+    const ok = await confirm({
+      title: "Réinitialiser le mot de passe ?",
+      description: `Réinitialiser le mot de passe de ${user.name} (${user.email}) et l'envoyer par e-mail + WhatsApp ?`,
+      confirmLabel: "Réinitialiser",
+    });
+    if (!ok) {
       return;
     }
     setResetBusyId(user.id);
@@ -570,6 +574,26 @@ export default function ShopsPage() {
               </div>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                className="col-span-3 inline-flex h-7 items-center justify-center rounded-lg border border-border text-[0.8rem] font-medium"
+                onClick={async () => {
+                  const { res, data } = await fetchJson<{
+                    error?: string;
+                    proUntil?: string;
+                  }>(`/api/shops/${shop.slug}/pro`, { method: "POST" });
+                  if (!res.ok) {
+                    toast.error(data?.error ?? "ShipPro impossible");
+                    return;
+                  }
+                  toast.success("ShipPro activé 30 jours (10 $US) — optionnel");
+                  loadSeller();
+                }}
+              >
+                {shop.proUntil && new Date(shop.proUntil) > new Date()
+                  ? "ShipPro actif"
+                  : "ShipPro 10 $/mois"}
+              </button>
               <Link
                 href={`/shop/${shop.slug}`}
                 className="inline-flex h-7 items-center justify-center rounded-lg border border-border text-[0.8rem] font-medium"
@@ -750,6 +774,7 @@ export default function ShopsPage() {
           )}
         </ul>
       </div>
+      <ConfirmDialog />
     </div>
   );
 }

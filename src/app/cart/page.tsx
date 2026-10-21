@@ -18,6 +18,7 @@ import { InsufficientFundsSheet } from "@/components/insufficient-funds-sheet";
 import { FoxDispatchOverlay } from "@/components/fox-dispatch-overlay";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
+import { readCreatorAttribution } from "@/lib/creator-attribution";
 
 type CartItem = {
   id: string;
@@ -202,6 +203,7 @@ export default function CartPage() {
         deliveryLat: fulfillment.deliveryLat,
         deliveryLng: fulfillment.deliveryLng,
         contactPhone,
+        attributedCreatorId: readCreatorAttribution(),
       }),
     });
     setBusy(false);

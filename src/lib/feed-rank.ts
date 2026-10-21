@@ -11,6 +11,7 @@ export type RankableProduct = {
   images: string[];
   likesCount?: number;
   commentsCount?: number;
+  boosted?: boolean;
   shop: { lat?: number | null; lng?: number | null };
 };
 
@@ -63,13 +64,15 @@ export function feedRankScore(
           taste,
         )
       : 0;
+  const boosted = product.boosted ? 1 : 0;
   return (
     video * 3.2 +
     proximity * 3.6 +
     recency * 1.6 +
     engagement * 0.5 +
     following * 0.8 +
-    personal * 1.15
+    personal * 1.15 +
+    boosted * 4.2
   );
 }
 

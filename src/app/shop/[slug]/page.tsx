@@ -53,6 +53,7 @@ import {
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { MediaThumb } from "@/components/media-thumb";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ShopHoursNotice } from "@/components/shop-hours-notice";
@@ -127,6 +128,7 @@ function ShopInner() {
   const [commentProductId, setCommentProductId] = useState<string | null>(null);
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const audioFocusId = useFeedAudioFocus();
   useResumeFeedSoundWhenVisible();
   const prevAudioFocus = useRef<string | null>(null);
@@ -299,7 +301,12 @@ function ShopInner() {
   }
 
   async function deleteProduct(product: Product) {
-    if (!confirm(t("product.deleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("product.delete"),
+      description: t("product.deleteConfirm"),
+      confirmLabel: t("product.delete"),
+    });
+    if (!ok) return;
     setManageBusyId(product.id);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/products/${product.id}`,
@@ -900,6 +907,7 @@ function ShopInner() {
           )
         }
       />
+      <ConfirmDialog />
     </div>
   );
 }

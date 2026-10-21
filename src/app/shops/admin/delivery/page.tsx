@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
 import { PageLoader } from "@/components/page-loader";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -79,6 +80,7 @@ export default function AdminDeliveryPage() {
   const [companyFilter, setCompanyFilter] = useState("");
   const [newCompany, setNewCompany] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const [editZone, setEditZone] = useState<Zone | null>(null);
   const [newCourier, setNewCourier] = useState({
     name: "",
@@ -228,7 +230,12 @@ export default function AdminDeliveryPage() {
   }
 
   async function deleteCourier(id: string) {
-    if (!confirm("Supprimer ce livreur ?")) return;
+    const ok = await confirm({
+      title: "Supprimer le livreur ?",
+      description: "Supprimer ce livreur ?",
+      confirmLabel: "Supprimer",
+    });
+    if (!ok) return;
     setBusyId(id);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/shops/delivery/couriers/${id}`,
@@ -726,6 +733,7 @@ export default function AdminDeliveryPage() {
           </ul>
         </div>
       )}
+      <ConfirmDialog />
     </div>
   );
 }

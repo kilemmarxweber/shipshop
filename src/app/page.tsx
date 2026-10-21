@@ -732,8 +732,23 @@ export default function FeedPage() {
                   {p.description}
                 </p>
               )}
-              <div className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:gap-3 sm:p-2.5">
-                <Link href={`/product/${p.id}`} className="contents">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setBuyProduct(p)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setBuyProduct(p);
+                  }
+                }}
+                className="flex cursor-pointer items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:gap-3 sm:p-2.5"
+              >
+                <Link
+                  href={`/product/${p.id}`}
+                  className="contents"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <MediaThumb
                     images={p.images}
                     className="size-11 shrink-0 rounded-xl ring-1 ring-white/10 sm:size-12"
@@ -749,8 +764,11 @@ export default function FeedPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setBuyProduct(p)}
-                  className="min-h-11 shrink-0 rounded-full bg-primary px-4 py-2 text-[11px] font-bold text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBuyProduct(p);
+                  }}
+                  className="min-h-11 shrink-0 cursor-pointer rounded-full bg-primary px-4 py-2 text-[11px] font-bold text-white"
                 >
                   {t("buy.cta")}
                 </button>

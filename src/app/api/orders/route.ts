@@ -21,6 +21,7 @@ const createSchema = z.object({
   contactPhone: z.string().min(10).max(24),
   optionColor: z.string().max(40).optional().nullable(),
   optionSize: z.string().max(20).optional().nullable(),
+  attributedCreatorId: z.string().min(1).optional().nullable(),
 });
 
 const ACTIVE = [
@@ -145,20 +146,26 @@ export async function POST(req: Request) {
 
     const result = await withDbRetry(() =>
       prisma.$transaction((tx) =>
-        purchaseProduct(tx, session.user.id, body.productId, {
-          fulfillmentType: body.fulfillmentType,
-          deliveryCity: body.deliveryCity,
-          deliveryAddress: body.deliveryAddress,
-          deliveryCommune: body.deliveryCommune,
-          deliveryQuartier: body.deliveryQuartier,
-          deliveryAvenue: body.deliveryAvenue,
-          deliveryParcelle: body.deliveryParcelle,
-          deliveryLat: body.deliveryLat,
-          deliveryLng: body.deliveryLng,
-          contactPhone: body.contactPhone,
-          optionColor: body.optionColor,
-          optionSize: body.optionSize,
-        }),
+        purchaseProduct(
+          tx,
+          session.user.id,
+          body.productId,
+          {
+            fulfillmentType: body.fulfillmentType,
+            deliveryCity: body.deliveryCity,
+            deliveryAddress: body.deliveryAddress,
+            deliveryCommune: body.deliveryCommune,
+            deliveryQuartier: body.deliveryQuartier,
+            deliveryAvenue: body.deliveryAvenue,
+            deliveryParcelle: body.deliveryParcelle,
+            deliveryLat: body.deliveryLat,
+            deliveryLng: body.deliveryLng,
+            contactPhone: body.contactPhone,
+            optionColor: body.optionColor,
+            optionSize: body.optionSize,
+          },
+          { attributedCreatorId: body.attributedCreatorId },
+        ),
       ),
     );
 

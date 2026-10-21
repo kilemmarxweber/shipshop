@@ -257,6 +257,19 @@ export async function GET(req: Request) {
         ? await loadBuyerTaste(session.user.id)
         : null;
 
+    const activeBoosts = products.length
+      ? await withDbRetry(() =>
+          prisma.shopBoost.findMany({
+            where: {
+              productId: { in: products.map((p) => p.id) },
+              endsAt: { gt: new Date() },
+            },
+            select: { productId: true },
+          }),
+        )
+      : [];
+    const boostedIds = new Set(activeBoosts.map((b) => b.productId));
+
     if (!following) {
       let followedShopIds: Set<string> | null = null;
       if (session) {
@@ -276,6 +289,7 @@ export async function GET(req: Request) {
           category: p.category,
           likesCount: p._count.likes,
           commentsCount: p._count.comments,
+          boosted: boostedIds.has(p.id),
         })),
         near,
         followedShopIds,

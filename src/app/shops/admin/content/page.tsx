@@ -263,6 +263,8 @@ export default function AdminContentPage() {
         </label>
       </section>
 
+      <ShipAdsDrafts />
+
       {(data?.reviews?.length ?? 0) > 0 ? (
         <section className="rounded-2xl border border-border bg-surface p-4">
           <h2 className="text-sm font-semibold">File à revoir</h2>
@@ -293,5 +295,65 @@ export default function AdminContentPage() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function ShipAdsDrafts() {
+  const [title, setTitle] = useState("");
+  const [rows, setRows] = useState<{ id: string; title: string; status: string; kind: string }[]>(
+    [],
+  );
+
+  useEffect(() => {
+    void fetchJson<{ campaigns?: typeof rows }>("/api/admin/brand-campaigns").then(
+      ({ data }) => setRows(data?.campaigns ?? []),
+    );
+  }, []);
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4">
+      <h2 className="text-sm font-semibold">ShipAds (brouillons)</h2>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        À activer seulement avec audience et attribution réelles. Ne taxer pas le
+        feed organique.
+      </p>
+      <div className="mt-3 flex gap-2">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Campagne marque"
+          className="h-8 flex-1 rounded-lg border border-border bg-surface-2 px-2 text-xs"
+        />
+        <Button
+          size="sm"
+          onClick={async () => {
+            if (!title.trim()) return;
+            const { res, data } = await fetchJson<{
+              campaign?: (typeof rows)[number];
+              error?: string;
+            }>("/api/admin/brand-campaigns", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title: title.trim(), status: "DRAFT" }),
+            });
+            if (!res.ok) {
+              toast.error(data?.error ?? "Campagne impossible");
+              return;
+            }
+            if (data?.campaign) setRows((prev) => [data.campaign!, ...prev]);
+            setTitle("");
+          }}
+        >
+          Brouillon
+        </Button>
+      </div>
+      <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+        {rows.map((row) => (
+          <li key={row.id}>
+            {row.title} · {row.kind} · {row.status}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

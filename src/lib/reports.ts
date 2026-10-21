@@ -57,6 +57,7 @@ export async function resolveReportScope(userId: string) {
           slug: true,
           ownerUserId: true,
           logoUrl: true,
+          proUntil: true,
         },
         orderBy: { name: "asc" },
       }),
@@ -77,6 +78,7 @@ export async function resolveReportScope(userId: string) {
         slug: true,
         ownerUserId: true,
         logoUrl: true,
+        proUntil: true,
       },
       orderBy: { name: "asc" },
     }),
@@ -231,6 +233,9 @@ export function summarizeOrders(orders: OrderRow[]) {
 
   return {
     soldCents,
+    gmvCents: soldCents,
+    aovCents: soldCount > 0 ? Math.round(soldCents / soldCount) : 0,
+    takeRateBps: soldCents > 0 ? Math.round((saleFees * 10_000) / soldCents) : 0,
     vendorGainCents: Math.max(0, soldCents - saleFees),
     platformFeeCents: saleFees,
     shippingCents,

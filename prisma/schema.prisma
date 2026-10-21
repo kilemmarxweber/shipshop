@@ -58,6 +58,10 @@ model User {
   courierProfile    Courier?
   withdrawals       Withdrawal[]
   appNotices        AppNotice[]
+  creatorShares     ProductCreatorShare[]
+  creatorSales      Order[]            @relation("CreatorSales")
+  funnelEvents      CommerceFunnelEvent[]
+  brandCampaigns    BrandCampaign[]
 
   @@unique([email])
   @@map("user")
@@ -195,6 +199,8 @@ model Shop {
   hoursEnd       String?
   /// Jours JS 0=dim … 6=sam. [] = non renseigné.
   workDays       Json     @default("[]")
+  /// ShipPro : outils avancés jusqu’à cette date (jamais requis pour vendre).
+  proUntil       DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -206,6 +212,7 @@ model Shop {
   deliveryRates ShopDeliveryRate[]
   wantedOffers  WantedOffer[]
   handovers     ShopHandover[]
+  boosts        ShopBoost[]
 
   @@unique([organizationId, slug])
   /// Deux boutiques ne peuvent pas porter le même nom (plateforme)
@@ -316,6 +323,8 @@ model Product {
   soundtrackId      String?
   soundtrack        Soundtrack? @relation(fields: [soundtrackId], references: [id], onDelete: SetNull)
   soundtrackStartMs Int         @default(0)
+  /// Commission créateur (bps) si le produit est ouvert à ShipCreator. 0 = fermé.
+  creatorCommissionBps Int      @default(0)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -327,6 +336,9 @@ model Product {
   shares        ProductShare[]
   dwells        ProductDwell[]
   wantedOffer   WantedOffer?
+  boosts        ShopBoost[]
+  creatorShares ProductCreatorShare[]
+  funnelEvents  CommerceFunnelEvent[]
 
   @@index([category, status])
   @@index([shopId, status])
@@ -998,6 +1010,10 @@ model Order {
   proximityNotifiedAt DateTime?
   status             OrderStatus     @default(PAID)
   paidAt             DateTime?
+  saleFeeBps         Int             @default(500)
+  attributedCreatorId String?
+  attributedCreator  User?           @relation("CreatorSales", fields: [attributedCreatorId], references: [id], onDelete: SetNull)
+  creatorFeeCents    Int             @default(0)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -1011,7 +1027,74 @@ model Order {
   @@index([shopId, status])
   @@index([courierId])
   @@index([handoverId])
+  @@index([attributedCreatorId])
   @@map("order")
+}
+
+model CommerceFunnelEvent {
+  id        String     @id @default(cuid())
+  kind      String
+  productId String?
+  product   Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  wantedId  String?
+  source    String?
+  createdAt DateTime   @default(now())
+
+  @@index([kind, createdAt])
+  @@index([productId, kind])
+  @@map("commerce_funnel_event")
+}
+
+model ShopBoost {
+  id          String   @id @default(cuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  budgetCents Int
+  currency    String   @default("USD")
+  days        Int
+  startsAt    DateTime @default(now())
+  endsAt      DateTime
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([productId, endsAt])
+  @@index([shopId, endsAt])
+  @@map("shop_boost")
+}
+
+model ProductCreatorShare {
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([productId, userId])
+  @@index([userId])
+  @@map("product_creator_share")
+}
+
+model BrandCampaign {
+  id          String    @id @default(cuid())
+  title       String
+  kind        String    @default("FEED")
+  category    String?
+  budgetCents Int       @default(0)
+  currency    String    @default("USD")
+  status      String    @default("DRAFT")
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime  @default(now())
+  ownerUserId String?
+  owner       User?     @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, startsAt])
+  @@map("brand_campaign")
 }
 
 /// Reçu / preuve de remise (retrait boutique OU livraison) — QR à scanner

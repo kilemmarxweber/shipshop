@@ -41,6 +41,27 @@ export type Messages = {
     registerWelcome: string;
     registerFailed: string;
     accountDisabled: string;
+    forgotLink: string;
+    forgotTitle: string;
+    forgotHint: string;
+    forgotOtpHint: string;
+    sendOtp: string;
+    sendingOtp: string;
+    otpSent: string;
+    otpCode: string;
+    otpInvalid: string;
+    otpExpired: string;
+    newPassword: string;
+    confirmPassword: string;
+    passwordMismatch: string;
+    resetPassword: string;
+    resetting: string;
+    resendOtp: string;
+    resetDone: string;
+    resetRequestFailed: string;
+    resetConfirmFailed: string;
+    phoneTakenHelp: string;
+    goForgotPassword: string;
   };
   media: {
     nsfwRejected: string;
@@ -456,6 +477,28 @@ const fr: Messages = {
     registerWelcome: "Compte créé — portefeuille prêt",
     registerFailed: "Inscription impossible",
     accountDisabled: "Compte désactivé — contenu interdit",
+    forgotLink: "Mot de passe oublié ?",
+    forgotTitle: "Réinitialiser le mot de passe",
+    forgotHint: "Entre ton e-mail ou ton téléphone pour recevoir un code OTP",
+    forgotOtpHint: "Valide le code OTP puis choisis un nouveau mot de passe",
+    sendOtp: "Envoyer le code OTP",
+    sendingOtp: "Envoi du code…",
+    otpSent: "Code OTP envoyé (valable 10 minutes)",
+    otpCode: "Code OTP",
+    otpInvalid: "Code OTP invalide",
+    otpExpired: "Code OTP expiré — redemande un nouveau code",
+    newPassword: "Nouveau mot de passe",
+    confirmPassword: "Confirmer le mot de passe",
+    passwordMismatch: "Les mots de passe ne correspondent pas",
+    resetPassword: "Mettre à jour le mot de passe",
+    resetting: "Mise à jour…",
+    resendOtp: "Renvoyer un code",
+    resetDone: "Mot de passe mis à jour — reconnecte-toi",
+    resetRequestFailed: "Envoi OTP impossible",
+    resetConfirmFailed: "Réinitialisation impossible",
+    phoneTakenHelp:
+      "Ce numéro existe déjà. Tu peux récupérer le compte avec un OTP.",
+    goForgotPassword: "Changer mon mot de passe",
   },
   media: {
     nsfwRejected: "Média refusé — contenu sexuel explicite interdit",
@@ -878,6 +921,27 @@ const en: Messages = {
     registerWelcome: "Account created — wallet ready",
     registerFailed: "Sign-up failed",
     accountDisabled: "Account disabled — prohibited content",
+    forgotLink: "Forgot password?",
+    forgotTitle: "Reset password",
+    forgotHint: "Enter your email or phone to receive an OTP code",
+    forgotOtpHint: "Verify the OTP code, then set a new password",
+    sendOtp: "Send OTP code",
+    sendingOtp: "Sending code…",
+    otpSent: "OTP code sent (valid for 10 minutes)",
+    otpCode: "OTP code",
+    otpInvalid: "Invalid OTP code",
+    otpExpired: "OTP expired — request a new code",
+    newPassword: "New password",
+    confirmPassword: "Confirm password",
+    passwordMismatch: "Passwords do not match",
+    resetPassword: "Update password",
+    resetting: "Updating…",
+    resendOtp: "Send again",
+    resetDone: "Password updated — sign in again",
+    resetRequestFailed: "Could not send OTP",
+    resetConfirmFailed: "Could not reset password",
+    phoneTakenHelp: "This number already has an account. Recover it with OTP.",
+    goForgotPassword: "Reset my password",
   },
   media: {
     nsfwRejected: "Media rejected — explicit sexual content is not allowed",
@@ -1300,6 +1364,27 @@ const pt: Messages = {
     registerWelcome: "Conta criada — carteira pronta",
     registerFailed: "Não foi possível registar",
     accountDisabled: "Conta desativada — conteúdo proibido",
+    forgotLink: "Esqueceu a palavra-passe?",
+    forgotTitle: "Repor palavra-passe",
+    forgotHint: "Use e-mail ou telemóvel para receber um código OTP",
+    forgotOtpHint: "Valide o OTP e escolha uma nova palavra-passe",
+    sendOtp: "Enviar código OTP",
+    sendingOtp: "A enviar código…",
+    otpSent: "Código OTP enviado (válido por 10 minutos)",
+    otpCode: "Código OTP",
+    otpInvalid: "Código OTP inválido",
+    otpExpired: "OTP expirado — peça um novo código",
+    newPassword: "Nova palavra-passe",
+    confirmPassword: "Confirmar palavra-passe",
+    passwordMismatch: "As palavras-passe não coincidem",
+    resetPassword: "Atualizar palavra-passe",
+    resetting: "A atualizar…",
+    resendOtp: "Enviar novamente",
+    resetDone: "Palavra-passe atualizada — entre novamente",
+    resetRequestFailed: "Não foi possível enviar o OTP",
+    resetConfirmFailed: "Não foi possível repor a palavra-passe",
+    phoneTakenHelp: "Este número já tem conta. Recupere com OTP.",
+    goForgotPassword: "Repor palavra-passe",
   },
   media: {
     nsfwRejected: "Média recusado — conteúdo sexual explícito proibido",

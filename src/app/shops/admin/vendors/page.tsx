@@ -34,6 +34,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
+import { usePromptDialog } from "@/components/use-prompt-dialog";
 
 type ShopProduct = {
   id: string;
@@ -122,6 +124,8 @@ export default function AdminVendorsPage() {
   const [editing, setEditing] = useState<ShopProduct | null>(null);
   const [productBusy, setProductBusy] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
+  const { prompt, PromptDialog } = usePromptDialog();
   const [clientBusy, setClientBusy] = useState(false);
   const [republishPicker, setRepublishPicker] =
     useState<RepublishPicker | null>(null);
@@ -269,7 +273,12 @@ export default function AdminVendorsPage() {
       toast.error("Lié à un paiement — archivez-le plutôt");
       return;
     }
-    if (!confirm(`Supprimer définitivement « ${p.title} » ?`)) return;
+    const ok = await confirm({
+      title: "Supprimer le produit ?",
+      description: `Supprimer définitivement « ${p.title} » ?`,
+      confirmLabel: "Supprimer",
+    });
+    if (!ok) return;
     setProductBusy(true);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/products/${p.id}`,
@@ -317,7 +326,11 @@ export default function AdminVendorsPage() {
 
   async function archiveClient(c: Client) {
     const reason =
-      prompt("Motif d'archivage (optionnel) ?")?.trim() || undefined;
+      (await prompt({
+        title: "Motif d'archivage",
+        description: "Optionnel",
+        placeholder: "Motif (optionnel)",
+      }))?.trim() || undefined;
     setClientBusy(true);
     setBusyId(c.id);
     const { res, data } = await fetchJson<{ error?: string }>(
@@ -364,11 +377,12 @@ export default function AdminVendorsPage() {
       toast.error("Ce compte a des commandes — archivez-le plutôt");
       return;
     }
-    if (
-      !confirm(
-        `Supprimer définitivement « ${c.name} » (${c.email}) ? Cette action est irréversible.`,
-      )
-    ) {
+    const ok = await confirm({
+      title: "Supprimer le client ?",
+      description: `Supprimer définitivement « ${c.name} » (${c.email}) ? Cette action est irréversible.`,
+      confirmLabel: "Supprimer",
+    });
+    if (!ok) {
       return;
     }
     setClientBusy(true);
@@ -415,7 +429,11 @@ export default function AdminVendorsPage() {
   }
 
   async function revokeKyc(kycId: string, rowId: string) {
-    const reason = prompt("Motif de révocation KYC ?")?.trim();
+    const reason = (await prompt({
+      title: "Révocation KYC",
+      description: "Motif de révocation KYC",
+      placeholder: "Motif",
+    }))?.trim();
     if (!reason) return;
     setBusyId(rowId);
     const { res, data } = await fetchJson<{ error?: string }>(
@@ -436,11 +454,12 @@ export default function AdminVendorsPage() {
   }
 
   async function resetPassword(userId: string, rowId: string, label: string) {
-    if (
-      !confirm(
-        `Réinitialiser le mot de passe de ${label} et l'envoyer par e-mail + WhatsApp ?`,
-      )
-    ) {
+    const ok = await confirm({
+      title: "Réinitialiser le mot de passe ?",
+      description: `Réinitialiser le mot de passe de ${label} et l'envoyer par e-mail + WhatsApp ?`,
+      confirmLabel: "Réinitialiser",
+    });
+    if (!ok) {
       return;
     }
     setBusyId(rowId);
@@ -679,13 +698,14 @@ export default function AdminVendorsPage() {
                       variant="outline"
                       className="gap-1 border-destructive/40 text-destructive"
                       disabled={busy}
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Désactiver « ${v.name} » et archiver ses produits actifs ?`,
-                          )
-                        ) {
-                          shopAction(v.id, "deactivate");
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: "Désactiver la boutique ?",
+                          description: `Désactiver « ${v.name} » et archiver ses produits actifs ?`,
+                          confirmLabel: "Désactiver",
+                        });
+                        if (ok) {
+                          void shopAction(v.id, "deactivate");
                         }
                       }}
                     >
@@ -1264,6 +1284,8 @@ export default function AdminVendorsPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog />
+      <PromptDialog />
     </div>
   );
 }

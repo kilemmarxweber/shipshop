@@ -6,13 +6,17 @@ const PING_MS = 8_000;
 const MIN_FLUSH_MS = 4_000;
 const MAX_DELTA_MS = 20_000;
 
-function sendDwell(productId: string, deltaMs: number) {
+function sendDwell(
+  productId: string,
+  deltaMs: number,
+  source: "feed" | "product" = "feed",
+) {
   const ms = Math.min(MAX_DELTA_MS, Math.trunc(deltaMs));
   if (!productId || ms < MIN_FLUSH_MS) return;
   void fetch(`/api/products/${productId}/dwell`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ deltaMs: ms }),
+    body: JSON.stringify({ deltaMs: ms, source }),
     keepalive: true,
   }).catch(() => undefined);
 }
@@ -39,7 +43,7 @@ export function useProductDwell(
       acc.current += now - last.current;
       last.current = now;
       if (force || acc.current >= PING_MS) {
-        sendDwell(productId!, acc.current);
+        sendDwell(productId!, acc.current, "product");
         acc.current = 0;
       }
     }
@@ -96,7 +100,7 @@ export function useVisibleProductDwell(
       }
       last.current = now;
       if (force || acc.current >= PING_MS) {
-        sendDwell(productId, acc.current);
+        sendDwell(productId, acc.current, "feed");
         acc.current = 0;
       }
     }

@@ -38,11 +38,17 @@ import { ShopHoursNotice } from "@/components/shop-hours-notice";
 import { useProductDwell } from "@/lib/use-product-dwell";
 import type { ShopHoursFields } from "@/lib/shop-hours";
 import { AuthInline } from "@/components/auth-inline";
+import {
+  readCreatorAttribution,
+  rememberCreatorAttribution,
+} from "@/lib/creator-attribution";
+import { ProductCommerceTools } from "@/components/product-commerce-tools";
 import { FulfillmentForm } from "@/components/fulfillment-form";
 import { InsufficientFundsSheet } from "@/components/insufficient-funds-sheet";
 import { FoxDispatchOverlay } from "@/components/fox-dispatch-overlay";
 import { MediaUploader } from "@/components/media-uploader";
 import { ShareMenu } from "@/components/share-menu";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,6 +74,7 @@ type Product = {
   likedByMe: boolean;
   canDelete?: boolean;
   canManage?: boolean;
+  creatorCommissionBps?: number;
   soundtrackStartMs?: number;
   soundtrack?: { id: string; audioUrl: string } | null;
   shop: {
@@ -118,6 +125,7 @@ function ProductInner() {
   );
   const [cartHasItems, setCartHasItems] = useState(false);
   const [inCart, setInCart] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   useProductDwell(product?.id ?? id, Boolean(session && product));
 
   useEffect(() => {
@@ -142,6 +150,10 @@ function ProductInner() {
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    rememberCreatorAttribution(searchParams.get("via"));
+  }, [searchParams]);
 
   useEffect(() => {
     if (!session) {
@@ -262,7 +274,12 @@ function ProductInner() {
       toast.error(t("product.deleteBlocked"));
       return;
     }
-    if (!confirm(t("product.deleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("product.delete"),
+      description: t("product.deleteConfirm"),
+      confirmLabel: t("product.delete"),
+    });
+    if (!ok) return;
     setManageBusy(true);
     const { res, data } = await fetchJson<{ error?: string }>(
       `/api/products/${product.id}`,
@@ -404,6 +421,7 @@ function ProductInner() {
         contactPhone,
         optionColor: selectedColor,
         optionSize: selectedSize,
+        attributedCreatorId: readCreatorAttribution(),
       }),
     });
     setLoading(null);
@@ -606,8 +624,24 @@ function ProductInner() {
                 {t("product.delete")}
               </Button>
             </div>
+            <ProductCommerceTools
+              productId={product.id}
+              creatorCommissionBps={product.creatorCommissionBps ?? 0}
+              canManage
+              canClaimCreator={false}
+            />
           </div>
         )}
+        {!isOwner && (product.creatorCommissionBps ?? 0) > 0 ? (
+          <div className="mb-4 rounded-2xl border border-border bg-surface p-3">
+            <ProductCommerceTools
+              productId={product.id}
+              creatorCommissionBps={product.creatorCommissionBps ?? 0}
+              canManage={false}
+              canClaimCreator={Boolean(session)}
+            />
+          </div>
+        ) : null}
 
         <h1 className="font-heading text-2xl font-bold">{product.title}</h1>
         <p className="mt-1 font-heading text-3xl font-extrabold text-trust">
@@ -766,14 +800,16 @@ function ProductInner() {
                 <Label>Monnaie</Label>
                 <CurrencyPicker
                   value={parseCurrency(editing.currency)}
-                  onChange={(next) => {
+                  onChange={async (next) => {
                     const prev = parseCurrency(editing.currency);
                     if (next === prev) return;
                     if (
                       editing.priceCents > 0 &&
-                      !window.confirm(
-                        "Changer de monnaie vide le prix. Continuer ?",
-                      )
+                      !(await confirm({
+                        title: "Changer la monnaie ?",
+                        description:
+                          "Changer de monnaie vide le prix. Continuer ?",
+                      }))
                     ) {
                       return;
                     }
@@ -904,6 +940,7 @@ function ProductInner() {
           router.push(afterPayHref.current);
         }}
       />
+      <ConfirmDialog />
     </div>
   );
 }

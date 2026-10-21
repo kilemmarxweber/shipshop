@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordFunnelEvent } from "@/lib/commerce-funnel";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
 const schema = z.object({
   deltaMs: z.number().int().min(1_000).max(20_000),
+  source: z.enum(["feed", "product"]).optional(),
 });
 
 export async function POST(
@@ -38,6 +40,15 @@ export async function POST(
     );
     const newView =
       !existing || Date.now() - existing.lastSeenAt.getTime() > 30 * 60_000;
+
+    if (newView) {
+      await recordFunnelEvent(prisma, {
+        kind: body.source === "product" ? "PRODUCT" : "FEED",
+        productId: id,
+        userId: session.user.id,
+        source: body.source ?? "feed",
+      });
+    }
 
     await withDbRetry(() =>
       prisma.productDwell.upsert({

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { PageLoader } from "@/components/page-loader";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,7 @@ export default function AdminModerationPage() {
   const [disabled, setDisabled] = useState<ModUser[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   async function load() {
     const { res, data } = await fetchJson<{
@@ -65,7 +67,13 @@ export default function AdminModerationPage() {
   }, [session?.user?.id]);
 
   async function reactivate(userId: string) {
-    if (!confirm("Réactiver ce compte ? Les boutiques seront rouvertes ; les produits restent masqués.")) {
+    const ok = await confirm({
+      title: "Réactiver le compte ?",
+      description:
+        "Les boutiques seront rouvertes ; les produits restent masqués.",
+      confirmLabel: "Réactiver",
+    });
+    if (!ok) {
       return;
     }
     setBusyId(userId);
@@ -195,6 +203,7 @@ export default function AdminModerationPage() {
           ))}
         </ul>
       )}
+      <ConfirmDialog />
     </div>
   );
 }

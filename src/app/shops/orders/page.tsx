@@ -525,7 +525,7 @@ export default function VendorOrdersPage() {
                         {formatMoney(
                           Math.max(
                             0,
-                            o.productCents - (o.saleFeeCents ?? 50),
+                            o.productCents - (o.saleFeeCents ?? 0),
                           ),
                         )}
                       </span>
