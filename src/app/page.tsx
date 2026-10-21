@@ -48,7 +48,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { getCurrentGeoCoords } from "@/lib/browser-geolocation";
+import { getCurrentGeoCoords, reverseGeocode } from "@/lib/browser-geolocation";
 import type { MessagePath } from "@/components/i18n-provider";
 import { WantedCard, type WantedListItem } from "@/components/wanted-card";
 import {
@@ -124,12 +124,29 @@ export default function FeedPage() {
 
   useEffect(() => {
     void getCurrentGeoCoords()
-      .then((coords) =>
-        setNear({ lat: coords.latitude, lng: coords.longitude }),
-      )
+      .then(async (coords) => {
+        setNear({ lat: coords.latitude, lng: coords.longitude });
+        try {
+          const place = await reverseGeocode(coords.latitude, coords.longitude);
+          setNearZone({
+            city: place.city || "",
+            commune: place.commune || "",
+            quartier: place.quartier || "",
+            avenue: place.avenue || "",
+          });
+        } catch {
+          setNearZone(null);
+        }
+      })
       .catch(() => undefined);
   }, []);
   const [near, setNear] = useState<{ lat: number; lng: number } | null>(null);
+  const [nearZone, setNearZone] = useState<{
+    city: string;
+    commune: string;
+    quartier: string;
+    avenue: string;
+  } | null>(null);
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const productFeed = usePaginatedList<Product>({
@@ -137,9 +154,18 @@ export default function FeedPage() {
     cacheKey:
       tab === "following"
         ? `products:following:${session?.user?.id ?? ""}`
-        : `products:foryou:${session?.user?.id ?? "guest"}:${near ? "near" : "all"}`,
+        : `products:foryou:${session?.user?.id ?? "guest"}:${near ? "near" : "all"}:${nearZone?.city ?? ""}:${nearZone?.commune ?? ""}:${nearZone?.quartier ?? ""}:${nearZone?.avenue ?? ""}`,
     prefetchRemaining: 4,
-    deps: [tab, session?.user?.id, near?.lat, near?.lng],
+    deps: [
+      tab,
+      session?.user?.id,
+      near?.lat,
+      near?.lng,
+      nearZone?.city,
+      nearZone?.commune,
+      nearZone?.quartier,
+      nearZone?.avenue,
+    ],
     buildUrl: (cursor) => {
       const params = new URLSearchParams({
         status: "ACTIVE",
@@ -149,6 +175,10 @@ export default function FeedPage() {
       if (tab === "foryou" && near) {
         params.set("nearLat", String(near.lat));
         params.set("nearLng", String(near.lng));
+        if (nearZone?.city) params.set("nearCity", nearZone.city);
+        if (nearZone?.commune) params.set("nearCommune", nearZone.commune);
+        if (nearZone?.quartier) params.set("nearQuartier", nearZone.quartier);
+        if (nearZone?.avenue) params.set("nearAvenue", nearZone.avenue);
       }
       if (cursor) params.set("cursor", cursor);
       return `/api/products?${params}`;

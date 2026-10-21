@@ -281,8 +281,8 @@ export function AppShell({
             )}
           >
             {showBack && (
-              <div className="shrink-0 px-4 pt-1">
-                <BackButton inline />
+              <div className="sticky top-2 z-40 shrink-0 px-4 pt-1">
+                <BackButton inline fixed={false} />
               </div>
             )}
             <div className="app-page">{children}</div>

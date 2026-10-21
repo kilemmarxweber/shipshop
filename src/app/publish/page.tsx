@@ -413,7 +413,7 @@ function PublishInner() {
           <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
             Vidéo · 1/3
           </p>
-          <h1 className="font-heading text-xl font-bold">Filme l’article</h1>
+          <h1 className="font-heading text-xl font-bold">Contenu d'article</h1>
           <div className="space-y-2">
             <Label>{t("publish.shop")}</Label>
             <ShopPicker
@@ -491,7 +491,7 @@ function PublishInner() {
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={t("publish.titlePlaceholder")}
+              placeholder="Nom d'article ou produit"
               className="bg-surface-2"
             />
           </div>
@@ -521,7 +521,7 @@ function PublishInner() {
           </div>
           <details className="rounded-2xl border border-border bg-surface-2 p-3">
             <summary className="cursor-pointer text-sm font-semibold">
-              Plus tard (optionnel)
+              Categorie / taille et couleur
             </summary>
             <div className="mt-3 space-y-4">
           <div className="space-y-2">

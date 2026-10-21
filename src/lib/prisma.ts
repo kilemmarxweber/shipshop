@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 37;
+const PRISMA_SCHEMA_REV = 38;
 
 /** Forces a reload if the generated client predates cart_item.quantity. */
 const CART_ITEM_HAS_QUANTITY = Prisma.CartItemScalarFieldEnum.quantity === "quantity";
@@ -13,6 +13,12 @@ const SHOP_HAS_PRO_UNTIL = Prisma.ShopScalarFieldEnum.proUntil === "proUntil";
 const PRODUCT_HAS_CREATOR_BPS =
   Prisma.ProductScalarFieldEnum.creatorCommissionBps === "creatorCommissionBps";
 const ORDER_HAS_FEE_BPS = Prisma.OrderScalarFieldEnum.saleFeeBps === "saleFeeBps";
+const SHOP_BOOST_HAS_TARGET_CITY =
+  Prisma.ShopBoostScalarFieldEnum.targetCity === "targetCity";
+
+export const PRISMA_FEATURES = {
+  shopBoostZoneTargeting: SHOP_BOOST_HAS_TARGET_CITY,
+} as const;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -69,7 +75,8 @@ function getPrismaClient() {
     COURIER_HAS_ARCHIVE &&
     SHOP_HAS_PRO_UNTIL &&
     PRODUCT_HAS_CREATOR_BPS &&
-    ORDER_HAS_FEE_BPS
+    ORDER_HAS_FEE_BPS &&
+    SHOP_BOOST_HAS_TARGET_CITY
   ) {
     return existing;
   }

@@ -103,7 +103,7 @@ export async function reverseGeocode(
     throw new Error(data.error ?? "Reverse geocode échoué");
   }
   return {
-    city: data.city?.trim() || "Kinshasa",
+    city: data.city?.trim() || "",
     commune: data.commune?.trim() || "",
     quartier: data.quartier?.trim() || "",
     avenue: data.avenue?.trim() || "",

@@ -145,6 +145,10 @@ export type Messages = {
     searchPlaceholder: string;
     categoriesHeading: string;
     trendsHeading: string;
+    featuredHeading: string;
+    videoHeading: string;
+    budgetHeading: string;
+    resultsHeading: string;
     emptyResults: string;
     nearMe: string;
   };
@@ -584,6 +588,10 @@ const fr: Messages = {
     searchPlaceholder: "Rechercher un produit, vendeur…",
     categoriesHeading: "Catégories",
     trendsHeading: "Tendances à Kinshasa",
+    featuredHeading: "À la une",
+    videoHeading: "Vidéos et sons",
+    budgetHeading: "Petits prix",
+    resultsHeading: "Tous les produits",
     emptyResults: "Aucun résultat",
     nearMe: "Près de moi",
   },
@@ -783,7 +791,7 @@ const fr: Messages = {
     txnReceived: "Reçu",
     txnSent: "Envoyé",
     txnAdjustment: "Ajustement",
-    heldChip: "Argent bloqué",
+    heldChip: "Solde bloqué",
   },
   shopExtra: {
     followerOne: "abonné",
@@ -1027,6 +1035,10 @@ const en: Messages = {
     searchPlaceholder: "Search a product, seller…",
     categoriesHeading: "Categories",
     trendsHeading: "Trending in Kinshasa",
+    featuredHeading: "Featured",
+    videoHeading: "Videos and sound",
+    budgetHeading: "Budget picks",
+    resultsHeading: "All products",
     emptyResults: "No results",
     nearMe: "Near me",
   },
@@ -1470,6 +1482,10 @@ const pt: Messages = {
     searchPlaceholder: "Pesquisar produto, vendedor…",
     categoriesHeading: "Categorias",
     trendsHeading: "Tendências em Kinshasa",
+    featuredHeading: "Em destaque",
+    videoHeading: "Videos e som",
+    budgetHeading: "Pequeno preco",
+    resultsHeading: "Todos os produtos",
     emptyResults: "Sem resultados",
     nearMe: "Perto de mim",
   },

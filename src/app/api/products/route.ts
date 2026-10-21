@@ -10,7 +10,7 @@ import {
 } from "@/lib/list-cursor";
 import { getAppConfig } from "@/lib/content-source";
 import { assertCanManageShop, managedShopsWhere } from "@/lib/shop-access";
-import { prisma, withDbRetry } from "@/lib/prisma";
+import { PRISMA_FEATURES, prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
 import {
@@ -25,6 +25,120 @@ import {
   SOLD_ORDER_STATUS_FILTER,
   soldOrdersCount,
 } from "@/lib/sold-orders";
+
+type ZoneBoostRow = {
+  productId: string;
+  targetCity: string | null;
+  targetCommune: string | null;
+  targetQuartier: string | null;
+  targetAvenue: string | null;
+};
+
+function isUnknownTargetCityError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Unknown field `targetCity`");
+}
+
+function normZone(value?: string | null) {
+  return value
+    ?.trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function nullableString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function isBoostInViewerZone(
+  boost: {
+    targetCity: string | null;
+    targetCommune: string | null;
+    targetQuartier: string | null;
+    targetAvenue: string | null;
+  } | { targetCity?: null; targetCommune?: null; targetQuartier?: null; targetAvenue?: null },
+  viewer: {
+    city?: string | null;
+    commune?: string | null;
+    quartier?: string | null;
+    avenue?: string | null;
+  },
+) {
+  const targets = {
+    city: normZone(boost.targetCity),
+    commune: normZone(boost.targetCommune),
+    quartier: normZone(boost.targetQuartier),
+    avenue: normZone(boost.targetAvenue),
+  };
+  const hasTarget = Boolean(
+    targets.city || targets.commune || targets.quartier || targets.avenue,
+  );
+  if (!hasTarget) return true;
+  const current = {
+    city: normZone(viewer.city),
+    commune: normZone(viewer.commune),
+    quartier: normZone(viewer.quartier),
+    avenue: normZone(viewer.avenue),
+  };
+  if (targets.city && targets.city !== current.city) return false;
+  if (targets.commune && targets.commune !== current.commune) return false;
+  if (targets.quartier && targets.quartier !== current.quartier) return false;
+  if (targets.avenue && targets.avenue !== current.avenue) return false;
+  return true;
+}
+
+async function loadActiveBoosts(productIds: string[]): Promise<ZoneBoostRow[]> {
+  if (!productIds.length) return [];
+  try {
+    const rows = await withDbRetry(() =>
+      prisma.shopBoost.findMany({
+        where: {
+          productId: { in: productIds },
+          endsAt: { gt: new Date() },
+        },
+        select: PRISMA_FEATURES.shopBoostZoneTargeting
+          ? {
+              productId: true,
+              targetCity: true,
+              targetCommune: true,
+              targetQuartier: true,
+              targetAvenue: true,
+            }
+          : { productId: true },
+      }),
+    );
+    return rows.map((row) => {
+      const record = row as Record<string, unknown>;
+      return {
+        productId: row.productId,
+        targetCity: nullableString(record.targetCity),
+        targetCommune: nullableString(record.targetCommune),
+        targetQuartier: nullableString(record.targetQuartier),
+        targetAvenue: nullableString(record.targetAvenue),
+      };
+    });
+  } catch (error) {
+    if (!isUnknownTargetCityError(error)) throw error;
+    // Dev fallback when Next runtime still serves an older generated Prisma client.
+    const rows = await withDbRetry(() =>
+      prisma.shopBoost.findMany({
+        where: {
+          productId: { in: productIds },
+          endsAt: { gt: new Date() },
+        },
+        select: { productId: true },
+      }),
+    );
+    return rows.map((row) => ({
+      productId: row.productId,
+      targetCity: null,
+      targetCommune: null,
+      targetQuartier: null,
+      targetAvenue: null,
+    }));
+  }
+}
 
 const createSchema = z.object({
   shopId: z.string().min(1),
@@ -57,10 +171,20 @@ export async function GET(req: Request) {
     const cursorRaw = searchParams.get("cursor");
     const nearLat = Number.parseFloat(searchParams.get("nearLat") ?? "");
     const nearLng = Number.parseFloat(searchParams.get("nearLng") ?? "");
+    const nearCity = searchParams.get("nearCity");
+    const nearCommune = searchParams.get("nearCommune");
+    const nearQuartier = searchParams.get("nearQuartier");
+    const nearAvenue = searchParams.get("nearAvenue");
     const near =
       Number.isFinite(nearLat) && Number.isFinite(nearLng)
         ? { lat: nearLat, lng: nearLng }
         : null;
+    const nearZone = {
+      city: nearCity,
+      commune: nearCommune,
+      quartier: nearQuartier,
+      avenue: nearAvenue,
+    };
     const paginated = searchParams.has("limit") || Boolean(cursorRaw);
     const limit = paginated
       ? parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_SIZE)
@@ -257,18 +381,12 @@ export async function GET(req: Request) {
         ? await loadBuyerTaste(session.user.id)
         : null;
 
-    const activeBoosts = products.length
-      ? await withDbRetry(() =>
-          prisma.shopBoost.findMany({
-            where: {
-              productId: { in: products.map((p) => p.id) },
-              endsAt: { gt: new Date() },
-            },
-            select: { productId: true },
-          }),
-        )
-      : [];
-    const boostedIds = new Set(activeBoosts.map((b) => b.productId));
+    const activeBoosts = await loadActiveBoosts(products.map((p) => p.id));
+    const boostedIds = new Set(
+      activeBoosts
+        .filter((b) => isBoostInViewerZone(b, nearZone))
+        .map((b) => b.productId),
+    );
 
     if (!following) {
       let followedShopIds: Set<string> | null = null;

@@ -5,11 +5,6 @@ let seeded = false;
 
 export async function ensureDefaultSoundtracks() {
   if (seeded) return;
-  const count = await withDbRetry(() => prisma.soundtrack.count());
-  if (count > 0) {
-    seeded = true;
-    return;
-  }
   const files = await writeSeedSoundtracks();
   const rows = [
     {
@@ -42,7 +37,14 @@ export async function ensureDefaultSoundtracks() {
       prisma.soundtrack.upsert({
         where: { id: row.id },
         create: { ...row, isActive: true },
-        update: {},
+        update: {
+          title: row.title,
+          artist: row.artist,
+          mood: row.mood,
+          durationMs: row.durationMs,
+          audioUrl: row.audioUrl,
+          isActive: true,
+        },
       }),
     );
   }

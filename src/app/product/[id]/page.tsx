@@ -457,9 +457,9 @@ function ProductInner() {
   }
 
   return (
-    <div className="pb-12 pt-2">
+    <div className="pb-14 pt-2">
       <div className="mx-auto w-full max-w-3xl space-y-4 px-3 sm:px-4">
-        <div className="rounded-2xl border border-border/80 bg-surface/90 p-3 shadow-[0_8px_22px_rgba(0,0,0,0.2)] backdrop-blur">
+        <div className="rounded-2xl border border-border/80 bg-gradient-to-b from-surface to-surface/90 p-3 shadow-[0_8px_22px_rgba(0,0,0,0.2)] backdrop-blur">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
               <h1 className="truncate font-heading text-lg font-extrabold sm:text-xl">
@@ -660,6 +660,9 @@ function ProductInner() {
 
         {(product.colors.length > 0 || product.sizes.length > 0) && (
           <section className="rounded-2xl border border-border bg-surface p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Options disponibles
+            </p>
             {product.colors.length > 0 && (
               <div className="mb-4">
                 <p className="mb-2 text-xs font-semibold text-muted-foreground">
@@ -715,6 +718,9 @@ function ProductInner() {
 
         {product.description ? (
           <section className="rounded-2xl border border-border bg-surface p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Description
+            </p>
             <p className="text-sm leading-relaxed text-white/90">
               {product.description}
             </p>

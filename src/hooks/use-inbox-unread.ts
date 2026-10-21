@@ -98,7 +98,21 @@ export function useInboxUnread(userId: string | undefined, pathname?: string) {
     const timer = window.setInterval(() => {
       void refresh({ silent: true });
     }, POLL_MS);
-    return () => window.clearInterval(timer);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refresh({ silent: true });
+      }
+    };
+    const onFocus = () => {
+      void refresh({ silent: true });
+    };
+    window.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [userId, refresh]);
 
   useEffect(() => {

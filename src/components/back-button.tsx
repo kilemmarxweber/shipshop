@@ -13,6 +13,8 @@ type Props = {
   onBack?: () => void;
   /** Sur la même ligne qu’un titre (pas pleine largeur) */
   inline?: boolean;
+  /** Bouton collé à l'écran pendant le scroll */
+  fixed?: boolean;
 };
 
 /**
@@ -25,6 +27,7 @@ export function BackButton({
   className,
   onBack,
   inline = false,
+  fixed = true,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -48,6 +51,8 @@ export function BackButton({
     <div
       className={cn(
         "flex shrink-0 justify-start",
+        fixed &&
+          "fixed left-4 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-50",
         inline ? "w-auto" : "w-full",
         className,
       )}

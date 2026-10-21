@@ -1056,6 +1056,10 @@ model ShopBoost {
   budgetCents Int
   currency    String   @default("USD")
   days        Int
+  targetCity     String?
+  targetCommune  String?
+  targetQuartier String?
+  targetAvenue   String?
   startsAt    DateTime @default(now())
   endsAt      DateTime
   impressions Int      @default(0)
@@ -1064,6 +1068,7 @@ model ShopBoost {
 
   @@index([productId, endsAt])
   @@index([shopId, endsAt])
+  @@index([targetCity, targetCommune, targetQuartier, targetAvenue])
   @@map("shop_boost")
 }
 

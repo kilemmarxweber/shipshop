@@ -49,29 +49,72 @@ export function NotificationsBell({
   comments,
   userId,
 }: Props) {
+  const seenStorageKey = userId ? `ss:notices:seen:${userId}` : null;
   const [notices, setNotices] = useState<
     { id: string; title: string; body: string; href: string | null; readAt: string | null }[]
   >([]);
-  const unreadNotices = notices.filter((n) => !n.readAt).length;
+  const [seenNoticeIds, setSeenNoticeIds] = useState<string[]>([]);
+  const visibleNotices = notices.filter((n) => !seenNoticeIds.includes(n.id));
+  const unreadNotices = visibleNotices.filter((n) => !n.readAt).length;
+
+  useEffect(() => {
+    if (!seenStorageKey || typeof window === "undefined") {
+      setSeenNoticeIds([]);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(seenStorageKey);
+      const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+      setSeenNoticeIds(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setSeenNoticeIds([]);
+    }
+  }, [seenStorageKey]);
+
+  function markNoticeSeen(id: string) {
+    setSeenNoticeIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      if (seenStorageKey && typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(seenStorageKey, JSON.stringify(next));
+        } catch {
+          // ignore storage write failure
+        }
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!userId) return;
-    fetch("/api/notices")
-      .then((r) => r.json())
-      .then((json) => setNotices(json.notices ?? []))
-      .catch(() => undefined);
-    const t = setInterval(() => {
+    const refreshNotices = () => {
       fetch("/api/notices")
         .then((r) => r.json())
         .then((json) => setNotices(json.notices ?? []))
         .catch(() => undefined);
-    }, 8000);
-    return () => clearInterval(t);
+    };
+    refreshNotices();
+    const timer = setInterval(refreshNotices, 8000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshNotices();
+      }
+    };
+    const onFocus = () => refreshNotices();
+    window.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [userId]);
   const { t, locale } = useI18n();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"messages" | "comments">("messages");
+  const messagesTabUnread = unreadMessages + unreadNotices;
   const combined = unreadMessages + unreadComments + unreadNotices;
   const badge = urgentCount > 0 ? urgentCount : combined;
   const hasBadge = urgentCount > 0 || combined > 0;
@@ -137,7 +180,7 @@ export function NotificationsBell({
               )}
             >
               {t("notifications.tabMessages")}
-              {unreadMessages > 0 ? ` · ${unreadMessages}` : ""}
+              {messagesTabUnread > 0 ? ` · ${messagesTabUnread}` : ""}
             </button>
             <button
               type="button"
@@ -157,23 +200,26 @@ export function NotificationsBell({
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {tab === "messages" ? (
-            recent.length === 0 && notices.length === 0 ? (
+            recent.length === 0 && visibleNotices.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
                 {t("notifications.empty")}
               </p>
             ) : (
               <ul>
-                {notices.slice(0, 8).map((n) => (
+                {visibleNotices.slice(0, 8).map((n) => (
                   <li key={n.id} className="border-b border-border">
                     <button
                       type="button"
                       className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-muted/50"
                       onClick={() => {
-                        void fetchJson("/api/notices", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ ids: [n.id] }),
-                        });
+                        markNoticeSeen(n.id);
+                        if (!n.id.startsWith("order-")) {
+                          void fetchJson("/api/notices", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ ids: [n.id] }),
+                          });
+                        }
                         setNotices((prev) =>
                           prev.map((x) =>
                             x.id === n.id
@@ -185,7 +231,12 @@ export function NotificationsBell({
                         if (n.href) router.push(n.href);
                       }}
                     >
-                      <span className="text-sm font-bold">{n.title}</span>
+                      <span className="inline-flex items-center gap-1 text-sm font-bold">
+                        {!n.readAt ? (
+                          <span className="size-1.5 rounded-full bg-primary" />
+                        ) : null}
+                        {n.title}
+                      </span>
                       <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                         {n.body}
                       </span>
