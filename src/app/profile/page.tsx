@@ -742,7 +742,7 @@ export default function ProfilePage() {
               ["/shops/contacts", "Contacts (acheteurs, abonnés, invités)"],
               ...(isOwner
                 ? ([
-                    ["/shops/messaging", "Messages (admin)"],
+                    ["/shops/messaging", "Messages / Config Klambo / SMS / Infobip"],
                     ["/shops/admin/products", "Modération produits (tout)"],
                     ["/shops/admin/vendors", "Vendeurs & clients"],
                     ["/shops/admin/ledger", "Ledger paiements"],

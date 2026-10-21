@@ -1068,7 +1068,7 @@ model ShopBoost {
 
   @@index([productId, endsAt])
   @@index([shopId, endsAt])
-  @@index([targetCity, targetCommune, targetQuartier, targetAvenue])
+  @@index([targetCity, targetCommune, targetQuartier, targetAvenue], map: "shop_boost_targetCity_targetCommune_targetQuartier_targ_idx")
   @@map("shop_boost")
 }
 

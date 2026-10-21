@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { encryptSecret } from "@/lib/crypto";
+import { isSmtpConfigured } from "@/lib/email/smtp";
 import {
   ensureMessagingSetup,
   messagingFormState,
@@ -27,25 +28,39 @@ export async function GET() {
   return NextResponse.json({
     organizationId: org.id,
     config: messagingFormState(config),
+    smtpConfigured: isSmtpConfigured(),
   });
 }
 
 const patchSchema = z.object({
   whatsappProvider: z.enum(["klambo", "infobip"]).optional(),
   klamboApiKey: z.string().optional().nullable(),
-  klamboBaseUrl: z.string().url().optional(),
+  klamboBaseUrl: z.string().optional(),
   klamboDefaultCountry: z.string().min(2).max(2).optional(),
   smsApiKey: z.string().optional().nullable(),
-  smsBaseUrl: z.string().url().optional(),
+  smsBaseUrl: z.string().optional(),
   smsSender: z.string().min(2).max(20).optional(),
   waApiKey: z.string().optional().nullable(),
-  waBaseUrl: z.string().url().optional(),
+  waBaseUrl: z.string().optional(),
   waFromNumber: z.string().optional().nullable(),
   notifySms: z.boolean().optional(),
   notifyWhatsapp: z.boolean().optional(),
   notifyEmail: z.boolean().optional(),
   brandPrefix: z.string().min(2).max(40).optional(),
 });
+
+function normalizeBaseUrl(raw: string | undefined, label: string) {
+  if (raw === undefined) return undefined;
+  const input = raw.trim();
+  if (!input) throw new Error(`${label}: URL vide`);
+  const candidate = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    throw new Error(`${label}: URL invalide`);
+  }
+}
 
 export async function PATCH(req: Request) {
   const session = await getSession();
@@ -67,12 +82,15 @@ export async function PATCH(req: Request) {
     const data: Record<string, unknown> = {};
 
     if (body.whatsappProvider) data.whatsappProvider = body.whatsappProvider;
-    if (body.klamboBaseUrl) data.klamboBaseUrl = body.klamboBaseUrl;
+    const klamboBaseUrl = normalizeBaseUrl(body.klamboBaseUrl, "Klambo");
+    if (klamboBaseUrl) data.klamboBaseUrl = klamboBaseUrl;
     if (body.klamboDefaultCountry)
       data.klamboDefaultCountry = body.klamboDefaultCountry.toUpperCase();
-    if (body.smsBaseUrl) data.smsBaseUrl = body.smsBaseUrl;
+    const smsBaseUrl = normalizeBaseUrl(body.smsBaseUrl, "Infobip SMS");
+    if (smsBaseUrl) data.smsBaseUrl = smsBaseUrl;
     if (body.smsSender) data.smsSender = body.smsSender;
-    if (body.waBaseUrl) data.waBaseUrl = body.waBaseUrl;
+    const waBaseUrl = normalizeBaseUrl(body.waBaseUrl, "Infobip WhatsApp");
+    if (waBaseUrl) data.waBaseUrl = waBaseUrl;
     if (body.waFromNumber !== undefined)
       data.waFromNumber = body.waFromNumber?.trim() || null;
     if (body.notifySms !== undefined) data.notifySms = body.notifySms;
@@ -98,7 +116,10 @@ export async function PATCH(req: Request) {
       }),
     );
 
-    return NextResponse.json({ config: messagingFormState(config) });
+    return NextResponse.json({
+      config: messagingFormState(config),
+      smtpConfigured: isSmtpConfigured(),
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Mise à jour impossible";

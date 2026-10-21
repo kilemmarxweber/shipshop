@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { mapAuthError } from "@/lib/auth-errors";
+import { fetchJson } from "@/lib/fetch-json";
 import {
   isValidContactPhone,
   looksLikeEmail,
@@ -21,10 +22,16 @@ import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const preset = searchParams.get("identifier");
+    if (preset) setIdentifier(preset);
+  }, [searchParams]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +55,21 @@ export default function LoginPage() {
       toast.error(mapAuthError(error, t, t("auth.failed")));
       return;
     }
+
+    const forceCheck = await fetchJson<{ required?: boolean }>(
+      "/api/auth/password-reset/first-login",
+    );
+    if (forceCheck.res.ok && forceCheck.data?.required) {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("ss:first-login-identifier", id);
+        window.sessionStorage.setItem("ss:first-login-old-password", password);
+      }
+      toast.info("Change ton mot de passe avant de continuer");
+      router.push("/auth/first-login-password");
+      router.refresh();
+      return;
+    }
+
     toast.success(t("auth.welcome"));
     router.push("/");
     router.refresh();

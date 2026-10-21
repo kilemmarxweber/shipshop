@@ -50,6 +50,15 @@ export default function MessagingSettingsPage() {
   const [klamboKey, setKlamboKey] = useState("");
   const [smsKey, setSmsKey] = useState("");
   const [waKey, setWaKey] = useState("");
+  const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [testChannel, setTestChannel] = useState<"whatsapp" | "sms" | "email">(
+    "whatsapp",
+  );
+  const [testTo, setTestTo] = useState("");
+  const [testMessage, setTestMessage] = useState(
+    "Test ShipShop: votre configuration messaging est opérationnelle.",
+  );
+  const [testingSend, setTestingSend] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editTpl, setEditTpl] = useState<Template | null>(null);
   const [denied, setDenied] = useState(false);
@@ -57,6 +66,7 @@ export default function MessagingSettingsPage() {
   async function load() {
     const cfg = await fetchJson<{
       config?: ConfigForm;
+      smtpConfigured?: boolean;
       error?: string;
     }>("/api/messaging/config");
     if (!cfg.res.ok) {
@@ -64,6 +74,7 @@ export default function MessagingSettingsPage() {
       return;
     }
     setConfig(cfg.data?.config ?? null);
+    setSmtpConfigured(Boolean(cfg.data?.smtpConfigured));
     setDenied(false);
 
     const tpl = await fetchJson<{ templates?: Template[] }>(
@@ -81,6 +92,7 @@ export default function MessagingSettingsPage() {
     setBusy(true);
     const { res, data } = await fetchJson<{
       config?: ConfigForm;
+      smtpConfigured?: boolean;
       error?: string;
     }>("/api/messaging/config", {
       method: "PATCH",
@@ -108,10 +120,12 @@ export default function MessagingSettingsPage() {
       return;
     }
     setConfig(data?.config ?? config);
+    setSmtpConfigured(Boolean(data?.smtpConfigured ?? smtpConfigured));
     setKlamboKey("");
     setSmsKey("");
     setWaKey("");
     toast.success("Config messages enregistrée");
+    await load();
   }
 
   async function saveTemplate() {
@@ -140,6 +154,39 @@ export default function MessagingSettingsPage() {
     toast.success("Template mis à jour");
     setEditTpl(null);
     load();
+  }
+
+  async function sendTestMessage() {
+    if (!testTo.trim()) {
+      toast.error("Indique un destinataire (téléphone ou e-mail).");
+      return;
+    }
+    if (testMessage.trim().length < 3) {
+      toast.error("Le message de test est trop court.");
+      return;
+    }
+    setTestingSend(true);
+    const { res, data } = await fetchJson<{
+      ok?: boolean;
+      provider?: string;
+      error?: string;
+    }>("/api/messaging/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: testChannel,
+        to: testTo.trim(),
+        message: testMessage.trim(),
+      }),
+    });
+    setTestingSend(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Échec envoi test");
+      return;
+    }
+    toast.success(
+      `Message test envoyé via ${data?.provider || testChannel}.`,
+    );
   }
 
   if (!session) {
@@ -236,6 +283,31 @@ export default function MessagingSettingsPage() {
             <option value="infobip">Infobip WhatsApp</option>
           </select>
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          Si E-mail est désactivé ici, aucun mail transactionnel ne partira (même OTP/reset).
+        </p>
+      </section>
+
+      <section className="mb-8 space-y-3 rounded-2xl border border-border bg-surface p-4">
+        <h2 className="font-heading text-sm font-bold">
+          E-mail (SMTP){" "}
+          <span className="text-[10px] font-normal text-muted-foreground">
+            {smtpConfigured ? "(SMTP prêt)" : "(SMTP non configuré)"}
+          </span>
+        </h2>
+        <p className="text-[11px] text-muted-foreground">
+          La config SMTP vient des variables d&apos;environnement du serveur.
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          État envoi e-mail:{" "}
+          <span className={cn(config.notifyEmail ? "text-trust" : "text-amber-400")}>
+            {config.notifyEmail ? "Activé" : "Désactivé"}
+          </span>
+          .{" "}
+          {!config.notifyEmail
+            ? "Aucun e-mail ne sera envoyé."
+            : "Les e-mails sont autorisés."}
+        </p>
       </section>
 
       <section className="mb-8 space-y-3 rounded-2xl border border-border bg-surface p-4">
@@ -254,6 +326,11 @@ export default function MessagingSettingsPage() {
           onChange={(e) => setKlamboKey(e.target.value)}
           className="bg-surface-2"
         />
+        <p className="text-[11px] text-muted-foreground">
+          {config.klamboConfigured
+            ? `Clé déjà enregistrée en base (${config.klamboApiKeyMasked}). Laisse vide pour conserver.`
+            : "Aucune clé Klambo enregistrée en base."}
+        </p>
         <Input
           value={config.klamboBaseUrl}
           onChange={(e) =>
@@ -262,6 +339,22 @@ export default function MessagingSettingsPage() {
           className="bg-surface-2"
           placeholder="Base URL"
         />
+        <Input
+          value={config.klamboDefaultCountry}
+          onChange={(e) =>
+            setConfig({
+              ...config,
+              klamboDefaultCountry: e.target.value.toUpperCase().slice(0, 2),
+            })
+          }
+          className="bg-surface-2"
+          placeholder="Pays téléphone ISO (ex: CD)"
+          maxLength={2}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Klambo: clé API WhatsApp + pays ISO par défaut. Exemple production:{" "}
+          <code>https://whatsapp-api.klambocore.com</code>.
+        </p>
       </section>
 
       <section className="mb-8 space-y-3 rounded-2xl border border-border bg-surface p-4">
@@ -280,6 +373,11 @@ export default function MessagingSettingsPage() {
           onChange={(e) => setSmsKey(e.target.value)}
           className="bg-surface-2"
         />
+        <p className="text-[11px] text-muted-foreground">
+          {config.smsConfigured
+            ? `Clé SMS déjà enregistrée en base (${config.smsApiKeyMasked}). Laisse vide pour conserver.`
+            : "Aucune clé SMS enregistrée en base."}
+        </p>
         <div className="grid grid-cols-2 gap-2">
           <Input
             value={config.smsBaseUrl}
@@ -298,6 +396,9 @@ export default function MessagingSettingsPage() {
             placeholder="Sender"
           />
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          Infobip SMS: configure URL API + sender + clé API du compte SMS.
+        </p>
       </section>
 
       <section className="mb-8 space-y-3 rounded-2xl border border-border bg-surface p-4">
@@ -316,6 +417,11 @@ export default function MessagingSettingsPage() {
           onChange={(e) => setWaKey(e.target.value)}
           className="bg-surface-2"
         />
+        <p className="text-[11px] text-muted-foreground">
+          {config.waConfigured
+            ? `Clé WhatsApp déjà enregistrée en base (${config.waApiKeyMasked}). Laisse vide pour conserver.`
+            : "Aucune clé WhatsApp enregistrée en base."}
+        </p>
         <Input
           value={config.waFromNumber}
           onChange={(e) =>
@@ -332,6 +438,9 @@ export default function MessagingSettingsPage() {
           className="bg-surface-2"
           placeholder="Base URL"
         />
+        <p className="text-[11px] text-muted-foreground">
+          Infobip WhatsApp: clé API dédiée, numéro expéditeur WA et URL API.
+        </p>
       </section>
 
       <Button
@@ -341,6 +450,75 @@ export default function MessagingSettingsPage() {
       >
         {busy ? "…" : "Enregistrer la config"}
       </Button>
+
+      <section className="mb-8 space-y-3 rounded-2xl border border-border bg-surface p-4">
+        <h2 className="font-heading text-sm font-bold">Test d&apos;envoi</h2>
+        <p className="text-[11px] text-muted-foreground">
+          Envoie un message test pour valider immédiatement la clé API et le canal.
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setTestChannel("whatsapp")}
+            className={cn(
+              "rounded-lg border px-3 py-2 text-xs font-semibold",
+              testChannel === "whatsapp"
+                ? "border-primary bg-primary text-white"
+                : "border-border bg-surface-2",
+            )}
+          >
+            WhatsApp
+          </button>
+          <button
+            type="button"
+            onClick={() => setTestChannel("sms")}
+            className={cn(
+              "rounded-lg border px-3 py-2 text-xs font-semibold",
+              testChannel === "sms"
+                ? "border-primary bg-primary text-white"
+                : "border-border bg-surface-2",
+            )}
+          >
+            SMS
+          </button>
+          <button
+            type="button"
+            onClick={() => setTestChannel("email")}
+            className={cn(
+              "rounded-lg border px-3 py-2 text-xs font-semibold",
+              testChannel === "email"
+                ? "border-primary bg-primary text-white"
+                : "border-border bg-surface-2",
+            )}
+          >
+            E-mail
+          </button>
+        </div>
+        <Input
+          value={testTo}
+          onChange={(e) => setTestTo(e.target.value)}
+          className="bg-surface-2"
+          placeholder={
+            testChannel === "email"
+              ? "Destinataire e-mail (ex: nom@mail.com)"
+              : "Destinataire téléphone (ex: +243...)"
+          }
+        />
+        <Textarea
+          value={testMessage}
+          onChange={(e) => setTestMessage(e.target.value)}
+          className="min-h-24 bg-surface-2 text-sm"
+          placeholder="Message test"
+        />
+        <Button
+          type="button"
+          className="h-10 w-full font-semibold"
+          disabled={testingSend || busy}
+          onClick={sendTestMessage}
+        >
+          {testingSend ? "Envoi..." : "Envoyer un test"}
+        </Button>
+      </section>
 
       <h2 className="mb-3 font-heading text-sm font-bold">
         Templates (livraison + portefeuille)

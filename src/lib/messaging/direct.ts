@@ -86,6 +86,10 @@ export async function sendDirectEmail(input: {
 }) {
   const to = input.to.trim();
   if (!to) throw new Error("E-mail manquant");
+  const config = await getMessagingConfig();
+  if (!config.notifyEmail) {
+    throw new Error("E-mail désactivé dans la config messaging");
+  }
 
   const html =
     input.html ??

@@ -97,10 +97,22 @@ export async function POST(req: Request) {
       });
       channels.email = { ok: true, provider: result.provider };
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Envoi e-mail impossible";
       channels.email = {
         ok: false,
-        error: error instanceof Error ? error.message : "Envoi e-mail impossible",
+        error: message,
       };
+      if (message.includes("désactivé")) {
+        return NextResponse.json(
+          {
+            error:
+              "Canal e-mail désactivé. Activez l'e-mail ou utilisez le téléphone.",
+            code: "EMAIL_DISABLED",
+          },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
         { error: "Impossible d'envoyer l'OTP par e-mail", code: "OTP_SEND_FAILED" },
         { status: 502 },

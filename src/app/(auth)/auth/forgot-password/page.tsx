@@ -63,6 +63,14 @@ export default function ForgotPasswordPage() {
 
   async function confirmReset(e: React.FormEvent) {
     e.preventDefault();
+    if (password.length < 8) {
+      toast.error("Le mot de passe doit contenir au moins 8 caractères.");
+      return;
+    }
+    if (confirmPassword.length < 8) {
+      toast.error("La confirmation doit contenir au moins 8 caractères.");
+      return;
+    }
     if (password !== confirmPassword) {
       toast.error(t("auth.passwordMismatch"));
       return;
@@ -89,8 +97,8 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    toast.success(t("auth.resetDone"));
-    router.push("/auth/login");
+    toast.success("Mot de passe temporaire validé. Connecte-toi pour définir ton mot de passe final.");
+    router.push(`/auth/login?identifier=${encodeURIComponent(identifier.trim())}`);
   }
 
   return (

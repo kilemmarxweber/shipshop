@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { hashPassword } from "better-auth/crypto";
 import { z } from "zod";
 import {
+  expiresAtDaysFromNow,
   hashOtp,
+  passwordForceChangeIdentifier,
   parseResetIdentifier,
   passwordResetIdentifier,
 } from "@/lib/password-reset";
@@ -106,8 +108,18 @@ export async function POST(req: Request) {
 
       await tx.session.deleteMany({ where: { userId: user.id } });
       await tx.verification.deleteMany({ where: { identifier: otpId } });
+      await tx.verification.deleteMany({
+        where: { identifier: passwordForceChangeIdentifier(user.id) },
+      });
+      await tx.verification.create({
+        data: {
+          identifier: passwordForceChangeIdentifier(user.id),
+          value: "REQUIRED",
+          expiresAt: expiresAtDaysFromNow(),
+        },
+      });
     }),
   );
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, forcePasswordChange: true });
 }

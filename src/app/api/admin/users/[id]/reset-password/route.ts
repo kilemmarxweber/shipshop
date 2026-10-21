@@ -9,6 +9,10 @@ import {
   sendDirectSms,
   sendDirectWhatsapp,
 } from "@/lib/messaging/direct";
+import {
+  expiresAtDaysFromNow,
+  passwordForceChangeIdentifier,
+} from "@/lib/password-reset";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -87,6 +91,16 @@ export async function POST(
         }
         // Force reconnexion
         await tx.session.deleteMany({ where: { userId: user.id } });
+        await tx.verification.deleteMany({
+          where: { identifier: passwordForceChangeIdentifier(user.id) },
+        });
+        await tx.verification.create({
+          data: {
+            identifier: passwordForceChangeIdentifier(user.id),
+            value: "REQUIRED",
+            expiresAt: expiresAtDaysFromNow(),
+          },
+        });
       }),
     );
 
@@ -161,6 +175,7 @@ export async function POST(
         phone: user.phone,
       },
       temporaryPassword,
+      forcePasswordChange: true,
       channels,
     });
   } catch (error) {
