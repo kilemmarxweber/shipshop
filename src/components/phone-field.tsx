@@ -119,7 +119,9 @@ export function PhoneField({
           value={showDialSelector ? parts.national : value}
           onChange={(e) => {
             const raw = e.target.value;
-            if (emailOrPhone && !looksLikeNumericPhoneInput(raw)) {
+            // Email mode is only activated for actual email-like input
+            // (letters or @), not for symbol-only noise such as ".".
+            if (emailOrPhone && looksLikeEmailInput(raw)) {
               onChange(raw);
               return;
             }
