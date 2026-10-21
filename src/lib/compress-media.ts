@@ -8,6 +8,7 @@ import {
   IMAGE_STORED_MAX_BYTES,
   IMAGE_TARGET_BYTES,
   MEDIA_INPUT_MAX_BYTES,
+  VIDEO_RECOMMENDED_BYTES,
   VIDEO_INPUT_MAX_BYTES,
   looksLikeImageFile,
   looksLikeVideoFile,
@@ -137,6 +138,10 @@ export async function compressMediaFile(
   }
 
   throw new Error("Formats acceptés : image ou vidéo");
+}
+
+export function exceedsRecommendedVideoSize(file: File) {
+  return looksLikeVideoFile(file) && file.size > VIDEO_RECOMMENDED_BYTES;
 }
 
 export class MediaUploadError extends Error {

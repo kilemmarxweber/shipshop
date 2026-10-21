@@ -1,7 +1,8 @@
-import { mkdtemp, readFile, rm, writeFile, stat } from "fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import {
+  PRODUCT_VIDEO_MAX_SECONDS,
   VIDEO_COMPRESS_SKIP_BYTES,
   VIDEO_STORED_MAX_BYTES,
 } from "@/lib/media";
@@ -11,9 +12,12 @@ import { MONTAGE_MAX_SECONDS } from "@/lib/montage";
 
 async function clipSeconds() {
   try {
-    return (await getAppConfig()).clipSeconds;
+    return Math.min(
+      PRODUCT_VIDEO_MAX_SECONDS,
+      Math.max(5, (await getAppConfig()).clipSeconds),
+    );
   } catch {
-    return MONTAGE_MAX_SECONDS;
+    return Math.min(MONTAGE_MAX_SECONDS, PRODUCT_VIDEO_MAX_SECONDS);
   }
 }
 
@@ -28,6 +32,7 @@ type PassOpts = {
   maxWidth: number;
   crf: number;
   audioKbps: number;
+  trimSeconds: number;
   fps?: number;
   mono?: boolean;
   noAudio?: boolean;
@@ -46,7 +51,7 @@ async function encodePass(opts: PassOpts) {
     "-i",
     opts.inputPath,
     "-t",
-    String(await clipSeconds()),
+    String(opts.trimSeconds),
     "-vf",
     vf,
     "-c:v",
@@ -87,51 +92,46 @@ async function encodePass(opts: PassOpts) {
 export async function compressVideoBuffer(
   input: Buffer,
 ): Promise<{ buffer: Buffer; ext: "mp4" }> {
-  if (input.length <= VIDEO_COMPRESS_SKIP_BYTES) {
-    if (await isFfmpegAvailable()) {
-      const dir = await mkdtemp(path.join(tmpdir(), "chipshop-vidtrim-"));
-      const inputPath = path.join(dir, "in.bin");
-      const outputPath = path.join(dir, "out.mp4");
-      try {
-        await writeFile(inputPath, input);
-        await runFfmpeg(
-          [
-            "-y",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-            inputPath,
-            "-t",
-            String(await clipSeconds()),
-            "-c",
-            "copy",
-            "-movflags",
-            "+faststart",
-            outputPath,
-          ],
-          30_000,
-        );
-        const trimmed = await readFile(outputPath);
-        if (trimmed.length >= 2048) {
-          return { buffer: trimmed, ext: "mp4" };
-        }
-      } catch {
-        /* copie impossible : garder l’original */
-      } finally {
-        await rm(dir, { recursive: true, force: true });
-      }
-    }
-    return { buffer: input, ext: "mp4" };
+  const trimSeconds = await clipSeconds();
+  if (!(await isFfmpegAvailable())) {
+    throw new Error(
+      "ffmpeg requis pour traiter les vidéos (découpe max 60s). Installez ffmpeg ou définissez FFMPEG_PATH.",
+    );
   }
 
-  if (!(await isFfmpegAvailable())) {
-    if (input.length <= VIDEO_STORED_MAX_BYTES) {
-      return { buffer: input, ext: "mp4" };
+  if (input.length <= VIDEO_COMPRESS_SKIP_BYTES) {
+    const dir = await mkdtemp(path.join(tmpdir(), "chipshop-vidtrim-"));
+    const inputPath = path.join(dir, "in.bin");
+    const outputPath = path.join(dir, "out.mp4");
+    try {
+      await writeFile(inputPath, input);
+      await runFfmpeg(
+        [
+          "-y",
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-i",
+          inputPath,
+          "-t",
+          String(trimSeconds),
+          "-c",
+          "copy",
+          "-movflags",
+          "+faststart",
+          outputPath,
+        ],
+        30_000,
+      );
+      const trimmed = await readFile(outputPath);
+      if (trimmed.length >= 2048) {
+        return { buffer: trimmed, ext: "mp4" };
+      }
+    } catch {
+      // Copie impossible: passer au re-encodage pour garantir la decoupe.
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
-    throw new Error(
-      "ffmpeg requis pour compresser les grosses vidéos (installez ffmpeg ou définissez FFMPEG_PATH)",
-    );
   }
 
   const dir = await mkdtemp(path.join(tmpdir(), "chipshop-vid-"));
@@ -141,9 +141,9 @@ export async function compressVideoBuffer(
   try {
     await writeFile(inputPath, input);
 
-    // Passes de plus en plus légères jusqu’à ≤ 12 Mo
+    // Passes de plus en plus legeres jusqu'a <= 12 Mo, avec decoupe max 60s.
     const attempts: Array<
-      Omit<PassOpts, "inputPath" | "outputPath" | "timeoutMs">
+      Omit<PassOpts, "inputPath" | "outputPath" | "timeoutMs" | "trimSeconds">
     > = [
       { maxWidth: 960, crf: 30, audioKbps: 64, mono: true, fps: 24 },
       { maxWidth: 720, crf: 32, audioKbps: 48, mono: true, fps: 24 },
@@ -162,6 +162,7 @@ export async function compressVideoBuffer(
           ...base,
           inputPath,
           outputPath,
+          trimSeconds,
           timeoutMs,
         });
       } catch {
@@ -170,6 +171,7 @@ export async function compressVideoBuffer(
             ...base,
             inputPath,
             outputPath,
+            trimSeconds,
             timeoutMs,
             noAudio: true,
           });

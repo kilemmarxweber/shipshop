@@ -32,6 +32,7 @@ import { CurrencyPicker } from "@/components/currency-picker";
 import { useI18n } from "@/components/i18n-provider";
 import { notifyNewListing } from "@/lib/new-listing-events";
 import { PackagePlus, Search } from "lucide-react";
+import { isPublicUploadPath } from "@/lib/upload-url";
 
 type Shop = {
   id: string;
@@ -75,6 +76,7 @@ function PublishInner() {
   const [imageMotions, setImageMotions] = useState<string[]>([]);
   const localClipRef = useRef<LocalMontageClip | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mediaBusy, setMediaBusy] = useState(false);
 
   function replaceLocalClip(next: LocalMontageClip | null) {
     const prev = localClipRef.current;
@@ -229,6 +231,10 @@ function PublishInner() {
 
   async function saveProduct(as: "DRAFT" | "ACTIVE") {
     if (loading) return;
+    if (mediaBusy) {
+      toast.error("Patientez: upload média en cours");
+      return;
+    }
     const qty = Math.max(1, parseInt(quantity || "1", 10) || 1);
     setLoading(true);
     const priceCents = Math.round(parseFloat(price || "0") * 100);
@@ -247,9 +253,18 @@ function PublishInner() {
       toast.error("Choisissez une boutique");
       return;
     }
-    if (images.length === 0) {
+    const sanitizedImages = [...new Set(images.map((u) => u.trim()).filter(Boolean))];
+    if (sanitizedImages.length === 0) {
       setLoading(false);
       toast.error("Ajoutez au moins une image");
+      return;
+    }
+    const hasInvalidMediaUrl = sanitizedImages.some(
+      (url) => !isPublicUploadPath(url) && !url.includes("picsum.photos"),
+    );
+    if (hasInvalidMediaUrl) {
+      setLoading(false);
+      toast.error("Certains médias sont invalides. Réimportez-les.");
       return;
     }
     const location = composeAddress(address);
@@ -316,13 +331,13 @@ function PublishInner() {
           currency,
           quantity: qty,
           category,
-          images,
+          images: sanitizedImages,
           colors,
           sizes,
           location,
           soundtrackId: publishedSoundtrackId,
           soundtrackStartMs: publishedStartMs,
-          imageMotions: normalizeMotions(images.length, imageMotions),
+          imageMotions: normalizeMotions(sanitizedImages.length, imageMotions),
           status: as,
         }),
       });
@@ -444,6 +459,7 @@ function PublishInner() {
                 );
               }}
               max={appConfig.maxImages}
+              onBusyChange={setMediaBusy}
             />
           </div>
           <PublishMontage
@@ -472,10 +488,10 @@ function PublishInner() {
 
           <Button
             className="h-12 w-full font-bold"
-            disabled={!shopId || images.length === 0}
+            disabled={!shopId || images.length === 0 || mediaBusy}
             onClick={() => setStep(2)}
           >
-            Suivant
+            {mediaBusy ? "Upload en cours…" : "Suivant"}
           </Button>
         </div>
       )}
@@ -685,7 +701,7 @@ function PublishInner() {
               <Button
                 variant="outline"
                 className="flex-[2] border-white/20"
-                disabled={loading}
+                disabled={loading || mediaBusy}
                 onClick={() => saveProduct("DRAFT")}
               >
                 {loading ? "…" : "Enregistrer brouillon"}
@@ -693,7 +709,7 @@ function PublishInner() {
             </div>
             <Button
               className="h-12 w-full bg-gradient-to-r from-trust to-[#00b377] font-bold"
-              disabled={loading}
+              disabled={loading || mediaBusy}
               onClick={() => saveProduct("ACTIVE")}
             >
               {loading ? "Publication…" : "Publier maintenant"}

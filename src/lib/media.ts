@@ -21,6 +21,10 @@ export const VIDEO_INPUT_MAX_BYTES = 100 * 1024 * 1024;
 export const VIDEO_COMPRESS_SKIP_BYTES = 3 * 1024 * 1024;
 /** Après compression : cible stockage légère. */
 export const VIDEO_STORED_MAX_BYTES = 12 * 1024 * 1024;
+/** Recommandation UX (non bloquante) pour une lecture plus fluide. */
+export const VIDEO_RECOMMENDED_BYTES = 10 * 1024 * 1024;
+/** Limite métier des vidéos produit (trim serveur). */
+export const PRODUCT_VIDEO_MAX_SECONDS = 60;
 
 export const STORED_MAX_BYTES = IMAGE_STORED_MAX_BYTES;
 export const MEDIA_INPUT_MAX_BYTES = VIDEO_INPUT_MAX_BYTES;

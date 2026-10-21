@@ -9,6 +9,7 @@ import { APP_CURRENCIES } from "@/lib/money";
 import { normalizeMotions, SOUNDTRACK_START_MAX_MS } from "@/lib/montage";
 import { SOLD_ORDER_STATUS_FILTER } from "@/lib/sold-orders";
 import { SHOP_HOURS_SELECT } from "@/lib/shop-hours";
+import { relativeUploadPathFromUrl } from "@/lib/upload-file.server";
 
 const updateSchema = z.object({
   title: z.string().min(2).max(120).optional(),
@@ -27,6 +28,10 @@ const updateSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "SOLD", "HIDDEN"]).optional(),
   creatorCommissionBps: z.number().int().min(0).max(5000).optional(),
 });
+
+function isAllowedProductMediaUrl(url: string) {
+  return Boolean(relativeUploadPathFromUrl(url)) || url.includes("picsum.photos");
+}
 
 async function assertCanEdit(userId: string, shopId: string) {
   const access = await assertCanManageShop(userId, shopId);
@@ -177,6 +182,12 @@ export async function PATCH(
       body.images !== undefined
         ? body.images.slice(0, cfg.maxImages)
         : undefined;
+    if (nextImages && nextImages.some((url) => !isAllowedProductMediaUrl(url))) {
+      return NextResponse.json(
+        { error: "Média invalide: utilisez des fichiers uploadés" },
+        { status: 400 },
+      );
+    }
     const motionCount = (nextImages ?? existing.images).length;
     const nextMotions =
       nextImages !== undefined || body.imageMotions !== undefined

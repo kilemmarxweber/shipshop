@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Plus, X, Film, ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  exceedsRecommendedVideoSize,
   mediaUploadToastMessage,
   uploadCompressedMedia,
 } from "@/lib/compress-media";
@@ -12,6 +13,7 @@ import {
   isVideoUrl,
   looksLikeImageFile,
   looksLikeVideoFile,
+  PRODUCT_VIDEO_MAX_SECONDS,
 } from "@/lib/media";
 import { iosInlineVideo } from "@/lib/ios-inline-video";
 import { cn } from "@/lib/utils";
@@ -23,9 +25,10 @@ type Props = {
   urls: string[];
   onChange: (urls: string[]) => void;
   max?: number;
+  onBusyChange?: (busy: boolean) => void;
 };
 
-export function MediaUploader({ urls, onChange, max }: Props) {
+export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
   const { t } = useI18n();
   const cfg = useAppConfig();
   const cap = max ?? cfg.maxImages;
@@ -46,30 +49,52 @@ export function MediaUploader({ urls, onChange, max }: Props) {
 
     const list = Array.from(files).slice(0, remaining);
     setUploading(true);
+    onBusyChange?.(true);
     const next = [...urls];
+    let addedCount = 0;
+    let warnedRecommendedSize = false;
 
-    for (const file of list) {
-      if (!looksLikeImageFile(file) && !looksLikeVideoFile(file)) {
-        toast.error(`${file.name} : image ou vidéo uniquement`);
-        continue;
-      }
+    try {
+      for (const file of list) {
+        if (!looksLikeImageFile(file) && !looksLikeVideoFile(file)) {
+          toast.error(`${file.name} : image ou vidéo uniquement`);
+          continue;
+        }
 
-      try {
-        const uploaded = await uploadCompressedMedia(file, "product");
-        if (uploaded.posterUrl && !next.includes(uploaded.posterUrl)) {
-          next.push(uploaded.posterUrl);
+        if (
+          !warnedRecommendedSize &&
+          exceedsRecommendedVideoSize(file)
+        ) {
+          warnedRecommendedSize = true;
+          toast.warning(
+            `Vidéo > 10 Mo : recommandé pour la fluidité. Import autorisé, découpe max ${PRODUCT_VIDEO_MAX_SECONDS}s.`,
+          );
         }
-        if (uploaded.url && !next.includes(uploaded.url)) {
-          next.push(uploaded.url);
+
+        try {
+          const uploaded = await uploadCompressedMedia(file, "product");
+          if (uploaded.posterUrl && !next.includes(uploaded.posterUrl)) {
+            next.push(uploaded.posterUrl);
+            addedCount += 1;
+          }
+          if (uploaded.url && !next.includes(uploaded.url)) {
+            next.push(uploaded.url);
+            addedCount += 1;
+          }
+        } catch (error) {
+          toast.error(mediaUploadToastMessage(error, t));
         }
-      } catch (error) {
-        toast.error(mediaUploadToastMessage(error, t));
       }
+    } finally {
+      setUploading(false);
+      onBusyChange?.(false);
+      if (inputRef.current) inputRef.current.value = "";
     }
 
+    if (list.length > 1 && addedCount < list.length) {
+      toast.message(`${addedCount}/${list.length} fichier(s) ajouté(s)`);
+    }
     onChange(next);
-    setUploading(false);
-    if (inputRef.current) inputRef.current.value = "";
   }
 
   return (

@@ -25,6 +25,7 @@ import {
   SOLD_ORDER_STATUS_FILTER,
   soldOrdersCount,
 } from "@/lib/sold-orders";
+import { relativeUploadPathFromUrl } from "@/lib/upload-file.server";
 
 type ZoneBoostRow = {
   productId: string;
@@ -157,6 +158,10 @@ const createSchema = z.object({
   imageMotions: z.array(z.string().max(24)).max(12).optional(),
   status: z.enum(["DRAFT", "ACTIVE"]).default("DRAFT"),
 });
+
+function isAllowedProductMediaUrl(url: string) {
+  return Boolean(relativeUploadPathFromUrl(url)) || url.includes("picsum.photos");
+}
 
 export async function GET(req: Request) {
   try {
@@ -507,6 +512,12 @@ export async function POST(req: Request) {
       .map((u) => u.trim())
       .filter(Boolean)
       .slice(0, cfg.maxImages);
+    if (images.some((url) => !isAllowedProductMediaUrl(url))) {
+      return NextResponse.json(
+        { error: "Média invalide: utilisez des fichiers uploadés" },
+        { status: 400 },
+      );
+    }
 
     let soundtrackStartMs = body.soundtrackStartMs ?? 0;
     let soundtrackId = body.soundtrackId ?? null;
