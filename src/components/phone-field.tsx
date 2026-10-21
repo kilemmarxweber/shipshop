@@ -9,6 +9,7 @@ import {
   countryMatches,
   flagEmoji,
   looksLikeEmailInput,
+  looksLikeNumericPhoneInput,
   splitPhone,
 } from "@/lib/phone";
 import { Label } from "@/components/ui/label";
@@ -36,9 +37,13 @@ export function PhoneField({
   emailOrPhone = false,
   autoComplete,
 }: Props) {
+  const numericPhoneMode = !emailOrPhone || looksLikeNumericPhoneInput(value);
   const emailMode = emailOrPhone && looksLikeEmailInput(value);
-  const parts = splitPhone(emailMode ? "" : value);
-  const country = countryByDial(parts.dial);
+  const showDialSelector = !emailMode && numericPhoneMode;
+  const parts = splitPhone(showDialSelector ? value : "");
+  const [selectedDial, setSelectedDial] = useState(parts.dial);
+  const activeDial = showDialSelector && !value.trim() ? selectedDial : parts.dial;
+  const country = countryByDial(activeDial);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
@@ -65,6 +70,14 @@ export function PhoneField({
     return () => window.clearTimeout(t);
   }, [open]);
 
+  useEffect(() => {
+    if (!showDialSelector) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const parsed = splitPhone(trimmed);
+    if (parsed.dial !== selectedDial) setSelectedDial(parsed.dial);
+  }, [showDialSelector, value, selectedDial]);
+
   return (
     <div className={cn("space-y-2", className)}>
       <Label htmlFor={id}>
@@ -75,7 +88,7 @@ export function PhoneField({
         ref={boxRef}
         className="relative flex h-11 overflow-visible rounded-lg border border-border bg-surface-2 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
       >
-        {emailMode ? null : (
+        {showDialSelector ? (
           <>
             <button
               type="button"
@@ -92,22 +105,29 @@ export function PhoneField({
             </button>
             <span className="my-1.5 w-px shrink-0 bg-border" aria-hidden />
           </>
-        )}
+        ) : null}
         <input
           id={id}
           type={emailMode ? "email" : "tel"}
-          inputMode={emailMode ? "email" : emailOrPhone ? "text" : "numeric"}
+          inputMode={emailMode ? "email" : "numeric"}
           autoComplete={
             autoComplete ??
             (emailOrPhone ? "username" : "tel-national")
           }
           pattern={emailMode || emailOrPhone ? undefined : "[0-9]*"}
-          maxLength={emailMode ? undefined : country.max}
-          value={emailMode ? value : parts.national}
+          maxLength={showDialSelector ? country.max : undefined}
+          value={showDialSelector ? parts.national : value}
           onChange={(e) => {
             const raw = e.target.value;
-            if (emailOrPhone && looksLikeEmailInput(raw)) {
+            if (emailOrPhone && !looksLikeNumericPhoneInput(raw)) {
               onChange(raw);
+              return;
+            }
+            const hasExplicitDial = /^\s*(\+|00)/.test(raw);
+            if (showDialSelector && hasExplicitDial) {
+              const parsed = splitPhone(raw);
+              setSelectedDial(parsed.dial);
+              onChange(composePhone(parsed.dial, parsed.national));
               return;
             }
             onChange(composePhone(country.dial, raw));
@@ -122,7 +142,7 @@ export function PhoneField({
           className="h-11 min-w-0 flex-1 border-0 bg-transparent px-2.5 text-base outline-none"
         />
 
-        {!emailMode && open && (
+        {showDialSelector && open && (
           <div className="absolute top-[calc(100%+4px)] left-0 z-50 w-[min(100%,20rem)] overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
             <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
               <Search className="size-3.5 shrink-0 text-muted-foreground" />
@@ -145,6 +165,7 @@ export function PhoneField({
                     <button
                       type="button"
                       onClick={() => {
+                        setSelectedDial(c.dial);
                         onChange(composePhone(c.dial, parts.national));
                         setOpen(false);
                       }}
@@ -168,14 +189,14 @@ export function PhoneField({
           </div>
         )}
       </div>
-      {emailMode ? null : (
+      {showDialSelector ? (
         <p className="text-[10px] text-muted-foreground">
           {flagEmoji(country.iso)} {country.label} {country.dial} — {country.max}{" "}
           chiffre{country.max > 1 ? "s" : ""}
           {country.min !== country.max ? ` (min. ${country.min})` : ""}, sans le
           0.
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

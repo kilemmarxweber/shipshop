@@ -119,6 +119,15 @@ export function looksLikeEmailInput(raw: string) {
   return /[A-Za-z@]/.test(raw.trim());
 }
 
+/** Identifiant saisi comme téléphone: uniquement chiffres (ou + en tête). */
+export function looksLikeNumericPhoneInput(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return true;
+  // Accepte les formats téléphone courants sans basculer en mode e-mail.
+  if (/[A-Za-z@]/.test(trimmed)) return false;
+  return /^\+?[\d\s().-]+$/.test(trimmed) && /\d/.test(trimmed);
+}
+
 export function normalizeAccountPhone(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed || looksLikeEmailInput(trimmed)) return null;
