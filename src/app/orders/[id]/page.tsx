@@ -283,7 +283,7 @@ function OrderInner() {
       10_000,
   );
   const saleFeeCents =
-    (order.saleFeeCents ?? 0) > 0 ? (order.saleFeeCents ?? 0) : estimatedSaleFeeCents;
+    order.saleFeeCents != null ? order.saleFeeCents : estimatedSaleFeeCents;
   const vendorNetCents = Math.max(0, order.productCents - saleFeeCents);
   const handedOver = Boolean(order.pickupReceipt?.redeemedAt);
   const isBuyer =

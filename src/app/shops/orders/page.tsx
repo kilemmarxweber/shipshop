@@ -71,7 +71,7 @@ function resolveSaleFeeCents(
   saleFeeCents?: number,
   saleFeeBps?: number,
 ) {
-  if ((saleFeeCents ?? 0) > 0) return saleFeeCents ?? 0;
+  if (saleFeeCents != null) return saleFeeCents;
   return Math.floor(
     (Math.max(0, productCents) * (saleFeeBps ?? SALE_FEE_BPS_DEFAULT)) / 10_000,
   );
