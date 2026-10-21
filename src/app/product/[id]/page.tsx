@@ -457,63 +457,77 @@ function ProductInner() {
   }
 
   return (
-    <div className="pb-8 pt-1">
-      <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-4 pb-1">
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-heading text-sm font-bold leading-none">
-            {product.title}
-          </p>
-          <ShopBrand
-            name={product.shop.name}
-            slug={product.shop.slug}
-            logoUrl={product.shop.logoUrl}
-            className="mt-1"
-            avatarClassName="size-5 ring-1 ring-border"
-            nameClassName="text-[11px] font-semibold text-muted-foreground hover:text-primary"
-          />
-          <ShopHoursNotice hours={product.shop} className="mt-1" />
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={toggleLike}
-            className={cn(
-              "grid size-8 cursor-pointer place-items-center rounded-full border transition hover:scale-105 active:scale-95",
-              product.likedByMe
-                ? "border-destructive/40 bg-destructive/15"
-                : "border-border bg-muted/40",
-            )}
-            aria-label={t("product.likeAria")}
-          >
-            <Heart
-              className={cn(
-                "size-3.5",
-                product.likedByMe && "fill-destructive text-destructive",
-              )}
-            />
-          </button>
-          <ShareMenu
-            title={product.title}
-            productId={product.id}
-            text={`${product.title} — ${formatMoney(product.priceCents, product.currency)} ${t("product.onShipShop")}`}
-            url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${product.id}`}
-            triggerClassName="grid size-8 place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 hover:bg-muted active:scale-95"
-          >
-            <Share2 className="size-3.5" />
-          </ShareMenu>
-          <button
-            type="button"
-            onClick={() => setCommentsOpen(true)}
-            className="grid size-8 cursor-pointer place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 active:scale-95"
-            aria-label={t("product.commentAria")}
-          >
-            <MessageCircle className="size-3.5" />
-          </button>
-        </div>
-      </div>
+    <div className="pb-12 pt-2">
+      <div className="mx-auto w-full max-w-3xl space-y-4 px-3 sm:px-4">
+        <div className="rounded-2xl border border-border/80 bg-surface/90 p-3 shadow-[0_8px_22px_rgba(0,0,0,0.2)] backdrop-blur">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate font-heading text-lg font-extrabold sm:text-xl">
+                {product.title}
+              </h1>
+              <p className="mt-1 font-heading text-2xl font-black text-trust sm:text-3xl">
+                {formatMoney(product.priceCents, product.currency)}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="size-3.5 shrink-0" />
+                  {product.location}
+                </span>
+                <span>·</span>
+                <span>{product.category}</span>
+              </div>
+              <ShopBrand
+                name={product.shop.name}
+                slug={product.shop.slug}
+                logoUrl={product.shop.logoUrl}
+                className="mt-2"
+                avatarClassName="size-5 ring-1 ring-border"
+                nameClassName="text-[12px] font-semibold text-muted-foreground hover:text-primary"
+              />
+              <ShopHoursNotice hours={product.shop} className="mt-1" />
+            </div>
 
-      <div className="relative mx-auto w-full max-w-2xl px-2 md:px-3">
-        <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_8px_32px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleLike}
+                className={cn(
+                  "grid size-8 cursor-pointer place-items-center rounded-full border transition hover:scale-105 active:scale-95",
+                  product.likedByMe
+                    ? "border-destructive/40 bg-destructive/15"
+                    : "border-border bg-muted/40",
+                )}
+                aria-label={t("product.likeAria")}
+              >
+                <Heart
+                  className={cn(
+                    "size-3.5",
+                    product.likedByMe && "fill-destructive text-destructive",
+                  )}
+                />
+              </button>
+              <ShareMenu
+                title={product.title}
+                productId={product.id}
+                text={`${product.title} — ${formatMoney(product.priceCents, product.currency)} ${t("product.onShipShop")}`}
+                url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${product.id}`}
+                triggerClassName="grid size-8 place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 hover:bg-muted active:scale-95"
+              >
+                <Share2 className="size-3.5" />
+              </ShareMenu>
+              <button
+                type="button"
+                onClick={() => setCommentsOpen(true)}
+                className="grid size-8 cursor-pointer place-items-center rounded-full border border-border bg-muted/40 transition hover:scale-105 active:scale-95"
+                aria-label={t("product.commentAria")}
+              >
+                <MessageCircle className="size-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_10px_32px_rgba(0,0,0,0.35)] ring-1 ring-white/5">
           <ProductImageCarousel
             key={product.images.join("|")}
             images={product.images}
@@ -548,30 +562,30 @@ function ProductInner() {
             />
           ) : null}
         </div>
-      </div>
 
-      <div className="mx-auto max-w-2xl px-4 pt-2">
-        <div className="mb-3 flex items-center gap-2 text-xs text-trust">
-          <ShieldCheck className="size-4" />
-          {t("product.payFromWallet")}
-          {product.likesCount > 0 && (
-            <span className="text-muted-foreground">
-              · {product.likesCount} {t("product.likes")}
+        <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-trust/30 bg-trust/10 px-3 py-1 text-trust">
+            <ShieldCheck className="size-3.5" />
+            {t("product.payFromWallet")}
+          </span>
+          {product.likesCount > 0 ? (
+            <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-muted-foreground">
+              {product.likesCount} {t("product.likes")}
             </span>
-          )}
-          {(product.commentsCount ?? 0) > 0 && (
+          ) : null}
+          {(product.commentsCount ?? 0) > 0 ? (
             <button
               type="button"
               onClick={() => setCommentsOpen(true)}
-              className="text-muted-foreground hover:underline"
+              className="rounded-full border border-border bg-surface px-2.5 py-1 text-muted-foreground transition hover:bg-muted/50"
             >
-              · {product.commentsCount} {t("product.comments")}
+              {product.commentsCount} {t("product.comments")}
             </button>
-          )}
+          ) : null}
         </div>
 
         {isOwner && (
-          <div className="mb-4 rounded-2xl border border-border bg-surface p-3">
+          <div className="rounded-2xl border border-border bg-surface p-3">
             <p className="mb-2 text-[11px] font-semibold text-muted-foreground">
               {t("product.manageOwn")}
             </p>
@@ -632,8 +646,9 @@ function ProductInner() {
             />
           </div>
         )}
+
         {!isOwner && (product.creatorCommissionBps ?? 0) > 0 ? (
-          <div className="mb-4 rounded-2xl border border-border bg-surface p-3">
+          <div className="rounded-2xl border border-border bg-surface p-3">
             <ProductCommerceTools
               productId={product.id}
               creatorCommissionBps={product.creatorCommissionBps ?? 0}
@@ -643,139 +658,128 @@ function ProductInner() {
           </div>
         ) : null}
 
-        <h1 className="font-heading text-2xl font-bold">{product.title}</h1>
-        <p className="mt-1 font-heading text-3xl font-extrabold text-trust">
-          {formatMoney(product.priceCents, product.currency)}
-        </p>
-        <p className="mt-2 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
-          <MapPin className="size-3.5 shrink-0" />
-          <span>
-            {product.location} · {product.category} ·{" "}
-            <ShopBrand
-              name={product.shop.name}
-              slug={product.shop.slug}
-              logoUrl={product.shop.logoUrl}
-              className="inline-flex"
-              avatarClassName="size-5 ring-1 ring-border"
-              nameClassName="text-sm font-semibold text-foreground hover:text-primary"
-            />
-          </span>
-        </p>
+        {(product.colors.length > 0 || product.sizes.length > 0) && (
+          <section className="rounded-2xl border border-border bg-surface p-4">
+            {product.colors.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                  {t("product.color")}
+                  {selectedColor ? ` · ${selectedColor}` : ""}
+                </p>
+                <div className="h-scroll gap-2">
+                  {product.colors.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      title={c}
+                      onClick={() => setSelectedColor(c)}
+                      className={cn(
+                        "size-8 shrink-0 cursor-pointer rounded-full border-2 transition",
+                        selectedColor === c
+                          ? "border-primary scale-110"
+                          : "border-white/20",
+                      )}
+                      style={{ backgroundColor: colorHex(c) }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
-        {product.colors.length > 0 && (
-          <div className="mt-5">
-            <p className="mb-2 text-xs font-semibold text-muted-foreground">
-              {t("product.color")}
-              {selectedColor ? ` · ${selectedColor}` : ""}
+            {product.sizes.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                  {t("product.size")}
+                </p>
+                <div className="h-scroll gap-2">
+                  {product.sizes.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSelectedSize(s)}
+                      className={cn(
+                        "min-w-10 shrink-0 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold whitespace-nowrap",
+                        selectedSize === s
+                          ? "border-primary bg-primary text-white"
+                          : "border-border bg-surface-2",
+                      )}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {product.description ? (
+          <section className="rounded-2xl border border-border bg-surface p-4">
+            <p className="text-sm leading-relaxed text-white/90">
+              {product.description}
             </p>
-            <div className="h-scroll gap-2">
-              {product.colors.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  title={c}
-                  onClick={() => setSelectedColor(c)}
-                  className={cn(
-                    "size-8 shrink-0 cursor-pointer rounded-full border-2 transition",
-                    selectedColor === c
-                      ? "border-primary scale-110"
-                      : "border-white/20",
-                  )}
-                  style={{ backgroundColor: colorHex(c) }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {product.sizes.length > 0 && (
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-semibold text-muted-foreground">
-              {t("product.size")}
-            </p>
-            <div className="h-scroll gap-2">
-              {product.sizes.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSelectedSize(s)}
-                  className={cn(
-                    "min-w-10 shrink-0 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold whitespace-nowrap",
-                    selectedSize === s
-                      ? "border-primary bg-primary text-white"
-                      : "border-border bg-surface-2",
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {product.description && (
-          <p className="mt-4 text-sm leading-relaxed text-white/85">
-            {product.description}
-          </p>
-        )}
+          </section>
+        ) : null}
 
         {product.status !== "ACTIVE" ? (
-          <Button disabled className="mt-6 h-12 w-full">
+          <Button disabled className="h-12 w-full">
             {product.status === "SOLD"
               ? t("product.sold")
               : t("product.unavailable")}
           </Button>
         ) : (
-          <div className="mt-6 space-y-3">
-            {!session ? (
-              <AuthInline />
-            ) : (
-              <>
-            <FulfillmentForm
-              compact
-              shopId={product.shop.id}
-              productCents={product.priceCents}
-              currency={product.currency}
-              defaultPhone={profilePhone}
-              value={fulfillment}
-              onChange={setFulfillment}
-            />
-            <Button
-              onClick={buyNow}
-              disabled={loading !== null || cartHasItems}
-              className="h-12 w-full cursor-pointer text-base font-bold"
-            >
-              {loading === "buy" ? t("product.processing") : t("buy.payPhone")}
-            </Button>
-            {cartHasItems ? (
-              <p className="text-center text-[11px] text-muted-foreground">
-                {t("buy.payUseCart")}
-              </p>
-            ) : null}
-            <Button
-              onClick={addToCart}
-              disabled={loading !== null}
-              variant="secondary"
-              className="h-11 w-full cursor-pointer gap-2 text-sm font-semibold"
-            >
-              <ShoppingCart className="size-4" />
-              {loading === "cart"
-                ? t("product.adding")
-                : inCart
-                  ? `${t("product.addToCart")} +1`
-                  : t("product.addToCart")}
-            </Button>
-              </>
-            )}
-            <Button
-              onClick={() => setCommentsOpen(true)}
-              variant="outline"
-              className="h-11 w-full cursor-pointer gap-2 text-sm font-semibold"
-            >
-              <MessageCircle className="size-4" />
-              {t("feed.commentsTitle")}
-            </Button>
-          </div>
+          <section className="rounded-2xl border border-border bg-surface p-3 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+            <div className="space-y-3">
+              {!session ? (
+                <AuthInline />
+              ) : (
+                <>
+                  <FulfillmentForm
+                    compact
+                    shopId={product.shop.id}
+                    productCents={product.priceCents}
+                    currency={product.currency}
+                    defaultPhone={profilePhone}
+                    value={fulfillment}
+                    onChange={setFulfillment}
+                  />
+                  <Button
+                    onClick={buyNow}
+                    disabled={loading !== null || cartHasItems}
+                    className="h-12 w-full cursor-pointer text-base font-bold"
+                  >
+                    {loading === "buy" ? t("product.processing") : t("buy.payPhone")}
+                  </Button>
+                  {cartHasItems ? (
+                    <p className="text-center text-[11px] text-muted-foreground">
+                      {t("buy.payUseCart")}
+                    </p>
+                  ) : null}
+                  <Button
+                    onClick={addToCart}
+                    disabled={loading !== null}
+                    variant="secondary"
+                    className="h-11 w-full cursor-pointer gap-2 text-sm font-semibold"
+                  >
+                    <ShoppingCart className="size-4" />
+                    {loading === "cart"
+                      ? t("product.adding")
+                      : inCart
+                        ? `${t("product.addToCart")} +1`
+                        : t("product.addToCart")}
+                  </Button>
+                </>
+              )}
+              <Button
+                onClick={() => setCommentsOpen(true)}
+                variant="outline"
+                className="h-11 w-full cursor-pointer gap-2 text-sm font-semibold"
+              >
+                <MessageCircle className="size-4" />
+                {t("feed.commentsTitle")}
+              </Button>
+            </div>
+          </section>
         )}
       </div>
 

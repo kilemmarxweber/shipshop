@@ -617,7 +617,7 @@ const fr: Messages = {
     discoverShop: "Découvrez",
   },
   product: {
-    payFromWallet: "Payer au téléphone — argent bloqué jusqu’à réception",
+    payFromWallet: "Payer au téléphone — argent bloqué jusqu’à la réception",
     likes: "j'aime",
     comments: "commentaires",
     commentAria: "Commentaires",
