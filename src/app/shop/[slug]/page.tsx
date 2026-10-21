@@ -42,6 +42,7 @@ import {
 } from "@/components/video-sound-button";
 import {
   requestFeedAudioFocus,
+  resetFeedAudioFocus,
   unpinFeedAudio,
   useFeedAudioFocus,
   useResumeFeedSoundWhenVisible,
@@ -128,10 +129,22 @@ function ShopInner() {
   const [commentProductId, setCommentProductId] = useState<string | null>(null);
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [shopAudioMuted, setShopAudioMuted] = useState(false);
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const audioFocusId = useFeedAudioFocus();
   useResumeFeedSoundWhenVisible();
   const prevAudioFocus = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Entrée shop: repartir en non-mute local; sortie shop: couper tout le son.
+    setShopAudioMuted(false);
+    return () => {
+      setShopAudioMuted(true);
+      disableFeedSound();
+      resetFeedAudioFocus();
+      setSoundById({});
+    };
+  }, []);
 
   useEffect(() => {
     if (prevAudioFocus.current === audioFocusId) return;
@@ -152,9 +165,10 @@ function ShopInner() {
 
   function mediaSound(id: string): VideoSoundState {
     const volume = soundById[id]?.volume ?? DEFAULT_VIDEO_SOUND.volume;
+    const cardMuted = soundById[id]?.muted ?? false;
     return {
       volume,
-      muted: audioFocusId !== id,
+      muted: shopAudioMuted || cardMuted || audioFocusId !== id,
     };
   }
 
@@ -163,6 +177,7 @@ function ShopInner() {
   }
 
   function activateSound(id: string) {
+    setShopAudioMuted(false);
     enableFeedSound(false);
     if (!soundFor(id).muted) {
       requestFeedAudioFocus(id);
@@ -402,7 +417,7 @@ function ShopInner() {
   const refCode = shop.slug.toUpperCase().slice(0, 12);
 
   return (
-    <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden md:h-auto md:overflow-visible">
+    <div className="feed-reel-root flex h-auto min-h-0 flex-col overflow-visible">
       {/* En-tête boutique */}
       <header className="shrink-0 border-b border-border bg-background/95 px-4 pb-3 pt-1 backdrop-blur">
         <div className="flex items-start gap-3">
@@ -651,7 +666,7 @@ function ShopInner() {
       ) : (
         <div
           id="produits"
-          className="feed-snap feed-product-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain md:h-auto md:min-h-0 md:flex-none md:overflow-visible md:overscroll-y-auto"
+          className="feed-snap feed-product-list h-auto min-h-0 flex-none overflow-visible overscroll-y-auto"
           onScroll={() => unpinFeedAudio()}
         >
           {products.map((p) => (
@@ -803,12 +818,14 @@ function ShopInner() {
                   sound={soundFor(p.id)}
                   onChange={(next) => {
                     if (next.muted) {
+                      setShopAudioMuted(true);
                       disableFeedSound();
                       setSoundById((prev) =>
                         applyExclusiveVideoSound(prev, p.id, next),
                       );
                       return;
                     }
+                    setShopAudioMuted(false);
                     enableFeedSound(false);
                     requestFeedAudioFocus(p.id);
                     setSoundById((prev) =>

@@ -275,7 +275,7 @@ function SlideMedia({
             onEnded={() => {
               if (!loop) onPlaybackEnded?.();
             }}
-            className={mediaClass(fit)}
+            className={cn(mediaClass(fit), portraitFocus && "ss-reel-fg-portrait")}
             style={portraitVars}
           />
         )
@@ -297,6 +297,7 @@ function SlideMedia({
               fetchPriority={playing ? "high" : "low"}
               className={cn(mediaClass(fit), portraitFocus && "ss-reel-fg-portrait")}
               onLoad={(e) => {
+                if (!applyRatio) return;
                 const el = e.currentTarget;
                 if (el.naturalWidth > 0 && el.naturalHeight > 0) {
                   setMediaRatio(el.naturalWidth / el.naturalHeight);

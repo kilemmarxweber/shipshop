@@ -51,7 +51,7 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
     setUploading(true);
     onBusyChange?.(true);
     const next = [...urls];
-    let succeededFiles = 0;
+    let addedMediaCount = 0;
     let warnedRecommendedSize = false;
 
     try {
@@ -73,12 +73,13 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
 
         try {
           const uploaded = await uploadCompressedMedia(file, "product");
-          succeededFiles += 1;
           if (uploaded.posterUrl && !next.includes(uploaded.posterUrl)) {
             next.push(uploaded.posterUrl);
+            addedMediaCount += 1;
           }
           if (uploaded.url && !next.includes(uploaded.url)) {
             next.push(uploaded.url);
+            addedMediaCount += 1;
           }
         } catch (error) {
           toast.error(mediaUploadToastMessage(error, t));
@@ -90,8 +91,8 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
       if (inputRef.current) inputRef.current.value = "";
     }
 
-    if (list.length > 1 && succeededFiles < list.length) {
-      toast.message(`${succeededFiles}/${list.length} fichier(s) ajouté(s)`);
+    if (list.length > 1) {
+      toast.message(`${addedMediaCount} média(s) ajouté(s)`);
     }
     onChange(next);
   }

@@ -275,6 +275,7 @@ export function AppShell({
             className={cn(
               "app-main",
               feedLayout && "app-main-feed",
+              pathname.startsWith("/shop/") && "app-main-shop-feed",
               pathname.startsWith("/messages/") && "app-main-chat",
               !hideChrome &&
                 "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
@@ -285,7 +286,14 @@ export function AppShell({
                 <BackButton inline fixed={false} />
               </div>
             )}
-            <div className="app-page">{children}</div>
+            <div
+              className={cn(
+                "app-page",
+                pathname.startsWith("/shop/") && "app-page-shop-feed",
+              )}
+            >
+              {children}
+            </div>
           </main>
 
           {!hideChrome && (

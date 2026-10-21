@@ -315,6 +315,37 @@
   overflow: hidden;
 }
 
+/* Shop page (mobile Android/tablette/desktop): header + cards dans le même scroll. */
+.app-main.app-main-feed.app-main-shop-feed {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.app-main.app-main-feed.app-main-shop-feed .app-page.app-page-shop-feed {
+  flex: 1 0 auto;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.app-main.app-main-feed.app-main-shop-feed .feed-product-list {
+  flex: none;
+  height: auto;
+  overflow: visible;
+  overscroll-behavior: auto;
+  scroll-snap-type: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 0.75rem 1.5rem;
+}
+
+.app-main.app-main-feed.app-main-shop-feed .feed-product-list .feed-snap-item {
+  height: clamp(420px, 72dvh, 560px);
+  min-height: clamp(420px, 72dvh, 560px);
+  border-radius: 1rem;
+}
+
 /* Toute page : occupe la zone utile (header / nav compris). */
 .app-page {
   display: flex;
@@ -453,6 +484,15 @@
     overflow: visible;
   }
 
+  /* Shop page tablet/desktop: le header et la grille produits partagent
+     le même scroll (comme "Pour toi"), sans scroll interne de la liste. */
+  .app-main.app-main-feed.app-main-shop-feed .app-page.app-page-shop-feed {
+    flex: 1 0 auto;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
   .app-main:has(.feed-product-list) {
     overflow-x: hidden;
     overflow-y: auto;
@@ -483,6 +523,18 @@
     min-height: 0;
     border-radius: 1rem;
     scroll-snap-align: start;
+  }
+
+  .app-main.app-main-feed.app-main-shop-feed .feed-product-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    padding: 1rem 1rem 2rem;
+  }
+
+  .app-main.app-main-feed.app-main-shop-feed .feed-product-list .feed-snap-item {
+    height: min(520px, 70dvh);
+    min-height: 0;
   }
 }
 
@@ -610,6 +662,7 @@
 .ss-reel-fg-video.ss-reel-fg-portrait {
   object-position: 50% clamp(12%, var(--ss-portrait-y, 18%), 30%);
 }
+
 /* iOS Safari: garder le meme cadrage portrait que Android/tablette. */
 @supports (-webkit-touch-callout: none) {
   .ss-reel-fg-portrait,
