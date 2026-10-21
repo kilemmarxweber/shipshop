@@ -73,17 +73,12 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
 
         try {
           const uploaded = await uploadCompressedMedia(file, "product");
-          let addedForFile = false;
+          succeededFiles += 1;
           if (uploaded.posterUrl && !next.includes(uploaded.posterUrl)) {
             next.push(uploaded.posterUrl);
-            addedForFile = true;
           }
           if (uploaded.url && !next.includes(uploaded.url)) {
             next.push(uploaded.url);
-            addedForFile = true;
-          }
-          if (addedForFile) {
-            succeededFiles += 1;
           }
         } catch (error) {
           toast.error(mediaUploadToastMessage(error, t));
