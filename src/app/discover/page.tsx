@@ -17,7 +17,7 @@ import {
   Shirt,
   Sparkles,
 } from "lucide-react";
-import { CATEGORIES } from "@/lib/categories";
+import { CATEGORIES, type CategoryId } from "@/lib/categories";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { useAppConfig } from "@/lib/use-app-config";
 import { formatMoney, cn } from "@/lib/utils";
@@ -135,6 +135,7 @@ export default function DiscoverPage() {
 
   const feed = usePaginatedList<Product>({
     prefetchRemaining: 4,
+    resetGroup: `discover:${category ?? ""}:${debouncedQ}`,
     cacheKey: `discover:${category ?? ""}:${debouncedQ}`,
     deps: [debouncedQ, category],
     buildUrl: (cursor) => {
@@ -154,17 +155,17 @@ export default function DiscoverPage() {
   });
 
   const products = feed.items;
-  const popularCats = useMemo(
-    () =>
-      CATEGORIES.map((c) => {
-        const hit = products.find(
-          (p) => p.category === c.id && firstVisualUrl(p.images),
-        );
-        const image = hit ? firstVisualUrl(hit.images) : null;
-        return image ? { id: c.id, image } : null;
-      }).filter((row): row is { id: string; image: string } => Boolean(row)),
-    [products],
-  );
+  const popularCats = useMemo(() => {
+    const rows: { id: CategoryId; image: string }[] = [];
+    for (const c of CATEGORIES) {
+      const hit = products.find(
+        (p) => p.category === c.id && firstVisualUrl(p.images),
+      );
+      const image = hit ? firstVisualUrl(hit.images) : null;
+      if (image) rows.push({ id: c.id, image });
+    }
+    return rows;
+  }, [products]);
   const featuredEntries: CardEntry[] = products
     .slice(0, 12)
     .map((product, index) => ({ key: `featured:${product.id}:${index}`, product }));

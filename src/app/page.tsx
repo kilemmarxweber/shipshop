@@ -126,24 +126,6 @@ export default function FeedPage() {
   useFeedOrientation();
   useResumeFeedSoundWhenVisible();
 
-  useEffect(() => {
-    void getCurrentGeoCoords()
-      .then(async (coords) => {
-        setNear({ lat: coords.latitude, lng: coords.longitude });
-        try {
-          const place = await reverseGeocode(coords.latitude, coords.longitude);
-          setNearZone({
-            city: place.city || "",
-            commune: place.commune || "",
-            quartier: place.quartier || "",
-            avenue: place.avenue || "",
-          });
-        } catch {
-          setNearZone(null);
-        }
-      })
-      .catch(() => undefined);
-  }, []);
   const [near, setNear] = useState<{ lat: number; lng: number } | null>(null);
   const [nearZone, setNearZone] = useState<{
     city: string;
@@ -151,10 +133,38 @@ export default function FeedPage() {
     quartier: string;
     avenue: string;
   } | null>(null);
+  useEffect(() => {
+    // Apply coords + zone together so geo doesn't trigger two feed reloads.
+    void getCurrentGeoCoords()
+      .then(async (coords) => {
+        const nextNear = { lat: coords.latitude, lng: coords.longitude };
+        let nextZone: {
+          city: string;
+          commune: string;
+          quartier: string;
+          avenue: string;
+        } | null = null;
+        try {
+          const place = await reverseGeocode(coords.latitude, coords.longitude);
+          nextZone = {
+            city: place.city || "",
+            commune: place.commune || "",
+            quartier: place.quartier || "",
+            avenue: place.avenue || "",
+          };
+        } catch {
+          nextZone = null;
+        }
+        setNear(nextNear);
+        setNearZone(nextZone);
+      })
+      .catch(() => undefined);
+  }, []);
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const productFeed = usePaginatedList<Product>({
     enabled: tab !== "wanted" && !(tab === "following" && !session),
+    resetGroup: tab === "following" ? "following" : "foryou",
     cacheKey:
       tab === "following"
         ? `products:following:${session?.user?.id ?? ""}`
@@ -479,7 +489,7 @@ export default function FeedPage() {
     </>
   );
 
-  if (loading) {
+  if (loading && (tab === "wanted" ? wanted.length === 0 : products.length === 0)) {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         {tabs}

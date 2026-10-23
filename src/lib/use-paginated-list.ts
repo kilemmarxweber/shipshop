@@ -19,9 +19,19 @@ type ExtractPage<T> = {
   nextCursor: string | null;
 };
 
+type LoadOptions = {
+  /** Keep current items visible; no full-page loading flash. */
+  soft?: boolean;
+};
+
 export function usePaginatedList<T extends { id: string }>(options: {
   enabled?: boolean;
   cacheKey?: string;
+  /**
+   * When this changes (ex. foryou → following), wipe and hard-load.
+   * Other dep changes (geo, session) soft-refresh in the background.
+   */
+  resetGroup?: string;
   prefetchRemaining?: number;
   deps: DependencyList;
   buildUrl: (cursor: string | null) => string;
@@ -30,6 +40,7 @@ export function usePaginatedList<T extends { id: string }>(options: {
   const {
     enabled = true,
     cacheKey,
+    resetGroup = "default",
     prefetchRemaining = 4,
     deps,
     buildUrl,
@@ -44,6 +55,9 @@ export function usePaginatedList<T extends { id: string }>(options: {
   const nextCursorRef = useRef<string | null>(null);
   const pagesLoadedRef = useRef(0);
   const userScrolledRef = useRef(false);
+  const itemsRef = useRef<T[]>([]);
+  const resetGroupRef = useRef(resetGroup);
+  const bootstrappedKeyRef = useRef<string | null>(null);
   const buildUrlRef = useRef(buildUrl);
   const extractRef = useRef(extract);
   const cacheKeyRef = useRef(cacheKey);
@@ -51,73 +65,83 @@ export function usePaginatedList<T extends { id: string }>(options: {
   extractRef.current = extract;
   cacheKeyRef.current = cacheKey;
   nextCursorRef.current = nextCursor;
+  itemsRef.current = items;
 
-  const load = useCallback(async (cursor: string | null, append: boolean) => {
-    if (!append) {
-      abortRef.current?.abort();
-    } else if (loadingMoreRef.current || !cursor) {
-      return;
-    }
-    const ac = new AbortController();
-    abortRef.current = ac;
-    if (append) {
-      loadingMoreRef.current = true;
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
-    try {
-      const res = await fetch(buildUrlRef.current(cursor), {
-        signal: ac.signal,
-      });
-      const json: unknown = await res.json().catch(() => ({}));
-      if (ac.signal.aborted) return;
-      const page = extractRef.current(json);
-      setNextCursor(page.nextCursor);
-      nextCursorRef.current = page.nextCursor;
-      pagesLoadedRef.current += 1;
-      setItems((prev) => {
-        const next = append
-          ? (() => {
-              const seen = new Set(prev.map((row) => row.id));
-              return [
-                ...prev,
-                ...page.items.filter((row) => !seen.has(row.id)),
-              ];
-            })()
-          : page.items;
-        const key = cacheKeyRef.current;
-        if (key) {
-          writeFeedListCache(key, {
-            items: next,
-            nextCursor: page.nextCursor,
-            pagesLoaded: pagesLoadedRef.current,
-          });
-        }
-        return next;
-      });
-    } catch (error) {
-      if (ac.signal.aborted) return;
-      if (
-        error instanceof DOMException &&
-        error.name === "AbortError"
-      ) {
+  const load = useCallback(
+    async (cursor: string | null, append: boolean, opts?: LoadOptions) => {
+      if (!append) {
+        abortRef.current?.abort();
+      } else if (loadingMoreRef.current || !cursor) {
         return;
       }
-      if (!append) setItems([]);
-      console.error("[paginated-list]", error);
-    } finally {
-      if (!ac.signal.aborted) {
-        setLoading(false);
-        setLoadingMore(false);
-        loadingMoreRef.current = false;
+      const ac = new AbortController();
+      abortRef.current = ac;
+      if (append) {
+        loadingMoreRef.current = true;
+        setLoadingMore(true);
+      } else {
+        const keepVisible = Boolean(opts?.soft && itemsRef.current.length > 0);
+        if (keepVisible) {
+          // Clear spinner left by an aborted hard load.
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
       }
-    }
-  }, []);
+      try {
+        const res = await fetch(buildUrlRef.current(cursor), {
+          signal: ac.signal,
+        });
+        const json: unknown = await res.json().catch(() => ({}));
+        if (ac.signal.aborted) return;
+        const page = extractRef.current(json);
+        setNextCursor(page.nextCursor);
+        nextCursorRef.current = page.nextCursor;
+        pagesLoadedRef.current += 1;
+        setItems((prev) => {
+          const next = append
+            ? (() => {
+                const seen = new Set(prev.map((row) => row.id));
+                return [
+                  ...prev,
+                  ...page.items.filter((row) => !seen.has(row.id)),
+                ];
+              })()
+            : page.items;
+          const key = cacheKeyRef.current;
+          if (key) {
+            writeFeedListCache(key, {
+              items: next,
+              nextCursor: page.nextCursor,
+              pagesLoaded: pagesLoadedRef.current,
+            });
+          }
+          return next;
+        });
+      } catch (error) {
+        if (ac.signal.aborted) return;
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        if (!append && !opts?.soft) setItems([]);
+        console.error("[paginated-list]", error);
+      } finally {
+        // Only the active request may clear flags (aborted hard loads used to
+        // leave loading=true forever when followed by a soft refresh).
+        if (abortRef.current === ac) {
+          setLoading(false);
+          setLoadingMore(false);
+          loadingMoreRef.current = false;
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!enabled) {
       abortRef.current?.abort();
+      abortRef.current = null;
       setItems([]);
       setNextCursor(null);
       setLoading(false);
@@ -125,10 +149,15 @@ export function usePaginatedList<T extends { id: string }>(options: {
       loadingMoreRef.current = false;
       pagesLoadedRef.current = 0;
       userScrolledRef.current = false;
+      bootstrappedKeyRef.current = null;
       return;
     }
-    pagesLoadedRef.current = 0;
-    userScrolledRef.current = false;
+
+    const groupChanged = resetGroupRef.current !== resetGroup;
+    resetGroupRef.current = resetGroup;
+    const key = cacheKey ?? `anon:${resetGroup}`;
+    const sameKeyBootstrapped = bootstrappedKeyRef.current === key;
+
     if (cacheKey) {
       const hit = readFeedListCache<T>(cacheKey);
       if (hit) {
@@ -139,20 +168,43 @@ export function usePaginatedList<T extends { id: string }>(options: {
         setLoading(false);
         setLoadingMore(false);
         loadingMoreRef.current = false;
-        return () => abortRef.current?.abort();
+        bootstrappedKeyRef.current = key;
+        // Do NOT auto soft-refresh on every cache hit — that aborted/restarted
+        // fetches in a loop during HMR / dep churn.
+        return () => {
+          abortRef.current?.abort();
+        };
       }
     }
-    void load(null, false);
-    return () => abortRef.current?.abort();
+
+    pagesLoadedRef.current = 0;
+    userScrolledRef.current = false;
+
+    if (groupChanged) {
+      setItems([]);
+      setNextCursor(null);
+      nextCursorRef.current = null;
+      bootstrappedKeyRef.current = key;
+      void load(null, false);
+    } else if (sameKeyBootstrapped && itemsRef.current.length > 0) {
+      // Same feed already on screen (geo/session tweak): refresh quietly.
+      void load(null, false, { soft: true });
+    } else {
+      bootstrappedKeyRef.current = key;
+      void load(null, false, { soft: itemsRef.current.length > 0 });
+    }
+    return () => {
+      abortRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- caller supplies reset deps
-  }, [enabled, load, cacheKey, ...deps]);
+  }, [enabled, load, cacheKey, resetGroup, ...deps]);
 
   useEffect(() => {
     if (!enabled) return;
     function refresh() {
       pagesLoadedRef.current = 0;
       userScrolledRef.current = false;
-      void load(null, false);
+      void load(null, false, { soft: itemsRef.current.length > 0 });
     }
     function onStorage(event: StorageEvent) {
       if (event.key !== NEW_LISTING_STORAGE_KEY || !event.newValue) return;
