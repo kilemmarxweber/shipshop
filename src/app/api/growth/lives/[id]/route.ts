@@ -16,6 +16,15 @@ import {
   liveOverlaysSchema,
   parseLiveOverlays,
 } from "@/lib/growth/live-overlays";
+import {
+  LIVE_GUEST_MAX_ON_STAGE,
+  closeLiveGuests,
+  countOnStage,
+  getMyLiveGuest,
+  isLiveFollower,
+  listLiveGuests,
+} from "@/lib/growth/live-guests";
+import { createAppNotice } from "@/lib/app-notice";
 
 const chatSchema = z.object({
   body: z.string().min(1).max(180),
@@ -51,7 +60,7 @@ async function reconcileLive(id: string) {
 
   if (live.status === "PAUSED" && live.pausedAt) {
     if (now - live.pausedAt.getTime() >= LIVE_PAUSE_TIMEOUT_MS) {
-      return withDbRetry(() =>
+      const ended = await withDbRetry(() =>
         prisma.creatorLive.update({
           where: { id },
           data: {
@@ -62,6 +71,8 @@ async function reconcileLive(id: string) {
           },
         }),
       );
+      await closeLiveGuests(id);
+      return ended;
     }
   }
 
@@ -87,10 +98,12 @@ function publicLive<T extends Record<string, unknown>>(live: T) {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  // Uniquement à l’entrée room (?countView=1) — pas à chaque poll
+  const countView = new URL(req.url).searchParams.get("countView") === "1";
   await reconcileLive(id);
   const live = await withDbRetry(() =>
     prisma.creatorLive.findUnique({
@@ -123,7 +136,10 @@ export async function GET(
   if (!live) {
     return NextResponse.json({ error: "Live introuvable" }, { status: 404 });
   }
-  if (live.status === "LIVE" || live.status === "PAUSED") {
+  if (
+    countView &&
+    (live.status === "LIVE" || live.status === "PAUSED")
+  ) {
     await withDbRetry(() =>
       prisma.creatorLive.update({
         where: { id },
@@ -131,11 +147,18 @@ export async function GET(
       }),
     );
   }
+  const guests = await listLiveGuests(id);
+  const viewer = await getSession();
+  const myGuest = viewer
+    ? await getMyLiveGuest(id, viewer.user.id)
+    : null;
   return NextResponse.json({
     live: publicLive({
       ...live,
       overlays: parseLiveOverlays(live.overlays),
       chats: [...live.chats].reverse(),
+      guests,
+      myGuest,
     }),
   });
 }
@@ -172,9 +195,15 @@ export async function POST(
     reason?: string;
     body?: string;
     kind?: string;
+    guestId?: string;
+    userId?: string;
   };
 
   const isHost = live.userId === session.user.id;
+
+  async function guestsPayload() {
+    return listLiveGuests(id);
+  }
 
   if (json.action === "heartbeat") {
     if (!isHost) {
@@ -358,7 +387,297 @@ export async function POST(
         },
       }),
     );
+    await closeLiveGuests(id);
     return NextResponse.json({ ok: true });
+  }
+
+  // —— Invités sur scène (followers) ——
+  if (json.action === "guest_request") {
+    if (isHost) {
+      return NextResponse.json(
+        { error: "Le diffuseur est déjà sur scène" },
+        { status: 400 },
+      );
+    }
+    if (live.status === "ENDED") {
+      return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    const follower = await isLiveFollower(session.user.id, live.userId);
+    if (!follower) {
+      return NextResponse.json(
+        { error: "Réservé aux abonnés du créateur" },
+        { status: 403 },
+      );
+    }
+    try {
+      const existing = await withDbRetry(() =>
+        prisma.liveGuest.findUnique({
+          where: {
+            liveId_userId: { liveId: id, userId: session.user.id },
+          },
+        }),
+      );
+      if (existing?.status === "ON_STAGE") {
+        return NextResponse.json({
+          guests: await guestsPayload(),
+          guest: existing,
+        });
+      }
+      if (existing?.status === "PENDING") {
+        return NextResponse.json({
+          guests: await guestsPayload(),
+          guest: existing,
+        });
+      }
+      const guest = existing
+        ? await withDbRetry(() =>
+            prisma.liveGuest.update({
+              where: { id: existing.id },
+              data: {
+                status: "PENDING",
+                cameraOn: false,
+                requestedAt: new Date(),
+                decidedAt: null,
+                leftAt: null,
+              },
+              select: {
+                id: true,
+                status: true,
+                cameraOn: true,
+                requestedAt: true,
+                decidedAt: true,
+                user: { select: { id: true, name: true, image: true } },
+              },
+            }),
+          )
+        : await withDbRetry(() =>
+            prisma.liveGuest.create({
+              data: {
+                liveId: id,
+                userId: session.user.id,
+                status: "PENDING",
+              },
+              select: {
+                id: true,
+                status: true,
+                cameraOn: true,
+                requestedAt: true,
+                decidedAt: true,
+                user: { select: { id: true, name: true, image: true } },
+              },
+            }),
+          );
+      void createAppNotice({
+        userId: live.userId,
+        title: "Demande de monter au live",
+        body: `${session.user.name ?? "Un abonné"} veut rejoindre votre scène`,
+        href: `/live/${id}`,
+      });
+      return NextResponse.json({
+        guests: await guestsPayload(),
+        guest,
+      });
+    } catch (error) {
+      console.error("[api/growth/lives] guest_request", error);
+      return NextResponse.json(
+        { error: "Demande impossible — redémarrez `pnpm dev` si schéma récent" },
+        { status: 503 },
+      );
+    }
+  }
+
+  if (json.action === "guest_cancel" || json.action === "guest_leave") {
+    if (isHost) {
+      return NextResponse.json({ error: "Action invité uniquement" }, { status: 400 });
+    }
+    try {
+      const row = await withDbRetry(() =>
+        prisma.liveGuest.findUnique({
+          where: {
+            liveId_userId: { liveId: id, userId: session.user.id },
+          },
+        }),
+      );
+      if (!row || (row.status !== "PENDING" && row.status !== "ON_STAGE")) {
+        return NextResponse.json({
+          guests: await guestsPayload(),
+          guest: row
+            ? await getMyLiveGuest(id, session.user.id)
+            : null,
+        });
+      }
+      const guest = await withDbRetry(() =>
+        prisma.liveGuest.update({
+          where: { id: row.id },
+          data: {
+            status: "LEFT",
+            leftAt: new Date(),
+            cameraOn: false,
+          },
+          select: {
+            id: true,
+            status: true,
+            cameraOn: true,
+            requestedAt: true,
+            decidedAt: true,
+            user: { select: { id: true, name: true, image: true } },
+          },
+        }),
+      );
+      return NextResponse.json({ guests: await guestsPayload(), guest });
+    } catch (error) {
+      console.error("[api/growth/lives] guest_leave", error);
+      return NextResponse.json({ error: "Impossible" }, { status: 500 });
+    }
+  }
+
+  if (json.action === "guest_camera") {
+    if (isHost) {
+      return NextResponse.json({ error: "Action invité uniquement" }, { status: 400 });
+    }
+    if (live.status === "ENDED") {
+      return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    try {
+      const row = await withDbRetry(() =>
+        prisma.liveGuest.findUnique({
+          where: {
+            liveId_userId: { liveId: id, userId: session.user.id },
+          },
+        }),
+      );
+      if (!row || row.status !== "ON_STAGE") {
+        return NextResponse.json(
+          { error: "Vous n’êtes pas sur scène" },
+          { status: 400 },
+        );
+      }
+      const cameraOn = Boolean(json.cameraOn);
+      const guest = await withDbRetry(() =>
+        prisma.liveGuest.update({
+          where: { id: row.id },
+          data: { cameraOn },
+          select: {
+            id: true,
+            status: true,
+            cameraOn: true,
+            requestedAt: true,
+            decidedAt: true,
+            user: { select: { id: true, name: true, image: true } },
+          },
+        }),
+      );
+      return NextResponse.json({ guests: await guestsPayload(), guest });
+    } catch (error) {
+      console.error("[api/growth/lives] guest_camera", error);
+      return NextResponse.json({ error: "Caméra impossible" }, { status: 500 });
+    }
+  }
+
+  if (
+    json.action === "guest_accept" ||
+    json.action === "guest_refuse" ||
+    json.action === "guest_kick"
+  ) {
+    if (!isHost) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+    if (live.status === "ENDED") {
+      return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    const guestId = typeof json.guestId === "string" ? json.guestId : null;
+    const userId = typeof json.userId === "string" ? json.userId : null;
+    if (!guestId && !userId) {
+      return NextResponse.json({ error: "Invité manquant" }, { status: 400 });
+    }
+    try {
+      const row = await withDbRetry(() =>
+        prisma.liveGuest.findFirst({
+          where: {
+            liveId: id,
+            ...(guestId ? { id: guestId } : { userId: userId! }),
+          },
+          include: {
+            user: { select: { id: true, name: true } },
+          },
+        }),
+      );
+      if (!row) {
+        return NextResponse.json({ error: "Demande introuvable" }, { status: 404 });
+      }
+
+      if (json.action === "guest_accept") {
+        if (row.status !== "PENDING") {
+          return NextResponse.json(
+            { error: "Cette demande n’est plus en attente" },
+            { status: 400 },
+          );
+        }
+        const onStage = await countOnStage(id);
+        if (onStage >= LIVE_GUEST_MAX_ON_STAGE) {
+          return NextResponse.json(
+            { error: `Maximum ${LIVE_GUEST_MAX_ON_STAGE} invités sur scène` },
+            { status: 400 },
+          );
+        }
+        await withDbRetry(() =>
+          prisma.liveGuest.update({
+            where: { id: row.id },
+            data: {
+              status: "ON_STAGE",
+              decidedAt: new Date(),
+              cameraOn: true,
+            },
+          }),
+        );
+        void createAppNotice({
+          userId: row.userId,
+          title: "Vous êtes sur scène",
+          body: "Le diffuseur a accepté votre montée au live — activez votre caméra.",
+          href: `/live/${id}`,
+        });
+        return NextResponse.json({ guests: await guestsPayload() });
+      }
+
+      if (json.action === "guest_refuse") {
+        await withDbRetry(() =>
+          prisma.liveGuest.update({
+            where: { id: row.id },
+            data: {
+              status: "REFUSED",
+              decidedAt: new Date(),
+              cameraOn: false,
+            },
+          }),
+        );
+        void createAppNotice({
+          userId: row.userId,
+          title: "Demande refusée",
+          body: "Le diffuseur n’a pas accepté votre montée au live.",
+          href: `/live/${id}`,
+        });
+        return NextResponse.json({ guests: await guestsPayload() });
+      }
+
+      // guest_kick
+      await withDbRetry(() =>
+        prisma.liveGuest.update({
+          where: { id: row.id },
+          data: {
+            status: "LEFT",
+            leftAt: new Date(),
+            cameraOn: false,
+          },
+        }),
+      );
+      return NextResponse.json({ guests: await guestsPayload() });
+    } catch (error) {
+      console.error("[api/growth/lives] guest_host", error);
+      return NextResponse.json(
+        { error: "Action invité impossible" },
+        { status: 500 },
+      );
+    }
   }
 
   if (json.action === "chat") {

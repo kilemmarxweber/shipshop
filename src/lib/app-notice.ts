@@ -18,3 +18,28 @@ export async function createAppNotice(input: {
     }),
   );
 }
+
+/** Fan-out cloche (lives, campagnes…) — ignore silencieusement si table absente. */
+export async function createAppNoticesMany(
+  userIds: string[],
+  notice: { title: string; body: string; href?: string | null },
+) {
+  if (typeof prisma.appNotice?.createMany !== "function") return 0;
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (!unique.length) return 0;
+  const title = notice.title.slice(0, 160);
+  const body = notice.body.slice(0, 2000);
+  const href = notice.href ?? null;
+  const chunk = 400;
+  let created = 0;
+  for (let i = 0; i < unique.length; i += chunk) {
+    const slice = unique.slice(i, i + chunk);
+    const result = await withDbRetry(() =>
+      prisma.appNotice.createMany({
+        data: slice.map((userId) => ({ userId, title, body, href })),
+      }),
+    );
+    created += result.count;
+  }
+  return created;
+}

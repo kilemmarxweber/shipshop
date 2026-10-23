@@ -199,19 +199,26 @@ export function ChallengeCard({
       : template === "ribbon"
         ? t("discover.challengeMission")
         : t("discover.challengeHeading");
-  // translateZ/isolation OK pour images ; évité si spotlight vidéo (iOS noir).
+  // Feed reel : plein viewport (colle tabs / pas d’espace). Autres : hauteur fixe.
   const frame = cn(
-    "h-[268px] sm:h-[292px] lg:h-[320px]",
+    feed
+      ? "h-full min-h-0"
+      : "h-[268px] sm:h-[292px] lg:h-[320px]",
+    "touch-pan-y",
     videoSpot
       ? "overflow-hidden"
       : "[transform:translateZ(0)] [isolation:isolate]",
   );
+  const feedChrome = feed
+    ? "rounded-none rounded-b-[1.15rem] sm:rounded-[1.5rem]"
+    : "rounded-[1.85rem] sm:rounded-[2rem]";
 
   if (template === "poster") {
     return (
       <section
         className={cn(
-          "relative overflow-hidden rounded-[1.85rem] bg-[#0e0e16] sm:rounded-[2rem]",
+          "relative overflow-hidden bg-[#0e0e16]",
+          feedChrome,
           frame,
           className,
         )}
@@ -261,12 +268,18 @@ export function ChallengeCard({
     return (
       <section
         className={cn(
-          "flex flex-col overflow-hidden rounded-[1.85rem] bg-[#0e0e16] sm:rounded-[2rem]",
+          "flex flex-col overflow-hidden bg-[#0e0e16]",
+          feedChrome,
           frame,
           className,
         )}
       >
-        <div className="relative h-[140px] sm:h-[160px]">
+        <div
+          className={cn(
+            "relative",
+            feed ? "min-h-[42%] flex-[1.15]" : "h-[140px] sm:h-[160px]",
+          )}
+        >
           <Spot className="absolute inset-0 size-full object-cover object-[center_18%]" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e16] via-transparent to-black/20" />
           <p className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-[#201820]">
@@ -274,30 +287,37 @@ export function ChallengeCard({
             {heading}
           </p>
         </div>
-        <div className="px-4 py-3.5 sm:px-5 sm:py-4">
-          <CategoryChip challenge={challenge} locale={locale} />
-          <h2
-            className={cn(
-              "mt-2 font-heading font-bold text-white",
-              feed
-                ? "line-clamp-2 text-[1.5rem] sm:text-[1.85rem]"
-                : "line-clamp-1 text-[1.2rem] sm:text-[1.5rem]",
-            )}
-          >
-            {challenge.title}
-          </h2>
-          <p
-            className={cn(
-              "mt-1 text-white/50",
-              feed
-                ? "line-clamp-3 text-[13px] sm:text-[15px]"
-                : "line-clamp-2 text-[12px] sm:text-[13px]",
-            )}
-          >
-            {challenge.body}
-          </p>
-          <div className="mt-2">
-            <ProductCue challenge={challenge} compact />
+        <div
+          className={cn(
+            "px-4 py-3.5 sm:px-5 sm:py-4",
+            feed && "flex flex-1 flex-col justify-between",
+          )}
+        >
+          <div>
+            <CategoryChip challenge={challenge} locale={locale} />
+            <h2
+              className={cn(
+                "mt-2 font-heading font-bold text-white",
+                feed
+                  ? "line-clamp-2 text-[1.5rem] sm:text-[1.85rem]"
+                  : "line-clamp-1 text-[1.2rem] sm:text-[1.5rem]",
+              )}
+            >
+              {challenge.title}
+            </h2>
+            <p
+              className={cn(
+                "mt-1 text-white/50",
+                feed
+                  ? "line-clamp-3 text-[13px] sm:text-[15px]"
+                  : "line-clamp-2 text-[12px] sm:text-[13px]",
+              )}
+            >
+              {challenge.body}
+            </p>
+            <div className="mt-2">
+              <ProductCue challenge={challenge} compact />
+            </div>
           </div>
           <div className="mt-3 flex items-center justify-between gap-2">
             <Faces faces={faces} count={count} compact />
@@ -317,7 +337,8 @@ export function ChallengeCard({
     return (
       <section
         className={cn(
-          "relative overflow-hidden rounded-[1.85rem] bg-[linear-gradient(135deg,#1a1220_0%,#0e0e16_55%,#241018_100%)] sm:rounded-[2rem]",
+          "relative overflow-hidden bg-[linear-gradient(135deg,#1a1220_0%,#0e0e16_55%,#241018_100%)]",
+          feedChrome,
           frame,
           className,
         )}
@@ -374,12 +395,22 @@ export function ChallengeCard({
     return (
       <section
         className={cn(
-          "relative flex overflow-hidden rounded-[1.5rem] bg-[#0e0e16] sm:rounded-[1.75rem]",
+          "relative flex overflow-hidden bg-[#0e0e16]",
+          feed
+            ? "rounded-none rounded-b-[1.15rem] sm:rounded-[1.5rem]"
+            : "rounded-[1.5rem] sm:rounded-[1.75rem]",
           frame,
           className,
         )}
       >
-        <div className="relative w-[34%] shrink-0 overflow-hidden rounded-l-[1.5rem] rounded-r-[1.1rem] bg-[#f4d0c2] sm:rounded-l-[1.75rem]">
+        <div
+          className={cn(
+            "relative w-[34%] shrink-0 overflow-hidden bg-[#f4d0c2]",
+            feed
+              ? "rounded-none"
+              : "rounded-l-[1.5rem] rounded-r-[1.1rem] sm:rounded-l-[1.75rem]",
+          )}
+        >
           <Spot className="absolute inset-0 size-full object-cover object-[center_18%]" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-between px-3 py-3 sm:px-4">
@@ -428,7 +459,8 @@ export function ChallengeCard({
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-[1.85rem] bg-[#0e0e16] sm:rounded-[2rem]",
+        "relative overflow-hidden bg-[#0e0e16]",
+        feedChrome,
         frame,
         className,
       )}

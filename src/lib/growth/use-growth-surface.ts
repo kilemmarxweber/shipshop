@@ -42,7 +42,15 @@ export type GrowthSurface = {
   lives?: {
     id: string;
     title: string;
-    user: { name: string };
+    status?: string;
+    followedByMe?: boolean;
+    user: { id?: string; name: string; image?: string | null };
+    product?: {
+      id: string;
+      title: string;
+      images: string[];
+      priceCents: number;
+    } | null;
   }[];
 };
 
@@ -104,6 +112,8 @@ function daySeed(userId: string) {
 export function useGrowthSurface() {
   const { data: session } = authClient.useSession();
   const [surface, setSurface] = useState<GrowthSurface | null>(cached);
+  /** true dès que le 1er fetch (ou cache module) a répondu — évite flash produit→challenge */
+  const [ready, setReady] = useState(() => cached != null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const memoryRef = useRef<Record<ChallengeSurface, ChallengeWeaveMemory>>({
     feed: emptyWeaveMemory(),
@@ -111,22 +121,26 @@ export function useGrowthSurface() {
   });
 
   const applySurface = useCallback((data: GrowthSurface | null) => {
-    if (!data) return;
     // Nouveau set de challenges → reset weave pour mettre en avant le lead
     memoryRef.current = {
       feed: emptyWeaveMemory(),
       discover: emptyWeaveMemory(),
     };
-    setSurface(data);
+    setSurface(data ?? { challenges: [] });
+    setReady(true);
   }, []);
 
   useEffect(() => {
-    void loadSurface().then(applySurface);
+    void loadSurface()
+      .then(applySurface)
+      .catch(() => applySurface(null));
   }, [session?.user?.id, applySurface]);
 
   useEffect(() => {
     const onRefresh = () => {
-      void loadSurface(true).then(applySurface);
+      void loadSurface(true)
+        .then(applySurface)
+        .catch(() => applySurface(null));
     };
     window.addEventListener(SURFACE_EVENT, onRefresh);
     return () => window.removeEventListener(SURFACE_EVENT, onRefresh);
@@ -189,6 +203,7 @@ export function useGrowthSurface() {
   return {
     surface,
     challenges,
+    ready,
     busyId,
     joinChallenge,
     placeChallenges,

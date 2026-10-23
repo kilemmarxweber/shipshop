@@ -14,6 +14,7 @@ import { templateFor } from "@/lib/growth/challenge-place";
 import { resolvePartnerStoryHref } from "@/lib/growth/story-href";
 import type { GrowthSurface } from "@/lib/growth/use-growth-surface";
 import { PartnerStoryFrame } from "@/components/growth/partner-story-frame";
+import { HScroll } from "@/components/h-scroll";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
 import {
@@ -117,15 +118,52 @@ export function GrowthFeedFormats({
   }
 
   return (
-    <div className={discover ? "mb-6 space-y-5" : "space-y-3 px-4 pb-3"}>
+    <div
+      className={
+        discover ? "mb-6 space-y-5" : "px-4 pb-1 pt-0 empty:hidden"
+      }
+    >
       {lives.length > 0 ? (
-        <Link
-          href="/live"
-          className="flex items-center gap-2 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-[11px] font-semibold"
-        >
-          <Radio className="size-3.5 text-destructive" />
-          {lives.length} live{lives.length > 1 ? "s" : ""} · {lives[0]?.user.name}
-        </Link>
+        <div className="mb-1 flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+          {lives.slice(0, 6).map((live) => (
+            <Link
+              key={live.id}
+              href={`/live/${live.id}`}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold",
+                live.followedByMe
+                  ? "border-destructive/50 bg-destructive/15 text-foreground"
+                  : "border-destructive/30 bg-destructive/10 text-foreground",
+              )}
+            >
+              <span className="relative grid size-6 place-items-center overflow-hidden rounded-full bg-black/20">
+                {live.user?.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={live.user.image}
+                    alt=""
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <Radio className="size-3 text-destructive" />
+                )}
+                <span className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-destructive ring-1 ring-background" />
+              </span>
+              <span className="max-w-[7.5rem] truncate">
+                {live.followedByMe ? "Abonné · " : ""}
+                {live.user?.name ?? "Live"}
+              </span>
+            </Link>
+          ))}
+          {lives.length > 6 ? (
+            <Link
+              href="/live"
+              className="inline-flex shrink-0 items-center rounded-full border border-border px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground"
+            >
+              +{lives.length - 6}
+            </Link>
+          ) : null}
+        </div>
       ) : null}
 
       {pinChallenges && lead ? (
@@ -201,10 +239,8 @@ export function GrowthFeedFormats({
                       )}
                     />
                   )}
-                  <Link
-                    href={`/product/${item.id}`}
-                    className="absolute inset-0 z-10"
-                  >
+                  {/* pointer-events-none sur le media → scroll vertical page ; tap sur le bas = fiche */}
+                  <div className="pointer-events-none absolute inset-0 z-10">
                     <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
                     <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md">
                       {isMoment ? (
@@ -216,7 +252,10 @@ export function GrowthFeedFormats({
                         categoryMood(item.category, locale)
                       )}
                     </span>
-                    <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
+                    <Link
+                      href={`/product/${item.id}`}
+                      className="pointer-events-auto absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3"
+                    >
                       <span className="min-w-0">
                         <span className="flex items-center gap-1.5">
                           <Face
@@ -235,8 +274,8 @@ export function GrowthFeedFormats({
                         <Heart className="size-3.5" />
                         {compactCount(item.likesCount, locale)}
                       </span>
-                    </span>
-                  </Link>
+                    </Link>
+                  </div>
                   {playMoment && playback ? (
                     <div className="absolute top-2 right-2 z-20">
                       <VideoSoundButton
@@ -259,11 +298,11 @@ export function GrowthFeedFormats({
           <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
             <Sparkles className="size-3.5" /> {t("discover.storiesHeading")}
           </p>
-          <div className="h-scroll h-scroll-fade gap-2.5">
+          <HScroll className="gap-2.5">
             {stories.map((story) => (
               <PartnerStoryCard key={story.id} story={story} />
             ))}
-          </div>
+          </HScroll>
         </section>
       ) : null}
     </div>

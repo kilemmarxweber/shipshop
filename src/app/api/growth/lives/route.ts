@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { hasActiveBadge, refreshAccountBadges } from "@/lib/growth/badges";
 import { assertChipShopOwner } from "@/lib/kyc";
+import { notifySubscribersLiveStarted } from "@/lib/growth/live-notify";
 
 const schema = z.object({
   title: z.string().min(2).max(80),
@@ -87,6 +88,13 @@ export async function POST(req: Request) {
         },
       }),
     );
+    // Cloche abonnés — n’bloque pas le démarrage live
+    void notifySubscribersLiveStarted({
+      hostUserId: session.user.id,
+      hostName: session.user.name ?? "Créateur",
+      liveId: live.id,
+      liveTitle: live.title,
+    });
     return NextResponse.json({ live });
   } catch (error) {
     console.error("[api/growth/lives] POST", error);

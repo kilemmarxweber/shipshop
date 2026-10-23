@@ -8,13 +8,16 @@ import {
   CameraOff,
   Clock,
   Gift,
+  LogOut,
   Pause,
   Play,
   Plus,
   Radio,
   Send,
+  Share2,
   ShoppingBag,
   Type,
+  UserPlus,
   WifiOff,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -26,10 +29,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageLoader } from "@/components/page-loader";
 import { usePageBack } from "@/components/back-nav-context";
+import { ShareMenu } from "@/components/share-menu";
 import { GIFT_CATALOG } from "@/lib/growth/constants";
 import {
   LIVE_END_ALERT_BEFORE_MS,
+  LIVE_HEARTBEAT_HIDDEN_MS,
+  LIVE_HEARTBEAT_MS,
   LIVE_PAUSE_TIMEOUT_MS,
+  LIVE_POLL_HIDDEN_MS,
+  LIVE_POLL_MS,
   formatLiveClock,
   liveEndMessage,
   livePauseMessage,
@@ -43,6 +51,11 @@ import {
   LiveProductPicker,
   type LiveCatalogProduct,
 } from "@/components/live/live-product-picker";
+import {
+  LiveGuestRequestQueue,
+  LiveGuestStageGrid,
+  type LiveGuestCard,
+} from "@/components/live/live-guest-stage";
 
 type LiveDetail = {
   id: string;
@@ -59,6 +72,8 @@ type LiveDetail = {
   viewerPeak?: number;
   pauseTimeoutMs?: number;
   overlays?: LiveOverlay[];
+  guests?: LiveGuestCard[];
+  myGuest?: LiveGuestCard | null;
   user?: { id: string; name: string; image?: string | null };
   product?: {
     id: string;
@@ -83,9 +98,12 @@ export default function LiveRoomPage({
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [localCameraOn, setLocalCameraOn] = useState(true);
+  const [guestCameraOn, setGuestCameraOn] = useState(false);
   const [camError, setCamError] = useState<string | null>(null);
   const [durationAlerted, setDurationAlerted] = useState(false);
   const [overlays, setOverlays] = useState<LiveOverlay[]>([]);
+  const [guests, setGuests] = useState<LiveGuestCard[]>([]);
+  const [myGuest, setMyGuest] = useState<LiveGuestCard | null>(null);
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(
     null,
   );
@@ -96,34 +114,109 @@ export default function LiveRoomPage({
   const [noteDraft, setNoteDraft] = useState("");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const guestStreamRef = useRef<MediaStream | null>(null);
+  const [guestStream, setGuestStream] = useState<MediaStream | null>(null);
   const prevStatus = useRef<string | null>(null);
+  const prevGuestStatus = useRef<string | null>(null);
   const overlaySyncTimer = useRef<number | null>(null);
   const skipRemoteOverlays = useRef(false);
   const overlaysSeeded = useRef(false);
   const isHostRef = useRef(false);
+  const liveIdRef = useRef(id);
+  const countedViewRef = useRef(false);
+  const endedRef = useRef(false);
+  const loadInFlightRef = useRef<Promise<void> | null>(null);
+  const pageVisibleRef = useRef(
+    typeof document === "undefined" ? true : document.visibilityState === "visible",
+  );
+  const localCameraOnRef = useRef(true);
+  const guestCameraOnRef = useRef(false);
+  liveIdRef.current = id;
+  endedRef.current = live?.status === "ENDED";
 
   const isHost = Boolean(
     session?.user?.id && live?.user?.id === session.user.id,
   );
   isHostRef.current = isHost;
 
+  function stopStream(stream: MediaStream | null | undefined) {
+    stream?.getTracks().forEach((t) => t.stop());
+  }
+
+  function setTracksEnabled(stream: MediaStream | null | undefined, on: boolean) {
+    stream?.getTracks().forEach((t) => {
+      t.enabled = on;
+    });
+  }
+
   const applyLive = useCallback((next: LiveDetail) => {
+    endedRef.current = next.status === "ENDED";
     setLive((prev) => {
       if (!prev) return next;
+      const chats = Array.isArray(next.chats) ? next.chats : prev.chats;
+      const guests = Array.isArray(next.guests) ? next.guests : prev.guests;
+      const overlays = Array.isArray(next.overlays)
+        ? next.overlays
+        : prev.overlays;
+      const user = next.user ?? prev.user;
+      const product =
+        next.product !== undefined ? next.product : prev.product;
+      // Évite re-render / effets caméra si le poll n’a rien changé d’utile
+      if (
+        prev.status === next.status &&
+        prev.giftCents === next.giftCents &&
+        prev.cameraOn === next.cameraOn &&
+        prev.plannedMinutes === next.plannedMinutes &&
+        prev.pausedAt === next.pausedAt &&
+        prev.viewerPeak === next.viewerPeak &&
+        prev.statusMessage === next.statusMessage &&
+        prev.user?.id === user?.id &&
+        prev.product?.id === product?.id &&
+        (prev.chats?.length ?? 0) === (chats?.length ?? 0) &&
+        prev.chats?.[(prev.chats?.length ?? 1) - 1]?.id ===
+          chats?.[(chats?.length ?? 1) - 1]?.id &&
+        (prev.guests?.length ?? 0) === (guests?.length ?? 0) &&
+        JSON.stringify(prev.guests) === JSON.stringify(guests) &&
+        (prev.myGuest?.id ?? null) === (next.myGuest?.id ?? null) &&
+        (prev.myGuest?.status ?? null) === (next.myGuest?.status ?? null) &&
+        (prev.myGuest?.cameraOn ?? null) ===
+          (next.myGuest?.cameraOn ?? null) &&
+        (isHostRef.current ||
+          JSON.stringify(prev.overlays) === JSON.stringify(overlays))
+      ) {
+        return prev;
+      }
       return {
         ...prev,
         ...next,
-        user: next.user ?? prev.user,
-        product:
-          next.product !== undefined ? next.product : prev.product,
-        chats: Array.isArray(next.chats) ? next.chats : prev.chats,
-        overlays: Array.isArray(next.overlays)
-          ? next.overlays
-          : prev.overlays,
+        user,
+        product,
+        chats,
+        overlays,
+        guests,
       };
     });
+    if (Array.isArray(next.guests)) {
+      setGuests((prev) =>
+        JSON.stringify(prev) === JSON.stringify(next.guests)
+          ? prev
+          : next.guests!,
+      );
+    }
+    if (next.myGuest !== undefined) {
+      const g = next.myGuest ?? null;
+      setMyGuest((prev) =>
+        prev?.id === g?.id &&
+        prev?.status === g?.status &&
+        prev?.cameraOn === g?.cameraOn
+          ? prev
+          : g,
+      );
+    }
     if (typeof next.cameraOn === "boolean") {
-      setLocalCameraOn(next.cameraOn);
+      setLocalCameraOn((prev) =>
+        prev === next.cameraOn ? prev : next.cameraOn!,
+      );
     }
     if (!Array.isArray(next.overlays) || skipRemoteOverlays.current) return;
     // Host : seed une fois puis garde le local (drag). Viewers : suivent le poll.
@@ -134,24 +227,96 @@ export default function LiveRoomPage({
       }
       return;
     }
-    setOverlays(next.overlays);
+    setOverlays((prev) =>
+      JSON.stringify(prev) === JSON.stringify(next.overlays)
+        ? prev
+        : next.overlays!,
+    );
   }, []);
 
-  async function load() {
-    const { data } = await fetchJson<{ live?: LiveDetail }>(
-      `/api/growth/lives/${id}`,
-    );
-    if (data?.live) applyLive(data.live);
+  async function load(opts?: { countView?: boolean }) {
+    const roomId = liveIdRef.current;
+    const wantCount = Boolean(opts?.countView && !countedViewRef.current);
+    // Une seule requête à la fois (poll + visibilité ne s’empilent pas)
+    if (loadInFlightRef.current) {
+      await loadInFlightRef.current;
+      if (roomId !== liveIdRef.current) return;
+      if (!wantCount || countedViewRef.current) return;
+    }
+    const p = (async () => {
+      const q = wantCount ? "?countView=1" : "";
+      const { data } = await fetchJson<{ live?: LiveDetail }>(
+        `/api/growth/lives/${roomId}${q}`,
+      );
+      if (roomId !== liveIdRef.current) return;
+      if (wantCount) countedViewRef.current = true;
+      if (data?.live) applyLive(data.live);
+    })().finally(() => {
+      if (loadInFlightRef.current === p) loadInFlightRef.current = null;
+    });
+    loadInFlightRef.current = p;
+    await p;
   }
 
+  // Poll room : uniquement quand l’id change — pas à chaque status (sinon boucle)
   useEffect(() => {
-    void load();
-    const poll = window.setInterval(() => void load(), 3000);
-    const tick = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      window.clearInterval(poll);
-      window.clearInterval(tick);
+    countedViewRef.current = false;
+    overlaysSeeded.current = false;
+    endedRef.current = false;
+    let pollTimer: number | null = null;
+    let tickTimer: number | null = null;
+
+    const clearTimers = () => {
+      if (pollTimer != null) window.clearInterval(pollTimer);
+      if (tickTimer != null) window.clearInterval(tickTimer);
+      pollTimer = null;
+      tickTimer = null;
     };
+
+    const schedule = () => {
+      clearTimers();
+      if (endedRef.current) return;
+      const hidden = document.visibilityState === "hidden";
+      pageVisibleRef.current = !hidden;
+      const pollMs = hidden ? LIVE_POLL_HIDDEN_MS : LIVE_POLL_MS;
+      pollTimer = window.setInterval(() => {
+        if (endedRef.current) {
+          clearTimers();
+          return;
+        }
+        void load();
+      }, pollMs);
+      if (!hidden) {
+        tickTimer = window.setInterval(() => setNow(Date.now()), 1000);
+      }
+    };
+
+    void load({ countView: true });
+    schedule();
+
+    const onVis = () => {
+      const hidden = document.visibilityState === "hidden";
+      pageVisibleRef.current = !hidden;
+      setTracksEnabled(
+        streamRef.current,
+        !hidden && localCameraOnRef.current,
+      );
+      setTracksEnabled(
+        guestStreamRef.current,
+        !hidden && guestCameraOnRef.current,
+      );
+      schedule();
+      if (!hidden && !endedRef.current) {
+        setNow(Date.now());
+        void load();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearTimers();
+      document.removeEventListener("visibilitychange", onVis);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- room id only
   }, [id]);
 
   useEffect(() => {
@@ -174,6 +339,7 @@ export default function LiveRoomPage({
   ) {
     const { res, data } = await fetchJson<{
       live?: LiveDetail;
+      guests?: LiveGuestCard[];
       error?: string;
     }>(`/api/growth/lives/${id}`, {
       method: "POST",
@@ -184,12 +350,44 @@ export default function LiveRoomPage({
       toast.error(data?.error ?? "Action impossible");
       return false;
     }
+    if (Array.isArray(data?.guests)) setGuests(data.guests);
     if (data?.live) applyLive(data.live);
-    else await load();
+    else if (!Array.isArray(data?.guests)) await load();
     return true;
   }
 
-  const pushOverlays = useCallback(
+  async function guestAction(
+    action: string,
+    extra?: Record<string, unknown>,
+  ) {
+    const { res, data } = await fetchJson<{
+      guests?: LiveGuestCard[];
+      guest?: LiveGuestCard;
+      live?: LiveDetail;
+      error?: string;
+    }>(`/api/growth/lives/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...extra }),
+    });
+    if (!res.ok) {
+      toast.error(data?.error ?? "Action impossible");
+      return false;
+    }
+    if (Array.isArray(data?.guests)) setGuests(data.guests);
+    if (data?.guest) setMyGuest(data.guest);
+    if (data?.live) applyLive(data.live);
+    return true;
+  }
+
+  /** Drag local : pas de réseau. */
+  const patchOverlaysLocal = useCallback((next: LiveOverlay[]) => {
+    setOverlays(next);
+    skipRemoteOverlays.current = true;
+  }, []);
+
+  /** Ajout / edit / fin de drag → 1 POST (debounce léger). */
+  const commitOverlays = useCallback(
     (next: LiveOverlay[]) => {
       setOverlays(next);
       skipRemoteOverlays.current = true;
@@ -198,14 +396,16 @@ export default function LiveRoomPage({
       }
       overlaySyncTimer.current = window.setTimeout(() => {
         void (async () => {
+          const roomId = liveIdRef.current;
           const { res, data } = await fetchJson<{
             live?: LiveDetail;
             error?: string;
-          }>(`/api/growth/lives/${id}`, {
+          }>(`/api/growth/lives/${roomId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "overlays", overlays: next }),
           });
+          if (roomId !== liveIdRef.current) return;
           skipRemoteOverlays.current = false;
           if (!res.ok) {
             toast.error(data?.error ?? "Sync overlays impossible");
@@ -213,19 +413,31 @@ export default function LiveRoomPage({
           }
           if (data?.live) applyLive(data.live);
         })();
-      }, 380);
+      }, 120);
     },
-    [id, applyLive],
+    [applyLive],
   );
+  const pushOverlays = commitOverlays;
 
   useEffect(() => {
     if (!isHost || !live || live.status === "ENDED") return;
 
+    let timer: number | null = null;
     const beat = () => {
       void hostAction("heartbeat");
     };
-    beat();
-    const timer = window.setInterval(beat, 8_000);
+
+    const scheduleBeat = () => {
+      if (timer != null) window.clearInterval(timer);
+      const hidden = document.visibilityState === "hidden";
+      // Hors écran : heartbeat moins fréquent mais sous LIVE_HEARTBEAT_STALE_MS
+      const ms = hidden ? LIVE_HEARTBEAT_HIDDEN_MS : LIVE_HEARTBEAT_MS;
+      beat();
+      timer = window.setInterval(beat, ms);
+    };
+
+    scheduleBeat();
+    const onVis = () => scheduleBeat();
 
     const onOffline = () => {
       void hostAction("pause", { reason: "connection" });
@@ -234,45 +446,69 @@ export default function LiveRoomPage({
     const onOnline = () => {
       toast.message("Connexion rétablie — reprenez le live");
     };
+    document.addEventListener("visibilitychange", onVis);
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
     return () => {
-      window.clearInterval(timer);
+      if (timer != null) window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("online", onOnline);
     };
   }, [isHost, live?.id, live?.status]);
 
   useEffect(() => {
-    if (!isHost || live?.status === "ENDED") {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+    localCameraOnRef.current = localCameraOn;
+  }, [localCameraOn]);
+
+  useEffect(() => {
+    guestCameraOnRef.current = guestCameraOn;
+  }, [guestCameraOn]);
+
+  useEffect(() => {
+    // Caméra host : stop si fin / pause (pas d’encode inutile)
+    if (!isHost || live?.status === "ENDED" || live?.status === "PAUSED") {
+      stopStream(streamRef.current);
       streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      return;
+    }
+    if (!localCameraOn) {
+      stopStream(streamRef.current);
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setCamError(null);
+      return;
+    }
+    // Déjà un flux actif → ne pas relancer getUserMedia (évite boucle LED/CPU)
+    if (streamRef.current?.active) {
+      setTracksEnabled(streamRef.current, pageVisibleRef.current);
+      if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+        void videoRef.current.play().catch(() => undefined);
+      }
       return;
     }
     let cancelled = false;
     async function syncCam() {
-      if (!localCameraOn) {
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-        if (videoRef.current) videoRef.current.srcObject = null;
-        setCamError(null);
-        return;
-      }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            // Preview mobile : 480p suffit (moins CPU / batterie)
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 24, max: 30 },
           },
           audio: false,
         });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
+        if (cancelled || liveIdRef.current !== id) {
+          stopStream(stream);
           return;
         }
-        streamRef.current?.getTracks().forEach((t) => t.stop());
+        stopStream(streamRef.current);
         streamRef.current = stream;
+        setTracksEnabled(stream, pageVisibleRef.current);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           void videoRef.current.play().catch(() => undefined);
@@ -287,12 +523,103 @@ export default function LiveRoomPage({
     void syncCam();
     return () => {
       cancelled = true;
+      // Ne stoppe pas ici : l’effet suivant réutilise le stream si toujours host+cam
     };
-  }, [isHost, localCameraOn, live?.status]);
+  }, [isHost, localCameraOn, live?.status, id]);
+
+  const myGuestRow =
+    myGuest ??
+    guests.find((g) => g.user.id === session?.user?.id) ??
+    null;
+  const myGuestStatus = myGuestRow?.status ?? null;
+  const onStageAsGuest = !isHost && myGuestStatus === "ON_STAGE";
+  const pendingAsGuest = !isHost && myGuestStatus === "PENDING";
+  const pendingGuests = guests.filter((g) => g.status === "PENDING");
+  const stageGuests = guests.filter((g) => g.status === "ON_STAGE");
+
+  useEffect(() => {
+    const prev = prevGuestStatus.current;
+    prevGuestStatus.current = myGuestStatus;
+    if (!session?.user?.id || isHost) return;
+    if (prev === "PENDING" && myGuestStatus === "ON_STAGE") {
+      toast.success("Vous êtes sur scène");
+      setGuestCameraOn(true);
+    }
+    if (prev === "PENDING" && myGuestStatus === "REFUSED") {
+      toast.message("Demande refusée par le diffuseur");
+    }
+    if (
+      (prev === "ON_STAGE" || prev === "PENDING") &&
+      (myGuestStatus === "LEFT" || myGuestStatus == null)
+    ) {
+      if (prev === "ON_STAGE") toast.message("Hors scène");
+      setGuestCameraOn(false);
+    }
+  }, [myGuestStatus, isHost, session?.user?.id]);
+
+  // Caméra locale invité (preview dans la carte)
+  useEffect(() => {
+    if (
+      !onStageAsGuest ||
+      live?.status === "ENDED" ||
+      live?.status === "PAUSED"
+    ) {
+      stopStream(guestStreamRef.current);
+      guestStreamRef.current = null;
+      setGuestStream(null);
+      return;
+    }
+    if (!guestCameraOn) {
+      stopStream(guestStreamRef.current);
+      guestStreamRef.current = null;
+      setGuestStream(null);
+      return;
+    }
+    if (guestStreamRef.current?.active) {
+      setTracksEnabled(guestStreamRef.current, pageVisibleRef.current);
+      setGuestStream((prev) =>
+        prev === guestStreamRef.current ? prev : guestStreamRef.current,
+      );
+      return;
+    }
+    let cancelled = false;
+    async function syncGuestCam() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 480 },
+            height: { ideal: 360 },
+            frameRate: { ideal: 20, max: 24 },
+          },
+          audio: false,
+        });
+        if (cancelled || liveIdRef.current !== id) {
+          stopStream(stream);
+          return;
+        }
+        stopStream(guestStreamRef.current);
+        guestStreamRef.current = stream;
+        setTracksEnabled(stream, pageVisibleRef.current);
+        setGuestStream(stream);
+      } catch {
+        setGuestCameraOn(false);
+        toast.error("Caméra indisponible");
+        void guestAction("guest_camera", { cameraOn: false });
+      }
+    }
+    void syncGuestCam();
+    return () => {
+      cancelled = true;
+    };
+  }, [onStageAsGuest, guestCameraOn, live?.status, id]);
 
   useEffect(() => {
     return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      stopStream(streamRef.current);
+      stopStream(guestStreamRef.current);
+      streamRef.current = null;
+      guestStreamRef.current = null;
       if (overlaySyncTimer.current) {
         window.clearTimeout(overlaySyncTimer.current);
       }
@@ -349,6 +676,15 @@ export default function LiveRoomPage({
     setLocalCameraOn(next);
     setBusy(true);
     await hostAction("camera", { cameraOn: next });
+    setBusy(false);
+  }
+
+  async function toggleGuestCamera() {
+    if (!onStageAsGuest || busy) return;
+    const next = !guestCameraOn;
+    setGuestCameraOn(next);
+    setBusy(true);
+    await guestAction("guest_camera", { cameraOn: next });
     setBusy(false);
   }
 
@@ -468,8 +804,52 @@ export default function LiveRoomPage({
           editable={isHost && !ended && !paused}
           selectedId={selectedOverlayId}
           onSelect={setSelectedOverlayId}
-          onChange={pushOverlays}
+          onChange={patchOverlaysLocal}
+          onCommit={commitOverlays}
         />
+
+        {!ended && isHost ? (
+          <LiveGuestRequestQueue
+            pending={pendingGuests}
+            busy={busy}
+            onAccept={(guestId) => {
+              void (async () => {
+                setBusy(true);
+                const ok = await hostAction("guest_accept", { guestId });
+                setBusy(false);
+                if (ok) toast.success("Invité sur scène");
+              })();
+            }}
+            onRefuse={(guestId) => {
+              void (async () => {
+                setBusy(true);
+                await hostAction("guest_refuse", { guestId });
+                setBusy(false);
+              })();
+            }}
+          />
+        ) : null}
+
+        {!ended && stageGuests.length > 0 ? (
+          <LiveGuestStageGrid
+            guests={stageGuests}
+            selfUserId={session?.user?.id}
+            selfStream={onStageAsGuest ? guestStream : null}
+            isHost={isHost}
+            onKick={
+              isHost
+                ? (guestId) => {
+                    void (async () => {
+                      setBusy(true);
+                      await hostAction("guest_kick", { guestId });
+                      setBusy(false);
+                      toast.message("Invité retiré");
+                    })();
+                  }
+                : undefined
+            }
+          />
+        ) : null}
 
         {!isHost && live.cameraOn === false && !ended ? (
           <div className="absolute inset-0 z-[12] flex flex-col items-center justify-center gap-2 bg-black/55 backdrop-blur-sm">
@@ -632,10 +1012,92 @@ export default function LiveRoomPage({
                 ) : null}
               </>
             ) : (
-              <RailBtn label="Cadeau" onClick={() => setGiftOpen((v) => !v)}>
-                <Gift className="size-5 text-pink-300" />
-              </RailBtn>
+              <>
+                {!session?.user ? null : pendingAsGuest ? (
+                  <RailBtn
+                    label="Attente"
+                    onClick={() => {
+                      void (async () => {
+                        setBusy(true);
+                        await guestAction("guest_cancel");
+                        setBusy(false);
+                        toast.message("Demande annulée");
+                      })();
+                    }}
+                  >
+                    <Clock className="size-5 text-amber-300" />
+                  </RailBtn>
+                ) : onStageAsGuest ? (
+                  <>
+                    <RailBtn
+                      label={guestCameraOn ? "Cam" : "Off"}
+                      onClick={() => void toggleGuestCamera()}
+                    >
+                      {guestCameraOn ? (
+                        <Camera className="size-5" />
+                      ) : (
+                        <CameraOff className="size-5 text-amber-300" />
+                      )}
+                    </RailBtn>
+                    <RailBtn
+                      label="Quitter"
+                      onClick={() => {
+                        void (async () => {
+                          setBusy(true);
+                          setGuestCameraOn(false);
+                          await guestAction("guest_leave");
+                          setBusy(false);
+                        })();
+                      }}
+                    >
+                      <LogOut className="size-5 text-amber-200" />
+                    </RailBtn>
+                  </>
+                ) : (
+                  <RailBtn
+                    label="Monter"
+                    onClick={() => {
+                      if (!session?.user) {
+                        toast.message("Connectez-vous pour monter au live");
+                        return;
+                      }
+                      void (async () => {
+                        setBusy(true);
+                        const ok = await guestAction("guest_request");
+                        setBusy(false);
+                        if (ok) {
+                          toast.message("Demande envoyée au diffuseur");
+                        }
+                      })();
+                    }}
+                  >
+                    <UserPlus className="size-5 text-[#7dffb3]" />
+                  </RailBtn>
+                )}
+                <RailBtn label="Cadeau" onClick={() => setGiftOpen((v) => !v)}>
+                  <Gift className="size-5 text-pink-300" />
+                </RailBtn>
+              </>
             )}
+            <ShareMenu
+              title={live.title || "Live ShipShop"}
+              text={`${live.user?.name ?? "Créateur"} est en live — ${live.title || "rejoins maintenant"}`}
+              url={
+                typeof window !== "undefined"
+                  ? `${window.location.origin}/live/${id}`
+                  : `/live/${id}`
+              }
+              side="left"
+              align="end"
+              triggerClassName="flex flex-col items-center gap-0.5 outline-none"
+            >
+              <span className="grid size-11 place-items-center rounded-full border border-white/20 bg-black/50 shadow-lg backdrop-blur transition active:scale-95">
+                <Share2 className="size-5" />
+              </span>
+              <span className="text-[9px] font-semibold text-white/80 drop-shadow">
+                Partager
+              </span>
+            </ShareMenu>
           </div>
         ) : null}
 

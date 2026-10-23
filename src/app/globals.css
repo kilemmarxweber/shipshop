@@ -362,6 +362,63 @@
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
+  /* vertical page + rails horizontaux (catégories, strips) */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Découvrir : scroll vertical global + snap résultats ; rails HScroll gèrent le X */
+@media (max-width: 767px) {
+  .app-main.app-main-discover {
+    touch-action: pan-x pan-y;
+    scroll-snap-type: y proximity;
+    overscroll-behavior-y: contain;
+  }
+
+  .discover-results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin-inline: -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .discover-results-list .discover-result-snap {
+    position: relative;
+    flex: 0 0 auto;
+    width: 100%;
+    height: calc(var(--app-height, 100dvh) - 8.25rem);
+    min-height: 520px;
+    max-height: none;
+    aspect-ratio: auto;
+    overflow: hidden;
+    border-radius: 1.15rem;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    transform: translateZ(0);
+    isolation: isolate;
+  }
+}
+
+@media (min-width: 768px) {
+  .discover-results-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .discover-results-list .discover-result-snap {
+    aspect-ratio: 3 / 4;
+    height: auto;
+    min-height: 0;
+    scroll-snap-align: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .discover-results-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 /* iPhone Safari : coller le shell à l’écran, nav en bas (comme Android). */
@@ -453,7 +510,8 @@
   }
 }
 
-/* Scroll horizontal tactile (filtres, chips, catégories) */
+/* Scroll horizontal tactile (filtres, chips, catégories, strips Découvrir).
+   HScroll (JS) lock l’axe : X = rail, Y = page. CSS garde pan-x pan-y en secours. */
 .h-scroll {
   display: flex;
   flex-wrap: nowrap;
@@ -463,7 +521,8 @@
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  overscroll-behavior-y: auto;
+  touch-action: pan-x pan-y;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
   padding-block: 0.5rem;
@@ -516,9 +575,16 @@
     height: 100%;
     min-height: 100%;
   }
+  /* Challenge : plein snap, air bas = tabbar + safe + marge selon hauteur écran */
   .feed-snap-item.feed-challenge-item {
-    height: auto;
-    min-height: 0;
+    height: 100%;
+    min-height: 100%;
+    padding: 0 0
+      calc(
+        5.75rem + env(safe-area-inset-bottom, 0px) +
+          clamp(4.5rem, 14dvh, 7.45rem)
+      );
+    box-sizing: border-box;
   }
 }
 
@@ -572,7 +638,7 @@
 
   .feed-product-list .feed-snap-item.feed-challenge-item {
     grid-column: 1 / -1;
-    height: auto;
+    height: clamp(280px, 42vw, 420px);
     min-height: 0;
   }
 

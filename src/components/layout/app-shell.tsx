@@ -231,6 +231,7 @@ export function AppShell({
               feedLayout && "app-main-feed",
               pathname.startsWith("/shop/") && "app-main-shop-feed",
               pathname.startsWith("/messages/") && "app-main-chat",
+              pathname.startsWith("/discover") && "app-main-discover",
               !hideChrome &&
                 "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
             )}

@@ -112,12 +112,13 @@ export async function GET() {
     ),
     withDbRetry(() =>
       prisma.creatorLive.findMany({
-        where: { status: "LIVE" },
+        where: { status: { in: ["LIVE", "PAUSED"] } },
         orderBy: { startedAt: "desc" },
         take: 8,
         select: {
           id: true,
           title: true,
+          status: true,
           startedAt: true,
           giftCents: true,
           user: { select: { id: true, name: true, image: true } },
@@ -167,6 +168,42 @@ export async function GET() {
       facesByChallenge.set(row.challengeId, list);
     }
   }
+
+  // Lives suivis par l’utilisateur connecté → bulle / cloche plus fortes
+  const liveHostIds = [
+    ...new Set(lives.map((row) => row.user.id).filter(Boolean)),
+  ];
+  let followedHostIds = new Set<string>();
+  if (session && liveHostIds.length) {
+    const [directFollows, shopFollows] = await Promise.all([
+      withDbRetry(() =>
+        prisma.userFollow.findMany({
+          where: {
+            followerId: session.user.id,
+            creatorId: { in: liveHostIds },
+          },
+          select: { creatorId: true },
+        }),
+      ),
+      withDbRetry(() =>
+        prisma.shopFollow.findMany({
+          where: {
+            userId: session.user.id,
+            shop: { ownerUserId: { in: liveHostIds } },
+          },
+          select: { shop: { select: { ownerUserId: true } } },
+        }),
+      ),
+    ]);
+    followedHostIds = new Set([
+      ...directFollows.map((row) => row.creatorId),
+      ...shopFollows.map((row) => row.shop.ownerUserId),
+    ]);
+  }
+  const publicLives = lives.map((row) => ({
+    ...row,
+    followedByMe: followedHostIds.has(row.user.id),
+  }));
 
   // Stories : ne renvoyer un productId que s’il pointe encore vers un produit actif
   const storyProductIds = [
@@ -282,7 +319,7 @@ export async function GET() {
         },
       })),
       stories: safeStories,
-      lives,
+      lives: publicLives,
       packs: packCatalog(),
     },
     {

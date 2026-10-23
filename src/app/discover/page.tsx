@@ -45,6 +45,7 @@ import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
 import { usePaginatedList } from "@/lib/use-paginated-list";
 import { firstVisualUrl } from "@/lib/growth/challenge-look";
 import { SellerMeta } from "@/components/growth/cover-image";
+import { HScroll } from "@/components/h-scroll";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import {
   getPinnedFeedAudioId,
@@ -400,7 +401,7 @@ export default function DiscoverPage() {
         <h2 className="mb-3.5 font-heading text-[1.05rem] font-bold tracking-tight">
           {t("discover.categoriesHeading")}
         </h2>
-        <div className="h-scroll h-scroll-fade items-start gap-2.5 sm:gap-3 md:justify-between md:overflow-visible md:[mask-image:none]">
+        <HScroll className="items-start gap-2.5 sm:gap-3 md:justify-between md:overflow-visible md:[mask-image:none]">
           {CATEGORIES.map((c) => {
             const Icon = CATEGORY_ICON[c.id] ?? Sparkles;
             const selected = category === c.id;
@@ -440,7 +441,7 @@ export default function DiscoverPage() {
               </button>
             );
           })}
-        </div>
+        </HScroll>
       </section>
 
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -464,7 +465,7 @@ export default function DiscoverPage() {
               <p className="mb-3 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
                 {t("discover.featuredHeading")}
               </p>
-              <div className="h-scroll h-scroll-fade gap-3 pb-1">
+              <HScroll className="gap-3 pb-1">
                 {featuredEntries.map((entry) => (
                   <DiscoverStripCard
                     key={entry.key}
@@ -501,7 +502,7 @@ export default function DiscoverPage() {
                     buyLabel={t("buy.cta")}
                   />
                 ))}
-              </div>
+              </HScroll>
             </section>
           ) : null}
           {videoEntries.length > 0 ? (
@@ -509,7 +510,7 @@ export default function DiscoverPage() {
               <p className="mb-3 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
                 {t("discover.videoHeading")}
               </p>
-              <div className="h-scroll h-scroll-fade gap-3 pb-1">
+              <HScroll className="gap-3 pb-1">
                 {videoEntries.map((entry) => (
                   <DiscoverStripCard
                     key={entry.key}
@@ -547,7 +548,7 @@ export default function DiscoverPage() {
                     buyLabel={t("buy.cta")}
                   />
                 ))}
-              </div>
+              </HScroll>
             </section>
           ) : null}
           {budgetEntries.length > 0 ? (
@@ -555,7 +556,7 @@ export default function DiscoverPage() {
               <p className="mb-3 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
                 {t("discover.budgetHeading")}
               </p>
-              <div className="h-scroll h-scroll-fade gap-3 pb-1">
+              <HScroll className="gap-3 pb-1">
                 {budgetEntries.map((entry) => (
                   <DiscoverStripCard
                     key={entry.key}
@@ -592,7 +593,7 @@ export default function DiscoverPage() {
                     buyLabel={t("buy.cta")}
                   />
                 ))}
-              </div>
+              </HScroll>
             </section>
           ) : null}
         </div>
@@ -611,7 +612,7 @@ export default function DiscoverPage() {
               <ChevronRight className="size-5" />
             </Link>
           </div>
-          <div className="h-scroll h-scroll-fade gap-2.5 pb-1">
+          <HScroll className="gap-2.5 pb-1">
             {popularCats.map((row) => (
               <button
                 key={row.id}
@@ -641,7 +642,7 @@ export default function DiscoverPage() {
                 </span>
               </button>
             ))}
-          </div>
+          </HScroll>
         </section>
       ) : null}
 
@@ -651,19 +652,21 @@ export default function DiscoverPage() {
       >
         {t("discover.resultsHeading")}
       </h2>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+      <div className="discover-results-list">
         {resultRows.map((row) => {
           if (row.kind === "challenge") {
             return (
               <div
                 key={row.key}
-                className="col-span-2 md:col-span-3 lg:col-span-4"
+                className="discover-result-snap flex flex-col justify-center bg-[#0e0e16] px-3 md:col-span-3 lg:col-span-4 md:aspect-auto md:h-auto md:min-h-0 md:px-0"
               >
                 <ChallengeCard
                   challenge={row.challenge}
                   template={row.template}
                   busy={busyId === row.challenge.id}
                   onJoin={() => void joinChallenge(row.challenge.id)}
+                  size="feed"
+                  className="w-full"
                 />
               </div>
             );
@@ -683,6 +686,7 @@ export default function DiscoverPage() {
               <ProductImageCarousel
                 images={cardMediaUrls(p, appConfig.maxImages)}
                 fit="cover"
+                overlay
                 className="absolute inset-0"
                 showDots={false}
                 intervalMs={3500}
@@ -710,7 +714,7 @@ export default function DiscoverPage() {
                 />
               ) : null}
               {audio ? (
-                <div className="absolute top-2 right-2 z-20">
+                <div className="absolute top-3 right-3 z-20 sm:top-2 sm:right-2">
                   <VideoSoundButton
                     images={p.images}
                     hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
@@ -735,9 +739,12 @@ export default function DiscoverPage() {
                   />
                 </div>
               ) : null}
-              <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/25 to-transparent p-2.5 sm:p-3">
-                <Link href={`/product/${p.id}`} className="block cursor-pointer">
-                  <p className="line-clamp-2 text-[13px] font-extrabold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/35 to-transparent px-3.5 pb-4 pt-16 sm:p-3">
+                <Link
+                  href={`/product/${p.id}`}
+                  className="pointer-events-auto block cursor-pointer"
+                >
+                  <p className="line-clamp-2 text-[15px] font-extrabold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-[13px]">
                     {p.title}
                   </p>
                   <div className="mt-1.5">
@@ -752,15 +759,15 @@ export default function DiscoverPage() {
                   </div>
                 </Link>
                 {p.shop ? (
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <p className="text-[11px] font-bold text-[#7dffb3]">
+                  <div className="pointer-events-auto mt-2.5 flex items-center justify-between gap-2 sm:mt-2">
+                    <p className="text-[13px] font-bold text-[#7dffb3] sm:text-[11px]">
                       {formatMoney(p.priceCents, p.currency)}
                     </p>
                     <Button
                       type="button"
                       size="sm"
                       onClick={() => setBuyProduct(p)}
-                      className="h-7 cursor-pointer rounded-full px-3 text-[10px] font-bold"
+                      className="h-9 cursor-pointer rounded-full px-4 text-[12px] font-bold sm:h-7 sm:px-3 sm:text-[10px]"
                     >
                       {t("buy.cta")}
                     </Button>
@@ -996,7 +1003,7 @@ function DiscoverTile({
       data-feed-card
       data-audio-key={id}
       {...(soundOn ? { "data-feed-sound-on": "1" } : {})}
-      className="group relative aspect-[3/4] overflow-hidden rounded-[1.25rem] [transform:translateZ(0)] [isolation:isolate]"
+      className="discover-result-snap group relative overflow-hidden bg-[#121218] [touch-action:pan-y]"
     >
       {children}
     </article>

@@ -422,6 +422,7 @@ export function ProductImageCarousel({
   const rootRef = useRef<HTMLDivElement>(null);
   const startRef = useRef<{ x: number; y: number; id: number } | null>(null);
   const lockedAxis = useRef<"x" | "y" | null>(null);
+  const captureRef = useRef(false);
   const lastTapRef = useRef(0);
   const pendingTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [likeBurst, setLikeBurst] = useState(false);
@@ -605,11 +606,8 @@ export function ProductImageCarousel({
     if (e.button !== 0) return;
     startRef.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
     lockedAxis.current = null;
-    try {
-      rootRef.current?.setPointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
+    captureRef.current = false;
+    // Ne pas capturer tout de suite : laisse le scroll vertical (Pour toi / Découvrir)
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -620,6 +618,24 @@ export function ProductImageCarousel({
     if (!lockedAxis.current) {
       if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
       lockedAxis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (lockedAxis.current === "y") {
+        // Scroll page / reel natif — abandonne le geste carousel
+        startRef.current = null;
+        lockedAxis.current = null;
+        return;
+      }
+      // 1 image : laisse le parent (.h-scroll Découvrir) scroller horizontalement
+      if (list.length <= 1) {
+        startRef.current = null;
+        lockedAxis.current = null;
+        return;
+      }
+      try {
+        rootRef.current?.setPointerCapture(e.pointerId);
+        captureRef.current = true;
+      } catch {
+        /* ignore */
+      }
     }
     if (lockedAxis.current === "x") {
       e.preventDefault();
@@ -628,17 +644,21 @@ export function ProductImageCarousel({
 
   function onPointerUp(e: React.PointerEvent) {
     const start = startRef.current;
-    if (!start || start.id !== e.pointerId) return;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
     const axis = lockedAxis.current;
+    const dx = start ? e.clientX - start.x : 0;
+    const dy = start ? e.clientY - start.y : 0;
+    const tracked = Boolean(start && start.id === e.pointerId);
     startRef.current = null;
     lockedAxis.current = null;
-    try {
-      rootRef.current?.releasePointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
+    if (captureRef.current) {
+      try {
+        rootRef.current?.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      captureRef.current = false;
     }
+    if (!tracked) return;
 
     const isTap = Math.abs(dx) < TAP_MAX_PX && Math.abs(dy) < TAP_MAX_PX;
     if (isTap) {
@@ -687,6 +707,7 @@ export function ProductImageCarousel({
   function onPointerCancel() {
     startRef.current = null;
     lockedAxis.current = null;
+    captureRef.current = false;
   }
 
   const slotActive = eager
@@ -701,7 +722,8 @@ export function ProductImageCarousel({
       ref={rootRef}
       data-audio-key={audioKey}
       className={cn(
-        "relative touch-pan-y overflow-hidden bg-black select-none",
+        // vertical → page ; horizontal multi-images → carousel / strip parent
+        "relative overflow-hidden bg-black select-none [touch-action:pan-x_pan-y]",
         className,
       )}
       onPointerDown={onPointerDown}

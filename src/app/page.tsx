@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Heart, MessageCircle, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -60,6 +60,7 @@ import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { DwellArticle } from "@/components/dwell-article";
 import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
 import { GrowthFeedFormats } from "@/components/growth/feed-formats";
+import { LiveScrollTeaser } from "@/components/live/live-scroll-teaser";
 import { ChallengeCard } from "@/components/growth/challenge-card";
 import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
 
@@ -97,7 +98,7 @@ type Product = {
 
 type FeedTab = "foryou" | "following" | "wanted";
 
-function resetHomeFeedScroll() {
+function resetHomeFeedScroll(snapEl?: HTMLElement | null) {
   if (typeof document === "undefined") return;
   document
     .querySelectorAll(".feed-snap, .app-main, .feed-wanted-scroll")
@@ -106,6 +107,9 @@ function resetHomeFeedScroll() {
       node.scrollTop = 0;
       node.scrollLeft = 0;
     });
+  const snap =
+    snapEl ?? document.querySelector(".feed-snap.feed-product-list");
+  if (snap instanceof HTMLElement) snap.scrollTop = 0;
 }
 
 function categoryLabel(
@@ -221,7 +225,12 @@ export default function FeedPage() {
   });
   const products = productFeed.items;
   const setProducts = productFeed.setItems;
-  const { busyId, joinChallenge, placeChallenges } = useGrowthSurface();
+  const {
+    busyId,
+    joinChallenge,
+    placeChallenges,
+    ready: growthReady,
+  } = useGrowthSurface();
   const feedRows = useMemo(
     () =>
       tab === "foryou"
@@ -236,6 +245,13 @@ export default function FeedPage() {
   const wanted = wantedFeed.items;
   const loading =
     tab === "wanted" ? wantedFeed.loading : productFeed.loading;
+  // Pour toi : attendre surface + 1ʳᵉ page pour peindre challenge/produit d’un coup (pas de flash)
+  const holdFirstPaint =
+    tab === "foryou"
+      ? !growthReady || (loading && products.length === 0)
+      : loading &&
+        (tab === "wanted" ? wanted.length === 0 : products.length === 0);
+  const snapRef = useRef<HTMLDivElement>(null);
   const loadMoreProducts = productFeed.loadMore;
   const loadMoreWanted = wantedFeed.loadMore;
   const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
@@ -294,10 +310,15 @@ export default function FeedPage() {
     resetFeedAudioFocus();
     resetAllPageMedia();
     setSoundById({});
-    resetHomeFeedScroll();
-    const id = window.setTimeout(resetHomeFeedScroll, 0);
-    return () => window.clearTimeout(id);
   }, [tab, audioEpoch]);
+
+  // Avant paint : 1ʳᵉ card (challenge ou image) dès l’ouverture, sans timeouts (flash)
+  const firstFeedKey = feedRows[0]?.key ?? "";
+  useLayoutEffect(() => {
+    if (holdFirstPaint) return;
+    if (tab !== "foryou" && tab !== "following") return;
+    resetHomeFeedScroll(snapRef.current);
+  }, [tab, audioEpoch, firstFeedKey, holdFirstPaint]);
 
   function syncVisibleSoundIcon() {
     const pin = getPinnedFeedAudioId();
@@ -489,7 +510,7 @@ export default function FeedPage() {
     </>
   );
 
-  if (loading && (tab === "wanted" ? wanted.length === 0 : products.length === 0)) {
+  if (holdFirstPaint) {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         {tabs}
@@ -596,12 +617,14 @@ export default function FeedPage() {
   return (
     <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden">
       {tabs}
-      {tab === "foryou" ? (
-        <GrowthFeedFormats variant="feed" pinChallenges />
+      {tab === "foryou" ? <GrowthFeedFormats variant="feed" /> : null}
+      {tab === "foryou" || tab === "following" ? (
+        <LiveScrollTeaser />
       ) : null}
 
       <div
         key={tab}
+        ref={snapRef}
         className="feed-snap feed-product-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
         data-experiment-id={appConfig.experimentId ?? undefined}
         onScroll={() => {
@@ -614,13 +637,15 @@ export default function FeedPage() {
             return (
               <article
                 key={`${tab}:${row.key}`}
-                className="feed-snap-item feed-challenge-item relative col-span-2 w-full shrink-0 px-4 md:px-0"
+                className="feed-snap-item feed-challenge-item relative col-span-2 flex h-full min-h-full w-full shrink-0 flex-col overflow-hidden md:px-0"
               >
                 <ChallengeCard
                   challenge={row.challenge}
                   template={row.template}
                   busy={busyId === row.challenge.id}
                   onJoin={() => void joinChallenge(row.challenge.id)}
+                  size="feed"
+                  className="h-full min-h-0 w-full flex-1 rounded-none rounded-b-[1.15rem] sm:rounded-[1.5rem]"
                 />
               </article>
             );

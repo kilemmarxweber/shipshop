@@ -8,6 +8,14 @@ export const LIVE_PROLONG_MINUTES = 15;
 /** Alerte host avant la fin prévue. */
 export const LIVE_END_ALERT_BEFORE_MS = 5 * 60 * 1000;
 
+/** Poll room visible — assez frais sans saturer API / DB. */
+export const LIVE_POLL_MS = 4_000;
+/** Poll quand onglet en arrière-plan (scroll ailleurs / app switch). */
+export const LIVE_POLL_HIDDEN_MS = 20_000;
+export const LIVE_HEARTBEAT_MS = 8_000;
+/** Heartbeat ralenti hors écran — reste sous LIVE_HEARTBEAT_STALE_MS. */
+export const LIVE_HEARTBEAT_HIDDEN_MS = 18_000;
+
 export type LiveStatus = "LIVE" | "PAUSED" | "ENDED";
 export type LivePauseReason = "connection" | "host" | "system";
 export type LiveEndReason =

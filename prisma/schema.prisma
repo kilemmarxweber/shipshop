@@ -69,6 +69,7 @@ model User {
   creatorFollowers  UserFollow[]          @relation("CreatorFollowers")
   creatorFollowing  UserFollow[]          @relation("CreatorFollowing")
   livesHosted       CreatorLive[]
+  liveGuests        LiveGuest[]
   giftsSent         CreatorGift[]         @relation("GiftsSent")
   giftsReceived     CreatorGift[]         @relation("GiftsReceived")
   liveChats         LiveChatMessage[]
@@ -1269,12 +1270,32 @@ model CreatorLive {
   /// Stickers texte + cartes produit (x/y/scale %) visibles par les viewers
   overlays         Json      @default("[]")
 
-  gifts CreatorGift[]
-  chats LiveChatMessage[]
+  gifts  CreatorGift[]
+  chats  LiveChatMessage[]
+  guests LiveGuest[]
 
   @@index([status, startedAt])
   @@index([userId, status])
   @@map("creator_live")
+}
+
+/// Follower qui demande à monter au live (caméra locale + acceptation host)
+model LiveGuest {
+  id          String      @id @default(cuid())
+  liveId      String
+  live        CreatorLive @relation(fields: [liveId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// PENDING | ON_STAGE | REFUSED | LEFT
+  status      String      @default("PENDING")
+  cameraOn    Boolean     @default(false)
+  requestedAt DateTime    @default(now())
+  decidedAt   DateTime?
+  leftAt      DateTime?
+
+  @@unique([liveId, userId])
+  @@index([liveId, status])
+  @@map("live_guest")
 }
 
 model CreatorGift {

@@ -120,10 +120,13 @@ function lockPlan(
 function challengeSlots(
   memory: ChallengeWeaveMemory,
   count: number,
-  _surface: ChallengeSurface,
+  surface: ChallengeSurface,
 ) {
-  // Slot 0 géré par GrowthFeedFormats (pinChallenges) — éviter le doublon
   const slots: number[] = [];
+  // Feed : challenge en tête du reel (slot 0) pour scroller avec les cards
+  if (surface === "feed" && count > 0) {
+    slots.push(0);
+  }
   if (memory.first == null || memory.gap == null) return slots;
   for (let index = memory.first; index <= count; index += memory.gap) {
     if (index !== 0) slots.push(index);

@@ -11,7 +11,10 @@ type Props = {
   editable: boolean;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /** Pendant le drag — état local seulement (pas de réseau). */
   onChange: (next: LiveOverlay[]) => void;
+  /** Fin de drag — sync serveur (évite spam POST à chaque pixel). */
+  onCommit?: (next: LiveOverlay[]) => void;
 };
 
 function clamp(n: number, min: number, max: number) {
@@ -24,19 +27,25 @@ export function LiveStageOverlays({
   selectedId,
   onSelect,
   onChange,
+  onCommit,
 }: Props) {
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const overlaysRef = useRef(overlays);
+  overlaysRef.current = overlays;
 
   function patch(id: string, partial: Partial<LiveOverlay>) {
-    onChange(
-      overlays.map((o) =>
-        o.id === id ? ({ ...o, ...partial } as LiveOverlay) : o,
-      ),
+    const next = overlaysRef.current.map((o) =>
+      o.id === id ? ({ ...o, ...partial } as LiveOverlay) : o,
     );
+    overlaysRef.current = next;
+    onChange(next);
   }
 
   function remove(id: string) {
-    onChange(overlays.filter((o) => o.id !== id));
+    const next = overlaysRef.current.filter((o) => o.id !== id);
+    overlaysRef.current = next;
+    onChange(next);
+    onCommit?.(next);
     if (selectedId === id) onSelect(null);
   }
 
@@ -50,7 +59,7 @@ export function LiveStageOverlays({
     e.stopPropagation();
     onSelect(id);
     const el = stageRef.current;
-    const item = overlays.find((o) => o.id === id);
+    const item = overlaysRef.current.find((o) => o.id === id);
     if (!el || !item) return;
     const target = e.currentTarget;
     try {
@@ -88,6 +97,7 @@ export function LiveStageOverlays({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      onCommit?.(overlaysRef.current);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
