@@ -197,7 +197,9 @@ export async function GET() {
     ]);
     followedHostIds = new Set([
       ...directFollows.map((row) => row.creatorId),
-      ...shopFollows.map((row) => row.shop.ownerUserId),
+      ...shopFollows
+        .map((row) => row.shop.ownerUserId)
+        .filter((id): id is string => Boolean(id)),
     ]);
   }
   const publicLives = lives.map((row) => ({
