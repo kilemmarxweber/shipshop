@@ -413,6 +413,92 @@ async function main() {
   // Messaging templates (owner) — lazy via ensureMessagingSetup at runtime;
   // seed skips encrypted keys (configurés dans /shops/messaging).
 
+  // Stories partenaires (Découvrir) — liées à des produits ACTIVE du shop démo
+  const seedProducts = await prisma.product.findMany({
+    where: { shopId: shop.id, status: "ACTIVE" },
+    orderBy: { createdAt: "asc" },
+    take: 4,
+    select: { id: true, title: true, images: true, category: true },
+  });
+  const storySeeds: {
+    title: string;
+    body: string;
+    category: string;
+    productIndex: number;
+    ctaUrl: string | null;
+  }[] = [
+    {
+      title: "Drop mode Kin",
+      body: "Looks du jour — like ton favori et passe en boutique.",
+      category: "cover",
+      productIndex: 0,
+      ctaUrl: null,
+    },
+    {
+      title: "Citation partenaire",
+      body: "« Le style commence ici. » — ShipShop × marques locales.",
+      category: "quote",
+      productIndex: 1,
+      ctaUrl: "/discover",
+    },
+    {
+      title: "Produit coup de cœur",
+      body: "Voir la fiche et commander en un tap.",
+      category: "product",
+      productIndex: 0,
+      ctaUrl: null,
+    },
+    {
+      title: "Split promo",
+      body: "Livraison Kinshasa · stories partenaires test seed.",
+      category: "split",
+      productIndex: 2,
+      ctaUrl: null,
+    },
+  ];
+
+  let storiesCreated = 0;
+  for (const item of storySeeds) {
+    const product = seedProducts[item.productIndex] ?? seedProducts[0];
+    if (!product) continue;
+    const exists = await prisma.brandCampaign.findFirst({
+      where: { title: item.title, kind: "STORY" },
+    });
+    const mediaUrl = product.images[0] ?? null;
+    if (!exists) {
+      await prisma.brandCampaign.create({
+        data: {
+          title: item.title,
+          kind: "STORY",
+          objective: "DISCOVERY",
+          category: item.category,
+          status: "ACTIVE",
+          budgetCents: 50_00,
+          body: item.body,
+          mediaUrl,
+          ctaUrl: item.ctaUrl,
+          productId: product.id,
+          ownerUserId: user.id,
+          startsAt: new Date(),
+        },
+      });
+      storiesCreated += 1;
+    } else {
+      await prisma.brandCampaign.update({
+        where: { id: exists.id },
+        data: {
+          status: "ACTIVE",
+          body: item.body,
+          category: item.category,
+          mediaUrl,
+          ctaUrl: item.ctaUrl,
+          productId: product.id,
+          startsAt: exists.startsAt ?? new Date(),
+        },
+      });
+    }
+  }
+
   console.log("Seed OK");
   console.log(`  email: ${email}`);
   console.log(
@@ -423,6 +509,7 @@ async function main() {
   console.log("  org: chipshop (système)");
   console.log(`  communes: ${KINSHASA_COMMUNES.length}`);
   console.log("  wallet: $500");
+  console.log(`  stories partenaires: ${storiesCreated} créées / sync`);
   console.log("  messaging: /shops/messaging (owner)");
 }
 

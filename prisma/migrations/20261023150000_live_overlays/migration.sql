@@ -1,0 +1,1 @@
+ALTER TABLE "creator_live" ADD COLUMN IF NOT EXISTS "overlays" JSONB NOT NULL DEFAULT '[]';

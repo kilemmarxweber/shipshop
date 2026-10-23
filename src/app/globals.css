@@ -390,14 +390,20 @@
     backface-visibility: hidden;
   }
 
+  /* Images seulement — transform sur <video> = cadre noir Safari / WebView. */
   .feed-snap-item .ss-reel-bg,
   .feed-snap-item .ss-reel-fg,
-  .feed-snap-item .ss-reel-fg-video,
   .feed-snap-item .ss-reel-fg-cover,
-  article[data-feed-card] img,
-  article[data-feed-card] video {
+  article[data-feed-card] img {
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
+  }
+
+  .feed-snap-item .ss-reel-fg-video,
+  article[data-feed-card] video,
+  .challenge-spot-video {
+    -webkit-transform: none !important;
+    transform: none !important;
   }
 }
 
@@ -664,6 +670,7 @@
   width: 100%;
   max-width: none;
   height: auto;
+  min-height: 100%;
   max-height: none;
   transform: translateY(-50%);
   object-fit: contain;

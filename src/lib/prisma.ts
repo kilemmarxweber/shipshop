@@ -3,7 +3,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 40;
+const PRISMA_SCHEMA_REV = 44;
+const CHALLENGE_HAS_PRODUCT =
+  Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
 
 /** Forces a reload if the generated client predates cart_item.quantity. */
 const CART_ITEM_HAS_QUANTITY = Prisma.CartItemScalarFieldEnum.quantity === "quantity";
@@ -79,7 +81,8 @@ function getPrismaClient() {
     SHOP_HAS_PRO_UNTIL &&
     PRODUCT_HAS_CREATOR_BPS &&
     ORDER_HAS_FEE_BPS &&
-    SHOP_BOOST_HAS_TARGET_CITY
+    SHOP_BOOST_HAS_TARGET_CITY &&
+    CHALLENGE_HAS_PRODUCT
   ) {
     return existing;
   }

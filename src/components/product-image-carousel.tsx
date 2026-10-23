@@ -78,12 +78,8 @@ const LEFT_VIEW_RATIO = 0.35;
 
 function mediaClass(fit: "cover" | "contain" | "reel") {
   if (fit === "reel") return "ss-reel-fg";
-  return cn(
-    "pointer-events-none",
-    fit === "cover"
-      ? "ss-reel-fg ss-reel-fg-cover"
-      : "max-h-full max-w-full object-contain object-center",
-  );
+  if (fit === "cover") return "ss-reel-fg-cover";
+  return "pointer-events-none max-h-full max-w-full object-contain object-center";
 }
 
 function portraitFocusVars(mediaRatio: number | null): CSSProperties | undefined {
@@ -129,11 +125,21 @@ function SlideMedia({
   const video = isVideoUrl(src);
   const poster = video ? videoPosterUrl(src) : src;
   const [mediaRatio, setMediaRatio] = useState<number | null>(null);
+  const [imgBroken, setImgBroken] = useState(false);
+  const [posterBroken, setPosterBroken] = useState(false);
   const portraitFocus = Boolean(mediaRatio && mediaRatio < 0.9);
   const portraitVars = portraitFocusVars(mediaRatio);
   const applied = video ? undefined : motion;
   const fill = fit === "reel";
   const applyRatio = !fill;
+  const displaySrc = imgBroken && !video ? null : src;
+  const displayPoster = posterBroken ? undefined : poster;
+
+  useEffect(() => {
+    setImgBroken(false);
+    setPosterBroken(false);
+    setMediaRatio(null);
+  }, [src]);
 
   useEffect(() => {
     return () => {
@@ -220,29 +226,30 @@ function SlideMedia({
 
   return (
     <>
-      {fill ? (
+      {fill && displayPoster ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           key={ken ? `bg-${applied}` : "bg"}
-          src={poster}
+          src={displayPoster}
           alt=""
           draggable={false}
           aria-hidden
           className={cn("ss-reel-bg", ken && kenClass)}
           data-motion={ken ? applied : undefined}
           style={kenStyle}
+          onError={() => setPosterBroken(true)}
         />
       ) : null}
       {video ? (
         fill ? (
-          <div className="absolute inset-0 z-[1] overflow-hidden">
+          <div className="absolute inset-0 z-[1] overflow-hidden bg-[#1a1a22]">
             <video
               ref={videoRef}
               muted={muted}
               loop={loop}
               {...iosInlineVideo}
               preload="auto"
-              poster={poster}
+              poster={displayPoster}
               disablePictureInPicture
               onEnded={() => {
                 if (!loop) onPlaybackEnded?.();
@@ -264,7 +271,7 @@ function SlideMedia({
             loop={loop}
             {...iosInlineVideo}
             preload="auto"
-            poster={poster}
+            poster={displayPoster}
             disablePictureInPicture
             onLoadedMetadata={(e) => {
               const el = e.currentTarget;
@@ -275,47 +282,60 @@ function SlideMedia({
             onEnded={() => {
               if (!loop) onPlaybackEnded?.();
             }}
-            className={cn(mediaClass(fit), portraitFocus && "ss-reel-fg-portrait")}
+            className={cn(
+              mediaClass(fit),
+              portraitFocus && "ss-reel-fg-portrait",
+            )}
             style={portraitVars}
           />
         )
       ) : fill ? (
-        <div className="absolute inset-0 z-[1] overflow-hidden">
-          <div
-            key={ken ? `fg-${applied}` : "fg"}
-            className={cn("absolute inset-0", ken && kenClass)}
-            data-motion={ken ? applied : undefined}
-            style={kenStyle}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={src}
-              alt=""
-              draggable={false}
-              loading={playing ? "eager" : "lazy"}
-              decoding="async"
-              fetchPriority={playing ? "high" : "low"}
-              className={cn(mediaClass(fit), portraitFocus && "ss-reel-fg-portrait")}
-              onLoad={(e) => {
-                if (!applyRatio) return;
-                const el = e.currentTarget;
-                if (el.naturalWidth > 0 && el.naturalHeight > 0) {
-                  setMediaRatio(el.naturalWidth / el.naturalHeight);
+        <div className="absolute inset-0 z-[1] overflow-hidden bg-[#1a1a22]">
+          {displaySrc ? (
+            <div
+              key={ken ? `fg-${applied}` : "fg"}
+              className={cn("absolute inset-0", ken && kenClass)}
+              data-motion={ken ? applied : undefined}
+              style={kenStyle}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={displaySrc}
+                alt=""
+                draggable={false}
+                loading={playing ? "eager" : "lazy"}
+                decoding="async"
+                fetchPriority={playing ? "high" : "low"}
+                className={cn(
+                  mediaClass(fit),
+                  portraitFocus && "ss-reel-fg-portrait",
+                )}
+                onError={() => setImgBroken(true)}
+                onLoad={(e) => {
+                  if (!applyRatio) return;
+                  const el = e.currentTarget;
+                  if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                    setMediaRatio(el.naturalWidth / el.naturalHeight);
+                  }
+                }}
+                style={
+                  applyRatio && mediaRatio
+                    ? {
+                        aspectRatio: `${mediaRatio}`,
+                        height: "auto",
+                        ...portraitVars,
+                      }
+                    : undefined
                 }
-              }}
-              style={
-                applyRatio && mediaRatio
-                  ? { aspectRatio: `${mediaRatio}`, height: "auto", ...portraitVars }
-                  : undefined
-              }
-            />
-          </div>
+              />
+            </div>
+          ) : null}
         </div>
-      ) : (
+      ) : displaySrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           key={ken ? `cover-${applied}` : "cover"}
-          src={src}
+          src={displaySrc}
           alt=""
           draggable={false}
           loading={playing ? "eager" : "lazy"}
@@ -334,6 +354,7 @@ function SlideMedia({
               ? { aspectRatio: `${mediaRatio}`, height: "auto" }
               : {}),
           }}
+          onError={() => setImgBroken(true)}
           onLoad={(e) => {
             if (!applyRatio) return;
             const el = e.currentTarget;
@@ -342,6 +363,8 @@ function SlideMedia({
             }
           }}
         />
+      ) : (
+        <div className="absolute inset-0 bg-[#1a1a22]" />
       )}
     </>
   );
@@ -379,9 +402,10 @@ export function ProductImageCarousel({
   forcePlay = false,
 }: Props) {
   const videoMuted = hasSoundtrack || muted;
+  const cleaned = images.filter((u) => typeof u === "string" && u.trim());
   const list =
-    images.length > 0
-      ? images
+    cleaned.length > 0
+      ? cleaned
       : ["https://picsum.photos/seed/chipshop/800/1000"];
   const feedId = useId();
   const pageKey = useFrozenPageKey();

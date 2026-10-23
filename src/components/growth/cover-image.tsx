@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { compactCount } from "@/lib/growth/challenge-look";
+import { iosInlineVideo } from "@/lib/ios-inline-video";
 import type { UserLocale } from "@/lib/user-locale";
 
 export function Face({
@@ -96,4 +97,48 @@ export function CoverImage({
       onError={() => setIndex((prev) => prev + 1)}
     />
   );
+}
+
+/** Spotlight challenge : image (jpg/png/webp) ou courte vidéo. */
+export function ChallengeSpotlightMedia({
+  spotlight,
+  fallbackCandidates = [],
+  className,
+}: {
+  spotlight?: {
+    url: string;
+    kind: "image" | "video";
+    posterUrl?: string | null;
+  } | null;
+  fallbackCandidates?: string[];
+  className?: string;
+}) {
+  if (spotlight?.kind === "video" && spotlight.url) {
+    // Pas de filter/transform sur le wrapper ni la vidéo (Safari iOS / WebView → noir).
+    return (
+      <div
+        className={cn(
+          "relative overflow-hidden bg-[#1a1a22] [contain:paint] ![filter:none]",
+          className,
+        )}
+      >
+        <video
+          className="challenge-spot-video absolute inset-0 size-full object-cover ![filter:none]"
+          src={spotlight.url}
+          poster={spotlight.posterUrl ?? undefined}
+          autoPlay
+          muted
+          loop
+          {...iosInlineVideo}
+          preload="metadata"
+          disablePictureInPicture
+        />
+      </div>
+    );
+  }
+  const candidates = [
+    ...(spotlight?.url ? [spotlight.url] : []),
+    ...fallbackCandidates,
+  ].filter((url, i, all) => Boolean(url) && all.indexOf(url) === i);
+  return <CoverImage candidates={candidates} className={className} />;
 }

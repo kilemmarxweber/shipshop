@@ -80,11 +80,18 @@ async function compressImageFile(file: File, variant: CompressVariant) {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext("2d", { alpha: false });
+    const preferWebp =
+      /^image\/webp$/i.test(file.type) || /\.webp$/i.test(file.name);
+    const ctx = canvas.getContext("2d", { alpha: preferWebp });
     if (!ctx) throw new Error("Canvas indisponible");
+    if (!preferWebp) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+    }
     ctx.drawImage(bitmap, 0, 0, width, height);
 
-    const type = "image/jpeg";
+    // Spotlight / uploads webp : garder webp (meilleure qualité + alpha)
+    const type = preferWebp ? "image/webp" : "image/jpeg";
     let quality = file.size > 2 * 1024 * 1024 ? 0.78 : 0.84;
     let blob = await canvasToBlob(canvas, type, quality);
 

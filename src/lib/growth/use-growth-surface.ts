@@ -36,6 +36,8 @@ export type GrowthSurface = {
     mediaUrl: string | null;
     ctaUrl: string | null;
     productId: string | null;
+    /** Template visuel (cover | quote | split | product) */
+    category?: string | null;
   }[];
   lives?: {
     id: string;
@@ -44,21 +46,54 @@ export type GrowthSurface = {
   }[];
 };
 
+const SURFACE_EVENT = "ss:growth-surface";
+/** Après un seed / publish, un reload hors TTL doit refetch (pas un cache éternel). */
+const CACHE_TTL_MS = 20_000;
+
 let cached: GrowthSurface | null = null;
+let cachedAt = 0;
 let inflight: Promise<GrowthSurface | null> | null = null;
 
-async function loadSurface() {
+async function loadSurface(force = false) {
+  if (force) {
+    cached = null;
+    cachedAt = 0;
+    inflight = null;
+  }
   if (cached?.highlights?.some((row) => row.hasVideo && !row.images)) {
     cached = null;
+    cachedAt = 0;
   }
-  if (cached) return cached;
-  if (inflight) return inflight;
-  inflight = fetchJson<GrowthSurface>("/api/growth/surface").then(({ data }) => {
-    cached = data ?? null;
-    inflight = null;
+  if (cached && Date.now() - cachedAt < CACHE_TTL_MS && !force) {
     return cached;
-  });
+  }
+  if (inflight) return inflight;
+  const bust = force || !cached ? `?t=${Date.now()}` : "";
+  inflight = fetchJson<GrowthSurface>(`/api/growth/surface${bust}`).then(
+    ({ data }) => {
+      cached = data ?? null;
+      cachedAt = Date.now();
+      inflight = null;
+      return cached;
+    },
+  );
   return inflight;
+}
+
+/** Invalide le cache module + notifie accueil / Découvrir pour refetch immédiat. */
+export function invalidateGrowthSurface() {
+  cached = null;
+  cachedAt = 0;
+  inflight = null;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(SURFACE_EVENT));
+  }
+}
+
+/** Force un nouveau GET surface (après publish / réactivation admin). */
+export async function refreshGrowthSurface() {
+  invalidateGrowthSurface();
+  return loadSurface(true);
 }
 
 function daySeed(userId: string) {
@@ -75,11 +110,27 @@ export function useGrowthSurface() {
     discover: emptyWeaveMemory(),
   });
 
+  const applySurface = useCallback((data: GrowthSurface | null) => {
+    if (!data) return;
+    // Nouveau set de challenges → reset weave pour mettre en avant le lead
+    memoryRef.current = {
+      feed: emptyWeaveMemory(),
+      discover: emptyWeaveMemory(),
+    };
+    setSurface(data);
+  }, []);
+
   useEffect(() => {
-    void loadSurface().then((data) => {
-      if (data) setSurface(data);
-    });
-  }, [session?.user?.id]);
+    void loadSurface().then(applySurface);
+  }, [session?.user?.id, applySurface]);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void loadSurface(true).then(applySurface);
+    };
+    window.addEventListener(SURFACE_EVENT, onRefresh);
+    return () => window.removeEventListener(SURFACE_EVENT, onRefresh);
+  }, [applySurface]);
 
   const challenges = surface?.challenges ?? [];
   const seed = daySeed(session?.user?.id ?? "anon");
@@ -107,7 +158,10 @@ export function useGrowthSurface() {
       return;
     }
     setBusyId(challengeId);
-    const { res } = await fetchJson("/api/growth/challenge", {
+    const { res, data } = await fetchJson<{
+      ok?: boolean;
+      reference?: string;
+    }>("/api/growth/challenge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ challengeId }),
@@ -125,7 +179,11 @@ export function useGrowthSurface() {
     };
     cached = next;
     setSurface(next);
-    toast.success("Challenge relevé");
+    toast.success(
+      data?.reference
+        ? `Challenge relevé · réf. ${data.reference}`
+        : "Challenge relevé",
+    );
   }
 
   return {
@@ -135,5 +193,6 @@ export function useGrowthSurface() {
     joinChallenge,
     placeChallenges,
     seed,
+    refresh: () => refreshGrowthSurface().then(applySurface),
   };
 }

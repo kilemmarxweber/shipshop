@@ -23,9 +23,15 @@ export async function POST(req: Request) {
   }
   try {
     const body = schema.parse(await req.json());
-    await completeChallenge(session.user.id, body.challengeId);
+    const completion = await completeChallenge(
+      session.user.id,
+      body.challengeId,
+    );
     await recordUserActivity(session.user.id, "challenge");
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      reference: completion.reference,
+    });
   } catch {
     return NextResponse.json({ error: "Challenge impossible" }, { status: 400 });
   }

@@ -39,13 +39,26 @@ export const CHALLENGE_CATALOG = [
   },
 ] as const;
 
+const challengeProductSelect = {
+  id: true,
+  title: true,
+  description: true,
+  images: true,
+  priceCents: true,
+  currency: true,
+  category: true,
+  shop: { select: { name: true } },
+} as const;
+
 export async function ensureActiveChallenges() {
   const start = utcDay();
   const end = utcDay(daysAgo(-1));
   const existing = await withDbRetry(() =>
     prisma.dailyChallenge.findMany({
       where: { startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
-      orderBy: { createdAt: "asc" },
+      // Plus récents / réactivés d’abord → mise en avant feed & Découvrir
+      orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }],
+      include: { product: { select: challengeProductSelect } },
     }),
   );
   const have = new Set(existing.map((row) => row.title));
@@ -63,23 +76,34 @@ export async function ensureActiveChallenges() {
             startsAt: start,
             endsAt: end,
           },
+          include: { product: { select: challengeProductSelect } },
         }),
       ),
     );
   }
-  const unique = [];
-  const seen = new Set<string>();
-  for (const row of [...existing, ...created]) {
-    if (seen.has(row.title)) continue;
-    seen.add(row.title);
-    unique.push(row);
-  }
-  return unique;
+  // Ne plus dédupliquer par titre à la lecture : un challenge admin
+  // publié ne doit jamais être masqué par le catalogue auto.
+  return [...created, ...existing].sort(
+    (a, b) =>
+      b.startsAt.getTime() - a.startsAt.getTime() ||
+      b.createdAt.getTime() - a.createdAt.getTime(),
+  );
 }
 
 export async function ensureTodayChallenge() {
   const all = await ensureActiveChallenges();
   return all[0]!;
+}
+
+const REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** Référence courte unique pour le rapport demandeur. */
+export function newChallengeParticipationRef() {
+  let code = "CHL-";
+  for (let i = 0; i < 6; i += 1) {
+    code += REF_ALPHABET[Math.floor(Math.random() * REF_ALPHABET.length)]!;
+  }
+  return code;
 }
 
 export async function completeChallenge(userId: string, challengeId: string) {
@@ -89,11 +113,31 @@ export async function completeChallenge(userId: string, challengeId: string) {
     }),
   );
   if (existing) return existing;
-  const created = await withDbRetry(() =>
-    prisma.challengeCompletion.create({
-      data: { challengeId, userId },
-    }),
-  );
+
+  let created = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      created = await withDbRetry(() =>
+        prisma.challengeCompletion.create({
+          data: {
+            challengeId,
+            userId,
+            reference: newChallengeParticipationRef(),
+          },
+        }),
+      );
+      break;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes("reference") && !message.includes("Unique")) {
+        throw error;
+      }
+    }
+  }
+  if (!created) {
+    throw new Error("Référence challenge impossible");
+  }
+
   await withDbRetry(() =>
     prisma.dailyChallenge.update({
       where: { id: challengeId },

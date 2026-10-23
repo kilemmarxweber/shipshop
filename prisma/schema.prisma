@@ -352,6 +352,7 @@ model Product {
   creatorShares ProductCreatorShare[]
   funnelEvents  CommerceFunnelEvent[]
   lives         CreatorLive[]
+  challenges    DailyChallenge[]
 
   @@index([category, status])
   @@index([shopId, status])
@@ -1207,6 +1208,15 @@ model DailyChallenge {
   city               String?
   startsAt           DateTime
   endsAt             DateTime
+  /// none | catalog | teaser — ancrage produit du challenge
+  productFocus       String    @default("none")
+  /// Produit publié (focus=catalog) → CTA fiche
+  productId          String?
+  product            Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  /// Snapshot hors catalogue (focus=teaser) : title, image, priceCents, currency, shopName, note
+  productTeaser      Json?
+  /// Média hero du challenge : { url, kind: image|video, posterUrl? } — jpg/png/webp/mp4/webm
+  spotlight          Json?
   sponsorCampaignId  String?
   sponsorCampaign    BrandCampaign? @relation(fields: [sponsorCampaignId], references: [id], onDelete: SetNull)
   completions        Int       @default(0)
@@ -1215,11 +1225,14 @@ model DailyChallenge {
   done ChallengeCompletion[]
 
   @@index([startsAt, endsAt])
+  @@index([productId])
   @@map("daily_challenge")
 }
 
 model ChallengeCompletion {
   id          String         @id @default(cuid())
+  /// Réf. publique (ex. CHL-A7K2M9) pour le rapport demandeur
+  reference   String         @unique
   challengeId String
   challenge   DailyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   userId      String
@@ -1227,21 +1240,34 @@ model ChallengeCompletion {
   createdAt   DateTime       @default(now())
 
   @@unique([challengeId, userId])
+  @@index([challengeId, createdAt])
   @@map("challenge_completion")
 }
 
 model CreatorLive {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  productId   String?
-  product     Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
-  status      String    @default("LIVE")
-  startedAt   DateTime  @default(now())
-  endedAt     DateTime?
-  viewerPeak  Int       @default(0)
-  giftCents   Int       @default(0)
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  productId        String?
+  product          Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  /// LIVE | PAUSED | ENDED
+  status           String    @default("LIVE")
+  startedAt        DateTime  @default(now())
+  endedAt          DateTime?
+  pausedAt         DateTime?
+  /// connection | host | system
+  pauseReason      String?
+  /// normal | pause_timeout | host | connection
+  endReason        String?
+  lastHeartbeatAt  DateTime  @default(now())
+  /// Durée prévue (minutes) — alerte host avant la fin
+  plannedMinutes   Int       @default(60)
+  cameraOn         Boolean   @default(true)
+  viewerPeak       Int       @default(0)
+  giftCents        Int       @default(0)
+  /// Stickers texte + cartes produit (x/y/scale %) visibles par les viewers
+  overlays         Json      @default("[]")
 
   gifts CreatorGift[]
   chats LiveChatMessage[]

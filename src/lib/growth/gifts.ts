@@ -29,7 +29,11 @@ export async function sendCreatorGift(input: {
   const influencer = await hasActiveBadge(input.toUserId, "INFLUENCER");
   const liveOpen = input.liveId
     ? await prisma.creatorLive.findFirst({
-        where: { id: input.liveId, userId: input.toUserId, status: "LIVE" },
+        where: {
+          id: input.liveId,
+          userId: input.toUserId,
+          status: { in: ["LIVE", "PAUSED"] },
+        },
         select: { id: true },
       })
     : null;

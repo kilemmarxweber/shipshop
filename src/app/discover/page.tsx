@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { mediaCoverUrl } from "@/lib/media";
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpen,
@@ -105,6 +106,15 @@ type CardEntry = {
 
 function hasAudio(p: Product) {
   return Boolean(p.soundtrack?.audioUrl) || productHasVideo(p.images);
+}
+
+/** Médias carte Discover : URLs valides, cover fiable si pas de vidéo. */
+function cardMediaUrls(product: Product, max = 8) {
+  const urls = product.images.filter((u) => Boolean(u?.trim()));
+  if (!urls.length) return [];
+  if (hasAudio(product)) return urls.slice(0, max);
+  const cover = mediaCoverUrl(urls);
+  return cover ? [cover] : urls.slice(0, 1);
 }
 
 export default function DiscoverPage() {
@@ -621,6 +631,9 @@ export default function DiscoverPage() {
                   src={row.image}
                   alt=""
                   className="absolute inset-0 size-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.opacity = "0";
+                  }}
                 />
                 <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
                 <span className="absolute inset-x-0 bottom-2 text-center text-[12px] font-semibold text-white">
@@ -658,7 +671,6 @@ export default function DiscoverPage() {
           const entry = row.item;
           const p = entry.product;
           const cardKey = entry.key;
-          const cover = p.images[0] ? [p.images[0]] : [];
           const audio = hasAudio(p);
           const focused = audioFocusId === cardKey && !audioOff;
           return (
@@ -669,11 +681,8 @@ export default function DiscoverPage() {
               soundOn={!soundFor(cardKey).muted}
             >
               <ProductImageCarousel
-                images={
-                  audio
-                    ? p.images.slice(0, appConfig.maxImages)
-                    : cover
-                }
+                images={cardMediaUrls(p, appConfig.maxImages)}
+                fit="cover"
                 className="absolute inset-0"
                 showDots={false}
                 intervalMs={3500}
@@ -834,6 +843,7 @@ function DiscoverStripCard({
 }) {
   const audio = hasAudio(product);
   const ref = useRef<HTMLElement>(null);
+  const media = cardMediaUrls(product);
 
   useEffect(() => {
     const el = ref.current;
@@ -869,23 +879,23 @@ function DiscoverStripCard({
       {...(!sound.muted ? { "data-feed-sound-on": "1" } : {})}
       className="relative w-[67vw] max-w-[270px] shrink-0 overflow-hidden rounded-[1.55rem] bg-[#17171c] [transform:translateZ(0)] [isolation:isolate] sm:w-[clamp(190px,18vw,270px)]"
     >
-      <div className="relative h-[330px] overflow-hidden bg-surface-2 sm:h-[clamp(280px,29vw,410px)]">
-        <Link href={`/product/${product.id}`} className="absolute inset-0">
-          <ProductImageCarousel
-            images={audio ? product.images.slice(0, 8) : product.images.slice(0, 1)}
-            className="absolute inset-0"
-            showDots={false}
-            intervalMs={audio ? 3500 : 0}
-            muted={sound.muted}
-            volume={sound.volume}
-            hasSoundtrack={Boolean(product.soundtrack?.audioUrl)}
-            clipMs={product.soundtrack?.audioUrl ? appClipMs : undefined}
-            audioKey={audio ? cardKey : undefined}
-            forcePlay={focused}
-            onActivateSound={audio ? onActivateSound : undefined}
-            onPlaybackEnded={onPlaybackEnded}
-          />
-        </Link>
+      <div className="relative h-[330px] overflow-hidden bg-[#1a1a22] sm:h-[clamp(280px,29vw,410px)]">
+        {/* Pas de <a> autour de la vidéo — sinon certains médias restent noirs */}
+        <ProductImageCarousel
+          images={media}
+          fit="cover"
+          className="absolute inset-0"
+          showDots={false}
+          intervalMs={audio ? 3500 : 0}
+          muted={sound.muted}
+          volume={sound.volume}
+          hasSoundtrack={Boolean(product.soundtrack?.audioUrl)}
+          clipMs={product.soundtrack?.audioUrl ? appClipMs : undefined}
+          audioKey={audio ? cardKey : undefined}
+          forcePlay={focused}
+          onActivateSound={audio ? onActivateSound : undefined}
+          onPlaybackEnded={onPlaybackEnded}
+        />
         {product.soundtrack?.audioUrl ? (
           <FeedSoundtrackPlayer
             audioUrl={product.soundtrack.audioUrl}
@@ -911,15 +921,20 @@ function DiscoverStripCard({
             />
           </div>
         ) : null}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent px-2.5 pb-2.5 pt-14">
-          <SellerMeta
-            name={product.shop?.name ?? product.title}
-            image={product.shop?.logoUrl ?? null}
-            views={views}
-            locale={locale}
-            viewsLabel={t("discover.views")}
-            likes={likes}
-          />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 via-black/30 to-transparent px-2.5 pb-2.5 pt-14">
+          <Link
+            href={`/product/${product.id}`}
+            className="pointer-events-auto block"
+          >
+            <SellerMeta
+              name={product.shop?.name ?? product.title}
+              image={product.shop?.logoUrl ?? null}
+              views={views}
+              locale={locale}
+              viewsLabel={t("discover.views")}
+              likes={likes}
+            />
+          </Link>
           {product.shop ? (
             <div className="pointer-events-auto mt-2 flex items-center justify-between gap-2">
               <p className="truncate text-[11px] font-semibold text-[#7dffb3]">

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useId } from "react";
-import { ChevronRight, Sparkles, Trophy } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ChevronRight, ShoppingBag, Sparkles, Trophy } from "lucide-react";
+import { cn, formatMoney } from "@/lib/utils";
 import { useI18n } from "@/components/i18n-provider";
 import { categoryMood } from "@/lib/growth/challenge-look";
 import type { UserLocale } from "@/lib/user-locale";
@@ -11,7 +11,60 @@ import type {
   ChallengeCardModel,
   ChallengeTemplate,
 } from "@/lib/growth/challenge-place";
-import { CoverImage, Face } from "@/components/growth/cover-image";
+import {
+  ChallengeSpotlightMedia,
+  CoverImage,
+  Face,
+} from "@/components/growth/cover-image";
+
+function ProductCue({
+  challenge,
+  compact,
+}: {
+  challenge: ChallengeCardModel;
+  compact?: boolean;
+}) {
+  const product = challenge.product;
+  if (!product) return null;
+  const price =
+    product.priceCents != null
+      ? formatMoney(product.priceCents, product.currency)
+      : null;
+  const className = cn(
+    "inline-flex max-w-full items-center gap-1.5 rounded-full font-semibold ring-1 transition",
+    product.kind === "teaser"
+      ? "bg-amber-400/15 text-amber-100 ring-amber-300/25"
+      : "bg-white/10 text-[#7dffb3] ring-white/15 hover:bg-white/15",
+    compact
+      ? "px-2 py-0.5 text-[10px]"
+      : "px-2.5 py-1 text-[11px] sm:text-[12px]",
+  );
+  const inner = (
+    <>
+      <ShoppingBag className="size-3 shrink-0" />
+      <span className="truncate">
+        {product.kind === "teaser" ? `Aperçu · ${product.title}` : product.title}
+      </span>
+      {price ? (
+        <span className="shrink-0 opacity-70">{price}</span>
+      ) : product.kind === "teaser" ? (
+        <span className="shrink-0 opacity-70">bientôt</span>
+      ) : null}
+    </>
+  );
+  if (product.href) {
+    return (
+      <Link
+        href={product.href}
+        className={className}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <span className={className}>{inner}</span>;
+}
 
 function coverList(challenge: ChallengeCardModel) {
   if (challenge.coverCandidates?.length) return challenge.coverCandidates;
@@ -132,14 +185,27 @@ export function ChallengeCard({
   const faces = challenge.participants ?? [];
   const count = challenge.completions;
   const feed = size === "feed";
+  const videoSpot = challenge.spotlight?.kind === "video";
+  const Spot = ({ className }: { className?: string }) => (
+    <ChallengeSpotlightMedia
+      spotlight={challenge.spotlight}
+      fallbackCandidates={covers}
+      className={className}
+    />
+  );
   const heading =
     template === "poster" || template === "pulse"
       ? t("discover.challengePulse")
       : template === "ribbon"
         ? t("discover.challengeMission")
         : t("discover.challengeHeading");
-  const frame =
-    "h-[268px] sm:h-[292px] lg:h-[320px] [transform:translateZ(0)] [isolation:isolate]";
+  // translateZ/isolation OK pour images ; évité si spotlight vidéo (iOS noir).
+  const frame = cn(
+    "h-[268px] sm:h-[292px] lg:h-[320px]",
+    videoSpot
+      ? "overflow-hidden"
+      : "[transform:translateZ(0)] [isolation:isolate]",
+  );
 
   if (template === "poster") {
     return (
@@ -150,10 +216,7 @@ export function ChallengeCard({
           className,
         )}
       >
-        <CoverImage
-          candidates={covers}
-          className="absolute inset-0 size-full object-cover object-[center_20%] saturate-[1.08]"
-        />
+        <Spot className="absolute inset-0 size-full object-cover object-[center_20%] saturate-[1.08]" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#0e0e16] via-[#0e0e16]/75 to-[#0e0e16]/20" />
         <div className="relative z-10 flex h-full flex-col justify-between p-4 sm:p-5">
           <div>
@@ -181,6 +244,9 @@ export function ChallengeCard({
             >
               {challenge.body}
             </p>
+            <div className="mt-2">
+              <ProductCue challenge={challenge} />
+            </div>
           </div>
           <div className="flex items-center justify-between gap-2">
             <Faces faces={faces} count={count} />
@@ -201,10 +267,7 @@ export function ChallengeCard({
         )}
       >
         <div className="relative h-[140px] sm:h-[160px]">
-          <CoverImage
-            candidates={covers}
-            className="absolute inset-0 size-full object-cover object-[center_18%]"
-          />
+          <Spot className="absolute inset-0 size-full object-cover object-[center_18%]" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e16] via-transparent to-black/20" />
           <p className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-[#201820]">
             <Trophy className="size-3 text-[#e0b21a]" />
@@ -233,6 +296,9 @@ export function ChallengeCard({
           >
             {challenge.body}
           </p>
+          <div className="mt-2">
+            <ProductCue challenge={challenge} compact />
+          </div>
           <div className="mt-3 flex items-center justify-between gap-2">
             <Faces faces={faces} count={count} compact />
             <JoinButton
@@ -257,10 +323,7 @@ export function ChallengeCard({
         )}
       >
         <div className="absolute inset-y-6 right-[-18px] w-[46%] overflow-hidden rounded-[2rem] bg-[#f4d0c2] shadow-[-18px_0_40px_rgba(0,0,0,0.28)] sm:right-[-12px] sm:w-[42%]">
-          <CoverImage
-            candidates={covers}
-            className="absolute inset-0 size-full object-cover object-[center_18%] saturate-[1.08]"
-          />
+          <Spot className="absolute inset-0 size-full object-cover object-[center_18%] saturate-[1.08]" />
           <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-[#1a1220]/35" />
         </div>
         <div className="relative z-10 flex h-full w-[58%] flex-col justify-between px-4 py-4 sm:w-[56%] sm:px-5 sm:py-5">
@@ -289,6 +352,9 @@ export function ChallengeCard({
             >
               {challenge.body}
             </p>
+            <div className="mt-2">
+              <ProductCue challenge={challenge} compact />
+            </div>
           </div>
           <div className="flex items-center justify-between gap-2">
             <Faces faces={faces} count={count} compact />
@@ -314,10 +380,7 @@ export function ChallengeCard({
         )}
       >
         <div className="relative w-[34%] shrink-0 overflow-hidden rounded-l-[1.5rem] rounded-r-[1.1rem] bg-[#f4d0c2] sm:rounded-l-[1.75rem]">
-          <CoverImage
-            candidates={covers}
-            className="absolute inset-0 size-full object-cover object-[center_18%]"
-          />
+          <Spot className="absolute inset-0 size-full object-cover object-[center_18%]" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-between px-3 py-3 sm:px-4">
           <div>
@@ -344,6 +407,9 @@ export function ChallengeCard({
             >
               {challenge.body}
             </p>
+            <div className="mt-1.5">
+              <ProductCue challenge={challenge} compact />
+            </div>
           </div>
           <div className="flex items-center justify-between gap-2">
             <Faces faces={faces} count={count} compact />
@@ -367,25 +433,38 @@ export function ChallengeCard({
         className,
       )}
     >
-      <svg className="pointer-events-none absolute h-0 w-0" aria-hidden>
-        <defs>
-          <clipPath id={coverClipId} clipPathUnits="objectBoundingBox">
-            <path d="M0.05 0 H0.86 C0.905 0 0.93 0.02 0.94 0.06 L0.995 0.93 C1 0.97 0.97 1 0.93 1 H0.05 C0.02 1 0 0.98 0 0.95 V0.05 C0 0.02 0.02 0 0.05 0 Z" />
-          </clipPath>
-        </defs>
-      </svg>
+      {!videoSpot ? (
+        <svg className="pointer-events-none absolute h-0 w-0" aria-hidden>
+          <defs>
+            <clipPath id={coverClipId} clipPathUnits="objectBoundingBox">
+              <path d="M0.05 0 H0.86 C0.905 0 0.93 0.02 0.94 0.06 L0.995 0.93 C1 0.97 0.97 1 0.93 1 H0.05 C0.02 1 0 0.98 0 0.95 V0.05 C0 0.02 0.02 0 0.05 0 Z" />
+            </clipPath>
+          </defs>
+        </svg>
+      ) : null}
       <div
-        className="absolute inset-y-0 left-0 z-0 w-[40%] bg-[#f4d0c2] sm:w-[38%]"
-        style={{
-          clipPath: `url(#${coverClipId})`,
-          WebkitClipPath: `url(#${coverClipId})`,
-        }}
+        className={cn(
+          "absolute inset-y-0 left-0 z-0 w-[40%] bg-[#f4d0c2] sm:w-[38%]",
+          videoSpot && "overflow-hidden rounded-r-[1.25rem]",
+        )}
+        style={
+          videoSpot
+            ? undefined
+            : {
+                clipPath: `url(#${coverClipId})`,
+                WebkitClipPath: `url(#${coverClipId})`,
+              }
+        }
       >
-        <CoverImage
-          candidates={covers}
-          className="absolute inset-0 size-full object-cover object-[center_18%] saturate-[1.08] contrast-[1.02]"
+        <Spot
+          className={cn(
+            "absolute inset-0 size-full object-cover object-[center_18%]",
+            !videoSpot && "saturate-[1.08] contrast-[1.02]",
+          )}
         />
-        <div className="absolute inset-0 bg-gradient-to-tr from-[#f6c8b8]/30 via-transparent to-white/20" />
+        {!videoSpot ? (
+          <div className="absolute inset-0 bg-gradient-to-tr from-[#f6c8b8]/30 via-transparent to-white/20" />
+        ) : null}
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#3a2018]/40 to-transparent" />
         <p className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-[#201820] shadow-[0_8px_20px_rgba(20,10,20,0.14)] sm:text-[11px]">
           <Trophy className="size-3 text-[#e0b21a]" />
@@ -435,6 +514,9 @@ export function ChallengeCard({
           >
             {challenge.body}
           </p>
+          <div className="mt-2">
+            <ProductCue challenge={challenge} compact />
+          </div>
         </div>
         <div className="flex items-center justify-between gap-2.5">
           <Faces faces={faces} count={count} />

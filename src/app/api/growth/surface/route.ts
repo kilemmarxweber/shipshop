@@ -4,6 +4,11 @@ import { prisma, withDbRetry } from "@/lib/prisma";
 import { ensureActiveChallenges } from "@/lib/growth/challenge";
 import { packCatalog } from "@/lib/growth/campaign-packs";
 import { firstVisualUrl, isProbablyVideo } from "@/lib/growth/challenge-look";
+import { challengeProductCueFromRow } from "@/lib/growth/challenge-product";
+import {
+  parseChallengeSpotlight,
+  spotlightCoverCandidates,
+} from "@/lib/growth/challenge-spotlight";
 
 type HighlightProduct = {
   id: string;
@@ -88,7 +93,7 @@ export async function GET() {
       prisma.brandCampaign.findMany({
         where: {
           status: "ACTIVE",
-          kind: { in: ["STORY", "CHALLENGE", "FEED"] },
+          kind: "STORY",
         },
         orderBy: { createdAt: "desc" },
         take: 12,
@@ -163,16 +168,67 @@ export async function GET() {
     }
   }
 
+  // Stories : ne renvoyer un productId que s’il pointe encore vers un produit actif
+  const storyProductIds = [
+    ...new Set(
+      stories
+        .map((row) => row.productId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const liveStoryProducts = storyProductIds.length
+    ? await withDbRetry(() =>
+        prisma.product.findMany({
+          where: { id: { in: storyProductIds }, status: "ACTIVE" },
+          select: { id: true },
+        }),
+      )
+    : [];
+  const liveStoryProductIds = new Set(liveStoryProducts.map((row) => row.id));
+  const safeStories = stories.map((row) => ({
+    ...row,
+    productId:
+      row.productId && liveStoryProductIds.has(row.productId)
+        ? row.productId
+        : null,
+  }));
+
   const open = active.filter((row) => !doneIds.has(row.id));
   const challenges = open.map((challenge) => {
-    const coverCandidates = [
+    const cue = challengeProductCueFromRow({
+      productFocus:
+        "productFocus" in challenge
+          ? (challenge.productFocus as string)
+          : null,
+      productTeaser:
+        "productTeaser" in challenge ? challenge.productTeaser : null,
+      product:
+        "product" in challenge
+          ? (challenge.product as {
+              id: string;
+              title: string;
+              images: string[];
+              priceCents: number;
+              currency: string;
+              shop: { name: string };
+            } | null)
+          : null,
+      firstVisual: firstVisualUrl,
+    });
+    const spotlight = parseChallengeSpotlight(
+      "spotlight" in challenge ? challenge.spotlight : null,
+    );
+    const productCovers = cue?.image ? [cue.image] : [];
+    const fallbackCovers = [
       ...catalog.filter((product) => product.category === challenge.category),
       ...catalog.filter((product) => product.category !== challenge.category),
     ]
       .map((product) => firstVisualUrl(product.images))
-      .filter((url): url is string => Boolean(url))
-      .filter((url, index, all) => all.indexOf(url) === index)
-      .slice(0, 4);
+      .filter((url): url is string => Boolean(url));
+    const coverCandidates = spotlightCoverCandidates(spotlight, [
+      ...productCovers,
+      ...fallbackCovers,
+    ]).slice(0, 4);
     return {
       id: challenge.id,
       title: challenge.title,
@@ -183,7 +239,9 @@ export async function GET() {
       done: false,
       coverUrl: coverCandidates[0] ?? null,
       coverCandidates,
+      spotlight,
       participants: facesByChallenge.get(challenge.id) ?? [],
+      product: cue,
     };
   });
 
@@ -202,28 +260,35 @@ export async function GET() {
     viewRows.map((row) => [row.productId, row._sum.viewCount ?? 0]),
   );
 
-  return NextResponse.json({
-    challenges,
-    challenge: challenges[0] ?? null,
-    highlights: highlights.map((row) => ({
-      id: row.id,
-      title: row.title,
-      category: row.category,
-      imageUrl: firstVisualUrl(row.images),
-      images: row.images,
-      soundtrack: row.soundtrack,
-      soundtrackStartMs: row.soundtrackStartMs,
-      hasVideo:
-        row.images.some(isProbablyVideo) || Boolean(row.soundtrack?.audioUrl),
-      likesCount: row._count.likes,
-      viewsCount: viewsById.get(row.id) ?? 0,
-      creator: {
-        name: row.shop.owner?.name ?? row.shop.name,
-        image: row.shop.owner?.image ?? row.shop.logoUrl,
+  return NextResponse.json(
+    {
+      challenges,
+      challenge: challenges[0] ?? null,
+      highlights: highlights.map((row) => ({
+        id: row.id,
+        title: row.title,
+        category: row.category,
+        imageUrl: firstVisualUrl(row.images),
+        images: row.images,
+        soundtrack: row.soundtrack,
+        soundtrackStartMs: row.soundtrackStartMs,
+        hasVideo:
+          row.images.some(isProbablyVideo) || Boolean(row.soundtrack?.audioUrl),
+        likesCount: row._count.likes,
+        viewsCount: viewsById.get(row.id) ?? 0,
+        creator: {
+          name: row.shop.owner?.name ?? row.shop.name,
+          image: row.shop.owner?.image ?? row.shop.logoUrl,
+        },
+      })),
+      stories: safeStories,
+      lives,
+      packs: packCatalog(),
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
       },
-    })),
-    stories,
-    lives,
-    packs: packCatalog(),
-  });
+    },
+  );
 }

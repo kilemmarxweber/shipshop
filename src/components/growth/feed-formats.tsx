@@ -11,12 +11,59 @@ import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
 import { ChallengeCard } from "@/components/growth/challenge-card";
 import { Face } from "@/components/growth/cover-image";
 import { templateFor } from "@/lib/growth/challenge-place";
+import { resolvePartnerStoryHref } from "@/lib/growth/story-href";
+import type { GrowthSurface } from "@/lib/growth/use-growth-surface";
+import { PartnerStoryFrame } from "@/components/growth/partner-story-frame";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
 import {
   VideoSoundButton,
   type VideoSoundState,
 } from "@/components/video-sound-button";
+
+type PartnerStory = NonNullable<GrowthSurface["stories"]>[number];
+
+function PartnerStoryCard({ story }: { story: PartnerStory }) {
+  const { href, external } = resolvePartnerStoryHref(story);
+
+  const trackClick = () => {
+    void fetchJson(`/api/growth/campaigns/${story.id}/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "click" }),
+    });
+  };
+
+  const frame = (
+    <PartnerStoryFrame
+      title={story.title}
+      body={story.body}
+      mediaUrl={story.mediaUrl}
+      category={story.category}
+      className="w-36 shrink-0"
+    />
+  );
+
+  if (external) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={trackClick}
+        className="block w-36 shrink-0"
+      >
+        {frame}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} onClick={trackClick} className="block w-36 shrink-0">
+      {frame}
+    </Link>
+  );
+}
 
 export type HighlightPlayback = {
   clipMs: number;
@@ -213,46 +260,9 @@ export function GrowthFeedFormats({
             <Sparkles className="size-3.5" /> {t("discover.storiesHeading")}
           </p>
           <div className="h-scroll h-scroll-fade gap-2.5">
-            {stories.map((story) => {
-              const href =
-                story.ctaUrl ||
-                (story.productId ? `/product/${story.productId}` : "/discover");
-              return (
-                <Link
-                  key={story.id}
-                  href={href}
-                  onClick={() => {
-                    void fetchJson(`/api/growth/campaigns/${story.id}/event`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ kind: "click" }),
-                    });
-                  }}
-                  className="relative w-36 shrink-0 overflow-hidden rounded-2xl border border-border bg-surface"
-                >
-                  <div
-                    className="aspect-[3/4] bg-surface-2"
-                    style={
-                      story.mediaUrl
-                        ? {
-                            backgroundImage: `url(${story.mediaUrl})`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                          }
-                        : undefined
-                    }
-                  />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2">
-                    <p className="line-clamp-2 text-[11px] font-bold text-white">
-                      {story.title}
-                    </p>
-                    <p className="text-[9px] font-semibold uppercase text-white/70">
-                      {story.objective} · sponsorisé
-                    </p>
-                  </div>
-                </Link>
-              );
-            })}
+            {stories.map((story) => (
+              <PartnerStoryCard key={story.id} story={story} />
+            ))}
           </div>
         </section>
       ) : null}

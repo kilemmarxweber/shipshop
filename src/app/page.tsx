@@ -596,7 +596,9 @@ export default function FeedPage() {
   return (
     <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden">
       {tabs}
-      {tab === "foryou" ? <GrowthFeedFormats variant="feed" /> : null}
+      {tab === "foryou" ? (
+        <GrowthFeedFormats variant="feed" pinChallenges />
+      ) : null}
 
       <div
         key={tab}

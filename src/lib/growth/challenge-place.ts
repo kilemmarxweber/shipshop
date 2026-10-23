@@ -18,6 +18,27 @@ export type ChallengeCardModel = {
   coverUrl?: string | null;
   coverCandidates?: string[];
   participants?: { name: string; image: string | null }[];
+  /** Média hero (jpg/png/webp ou courte vidéo) */
+  spotlight?: {
+    url: string;
+    kind: "image" | "video";
+    posterUrl?: string | null;
+  } | null;
+  /**
+   * Ancrage produit : catalogue (fiche) ou teaser hors boutique.
+   * null = mission libre (catégorie / engagement).
+   */
+  product?: {
+    kind: "catalog" | "teaser";
+    id: string | null;
+    title: string;
+    priceCents: number | null;
+    currency: string;
+    shopName: string | null;
+    image: string | null;
+    note?: string | null;
+    href: string | null;
+  } | null;
 };
 
 export type MixedRow<T> =
@@ -99,9 +120,10 @@ function lockPlan(
 function challengeSlots(
   memory: ChallengeWeaveMemory,
   count: number,
-  surface: ChallengeSurface,
+  _surface: ChallengeSurface,
 ) {
-  const slots: number[] = surface === "feed" ? [0] : [];
+  // Slot 0 géré par GrowthFeedFormats (pinChallenges) — éviter le doublon
+  const slots: number[] = [];
   if (memory.first == null || memory.gap == null) return slots;
   for (let index = memory.first; index <= count; index += memory.gap) {
     if (index !== 0) slots.push(index);

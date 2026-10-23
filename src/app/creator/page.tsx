@@ -16,6 +16,7 @@ type Me = {
   badges: BadgeRow[];
   subscribers: number;
   kycApproved: boolean;
+  isPlatformOwner?: boolean;
 };
 
 type GiftRow = {
@@ -53,16 +54,18 @@ export default function CreatorStudioPage() {
   }
 
   const influencer = me?.badges.some((b) => b.kind === "INFLUENCER" && b.active);
+  const canGoLive = Boolean(influencer || me?.isPlatformOwner);
 
   return (
     <div className="mx-auto max-w-lg space-y-4 px-4 py-5">
       <h1 className="font-heading text-xl font-bold">Studio créateur</h1>
       <p className="text-sm text-muted-foreground">
-        {me?.subscribers ?? 0} / 2000 abonnés pour le live, les cadeaux et la
-        pub rémunérée.
+        {me?.isPlatformOwner
+          ? "Owner plateforme : accès total au live, cadeaux et pub (sans seuil d’abonnés)."
+          : `${me?.subscribers ?? 0} / 2000 abonnés pour le live, les cadeaux et la pub rémunérée.`}
       </p>
       {me ? <AccountBadges badges={me.badges} /> : null}
-      {!me?.kycApproved ? (
+      {!me?.kycApproved && !me?.isPlatformOwner ? (
         <Link href="/kyc" className="block text-xs font-semibold text-primary">
           Vérifiez votre identité (KYC) pour monétiser
         </Link>
@@ -71,8 +74,9 @@ export default function CreatorStudioPage() {
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-sm font-bold">Lancer un live</h2>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Réservé au Badge Influenceur. Promouvez un produit, recevez des
-          cadeaux, soyez payé.
+          {me?.isPlatformOwner
+            ? "Accès owner : lancez un live quand vous voulez."
+            : "Réservé au Badge Influenceur. Promouvez un produit, recevez des cadeaux, soyez payé."}
         </p>
         <div className="mt-3 flex gap-2">
           <Input
@@ -81,7 +85,7 @@ export default function CreatorStudioPage() {
             className="bg-surface-2"
           />
           <Button
-            disabled={busy || !influencer}
+            disabled={busy || !canGoLive}
             onClick={async () => {
               setBusy(true);
               const { res, data } = await fetchJson<{

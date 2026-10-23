@@ -9,6 +9,7 @@ import {
   daysAgo,
 } from "@/lib/growth/constants";
 import { countCreatorSubscribers } from "@/lib/growth/subscribers";
+import { assertChipShopOwner } from "@/lib/kyc";
 
 export type BadgeSnapshot = {
   kind: "ACTIVE" | "INFLUENCER";
@@ -46,7 +47,7 @@ async function activeProgress(userId: string) {
 }
 
 export async function refreshAccountBadges(userId: string) {
-  const [activity, subscribers, strike, kyc] = await Promise.all([
+  const [activity, subscribers, strike, kyc, platform] = await Promise.all([
     activeProgress(userId),
     countCreatorSubscribers(userId),
     hasSeriousStrike(userId),
@@ -56,6 +57,7 @@ export async function refreshAccountBadges(userId: string) {
         select: { status: true },
       }),
     ),
+    assertChipShopOwner(userId),
   ]);
 
   const cycleKey = monthCycleKey();
@@ -63,10 +65,12 @@ export async function refreshAccountBadges(userId: string) {
     !strike &&
     activity.activeDays >= ACTIVE_DAYS_REQUIRED &&
     activity.interactions >= ACTIVE_INTERACTIONS_REQUIRED;
+  // Owner plateforme : accès total (live, cadeaux, pub) sans seuil d’abonnés.
   const qualifyInfluencer =
-    !strike &&
-    subscribers >= INFLUENCER_FOLLOWERS &&
-    kyc?.status === "APPROVED";
+    platform.isPlatformOwner ||
+    (!strike &&
+      subscribers >= INFLUENCER_FOLLOWERS &&
+      kyc?.status === "APPROVED");
 
   await syncBadge(userId, "ACTIVE", qualifyActive, cycleKey);
   await syncBadge(userId, "INFLUENCER", qualifyInfluencer, cycleKey);
@@ -153,8 +157,9 @@ export async function loadBadgeSnapshot(userId: string): Promise<{
   activeDays: number;
   interactions: number;
   kycApproved: boolean;
+  isPlatformOwner: boolean;
 }> {
-  const [rows, activity, subscribers, kyc] = await Promise.all([
+  const [rows, activity, subscribers, kyc, platform] = await Promise.all([
     withDbRetry(() =>
       prisma.accountBadge.findMany({
         where: { userId },
@@ -169,8 +174,11 @@ export async function loadBadgeSnapshot(userId: string): Promise<{
         select: { status: true },
       }),
     ),
+    assertChipShopOwner(userId),
   ]);
   const byKind = new Map(rows.map((row) => [row.kind, row]));
+  const influencerActive =
+    platform.isPlatformOwner || Boolean(byKind.get("INFLUENCER")?.active);
   const badges: BadgeSnapshot[] = [
     {
       kind: "ACTIVE",
@@ -184,9 +192,11 @@ export async function loadBadgeSnapshot(userId: string): Promise<{
     },
     {
       kind: "INFLUENCER",
-      active: Boolean(byKind.get("INFLUENCER")?.active),
+      active: influencerActive,
       earnedAt: byKind.get("INFLUENCER")?.earnedAt.toISOString() ?? null,
-      progress: Math.min(subscribers, INFLUENCER_FOLLOWERS),
+      progress: platform.isPlatformOwner
+        ? INFLUENCER_FOLLOWERS
+        : Math.min(subscribers, INFLUENCER_FOLLOWERS),
       target: INFLUENCER_FOLLOWERS,
     },
   ];
@@ -196,6 +206,7 @@ export async function loadBadgeSnapshot(userId: string): Promise<{
     activeDays: activity.activeDays,
     interactions: activity.interactions,
     kycApproved: kyc?.status === "APPROVED",
+    isPlatformOwner: platform.isPlatformOwner,
   };
 }
 
@@ -203,6 +214,10 @@ export async function hasActiveBadge(
   userId: string,
   kind: "ACTIVE" | "INFLUENCER",
 ) {
+  if (kind === "INFLUENCER") {
+    const { isPlatformOwner } = await assertChipShopOwner(userId);
+    if (isPlatformOwner) return true;
+  }
   const row = await withDbRetry(() =>
     prisma.accountBadge.findUnique({
       where: { userId_kind: { userId, kind } },

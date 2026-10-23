@@ -15,7 +15,14 @@ export async function assertChipShopOwner(userId: string) {
       },
     }),
   );
-  return { org, isOwner: Boolean(member), role: member?.role ?? null };
+  return {
+    org,
+    /** Owner ou admin plateforme. */
+    isOwner: Boolean(member),
+    /** Owner org uniquement — accès total lives / influenceur sans seuil d’abonnés. */
+    isPlatformOwner: member?.role === "owner",
+    role: member?.role ?? null,
+  };
 }
 
 export function kycPublic(kyc: {

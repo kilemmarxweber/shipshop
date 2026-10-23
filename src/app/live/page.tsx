@@ -10,6 +10,7 @@ import { usePageBack } from "@/components/back-nav-context";
 type LiveRow = {
   id: string;
   title: string;
+  status?: string;
   giftCents: number;
   user: { name: string; image: string | null };
   product: { title: string; images: string[]; priceCents: number } | null;
@@ -35,7 +36,8 @@ export default function LiveListPage() {
       </div>
       {lives.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          Aucun live en cours. Les influenceurs (2 000 abonnés) peuvent démarrer.
+          Aucun live en cours. Influenceurs (2 000 abonnés) ou owner peuvent
+          démarrer.
         </p>
       ) : (
         <ul className="space-y-2">
@@ -45,11 +47,24 @@ export default function LiveListPage() {
                 href={`/live/${live.id}`}
                 className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3"
               >
-                <span className="grid size-10 place-items-center rounded-full bg-destructive/20 text-destructive">
+                <span
+                  className={
+                    live.status === "PAUSED"
+                      ? "grid size-10 place-items-center rounded-full bg-amber-500/20 text-amber-600"
+                      : "grid size-10 place-items-center rounded-full bg-destructive/20 text-destructive"
+                  }
+                >
                   <Radio className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{live.title}</p>
+                  <p className="truncate text-sm font-bold">
+                    {live.status === "PAUSED" ? (
+                      <span className="mr-1.5 text-[10px] font-extrabold text-amber-600">
+                        PAUSE
+                      </span>
+                    ) : null}
+                    {live.title}
+                  </p>
                   <p className="text-[11px] text-muted-foreground">
                     {live.user.name}
                     {live.product ? ` · ${live.product.title}` : ""}
