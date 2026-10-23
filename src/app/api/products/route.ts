@@ -463,6 +463,19 @@ export async function GET(req: Request) {
       followedIds = new Set(follows.map((f) => f.shopId));
     }
 
+    const viewRows = products.length
+      ? await withDbRetry(() =>
+          prisma.productDwell.groupBy({
+            by: ["productId"],
+            where: { productId: { in: products.map((p) => p.id) } },
+            _sum: { viewCount: true },
+          }),
+        )
+      : [];
+    const viewsMap = new Map(
+      viewRows.map((row) => [row.productId, row._sum.viewCount ?? 0]),
+    );
+
     const mapped = products.map((p) => {
       const { _count, ...rest } = p;
       return {
@@ -470,6 +483,7 @@ export async function GET(req: Request) {
         likesCount: _count.likes,
         commentsCount: _count.comments,
         soldCount: _count.orders,
+        viewsCount: viewsMap.get(p.id) ?? 0,
         likedByMe: likedIds.has(p.id),
         shop: {
           ...p.shop,

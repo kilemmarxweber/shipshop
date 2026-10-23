@@ -163,6 +163,7 @@ export type Messages = {
     seeAll: string;
     videoOfMoment: string;
     views: string;
+    popularHeading: string;
   };
   shop: {
     notFound: string;
@@ -396,6 +397,14 @@ export type Messages = {
     blur: string;
     stampLogo: string;
     stampPrice: string;
+    addText: string;
+    textPrompt: string;
+    textPlaceholder: string;
+    needPrice: string;
+    deleteOverlay: string;
+    resizeOverlay: string;
+    overlayHint: string;
+    cropZoom: string;
     eraser: string;
     apply: string;
     skip: string;
@@ -416,6 +425,7 @@ export type Messages = {
     select: string;
     autoFill: string;
     searchOnline: string;
+    search: string;
     searchPlaceholder: string;
     searching: string;
     searchEmpty: string;
@@ -430,12 +440,29 @@ export type Messages = {
     motionPanLeft: string;
     motionPanRight: string;
     motionPanUp: string;
+    optional: string;
+    openHint: string;
+    needMedia: string;
+    activeSound: string;
+    activeMotion: string;
+    done: string;
   };
   publish: {
     titleProduct: string;
     titlePlaceholder: string;
     shop: string;
     media: string;
+    category: string;
+    categoryHint: string;
+    moreOptions: string;
+    moreOptionsHint: string;
+    colors: string;
+    colorsHint: string;
+    sizes: string;
+    sizesHint: string;
+    sizesClothing: string;
+    sizesShoes: string;
+    optionsSelected: string;
   };
   orderStatus: {
     PAID: string;
@@ -618,6 +645,7 @@ const fr: Messages = {
     seeAll: "Voir tout",
     videoOfMoment: "Vidéo du moment",
     views: "vues",
+    popularHeading: "Catégories populaires",
   },
   shop: {
     notFound: "Boutique introuvable",
@@ -854,6 +882,15 @@ const fr: Messages = {
     blur: "Masquer l’objet",
     stampLogo: "Tampon logo",
     stampPrice: "Tampon prix",
+    addText: "Ajouter du texte",
+    textPrompt: "Texte à afficher sur l’image",
+    textPlaceholder: "Votre texte…",
+    needPrice: "Indiquez d’abord le prix du produit",
+    deleteOverlay: "Supprimer l’élément",
+    resizeOverlay: "Redimensionner",
+    overlayHint:
+      "Glissez pour déplacer · coin pour redimensionner · zoom pour recadrer le logo",
+    cropZoom: "Recadrer",
     eraser: "Gomme",
     apply: "Appliquer",
     skip: "Passer",
@@ -873,12 +910,13 @@ const fr: Messages = {
     reset: "Image d’origine",
     select: "Sélection",
     autoFill: "Fond auto (pixels autour)",
-    searchOnline: "Chercher en ligne",
-    searchPlaceholder: "Nom ou titre (ex. rumba, actualités)",
+    searchOnline: "Trouver un son en ligne",
+    search: "Chercher",
+    searchPlaceholder: "Ex. rumba, jazz, actualités…",
     searching: "Recherche…",
     searchEmpty: "Aucun son libre trouvé — essayez un autre titre",
     searchHint:
-      "Pas de fichier sur l’appareil ? Cherchez un titre : extraits du domaine public (Internet Archive), pas de téléchargement pirate.",
+      "Tapez un titre ou un style — on propose des sons libres à essayer tout de suite.",
     tempOnly: "Temporaire — supprimé après publication",
     fetchOnline: "Utiliser ce son",
     slidesTitle: "Images sur 1 minute",
@@ -890,12 +928,31 @@ const fr: Messages = {
     motionPanLeft: "Travelling gauche",
     motionPanRight: "Travelling droit",
     motionPanUp: "Travelling haut",
+    optional: "Optionnel",
+    openHint: "Musique, animations et retouches — ouvrir les détails",
+    needMedia: "Ajoutez d’abord des images ou une vidéo",
+    activeSound: "Son",
+    activeMotion: "Mouvement",
+    done: "Terminé",
   },
   publish: {
     titleProduct: "Titre (produit)",
     titlePlaceholder: "iPhone 15 Pro Max 256Go",
     shop: "Boutique",
     media: "Images / vidéos",
+    category: "Catégorie",
+    categoryHint:
+      "Touchez une catégorie — c’est là que les acheteurs cherchent ce type d’article.",
+    moreOptions: "Taille et couleur",
+    moreOptionsHint:
+      "Aidez les acheteurs à trouver la bonne variante — plus clair, plus de ventes.",
+    colors: "Couleurs",
+    colorsHint: "Choisissez les teintes proposées pour cet article.",
+    sizes: "Tailles",
+    sizesHint: "Vêtements ou pointures — cochez ce que vous avez en stock.",
+    sizesClothing: "Vêtements",
+    sizesShoes: "Pointures",
+    optionsSelected: "sélectionné(s)",
   },
   orderStatus: {
     PAID: "Payé et bloqué",
@@ -1077,6 +1134,7 @@ const en: Messages = {
     seeAll: "See all",
     videoOfMoment: "Video of the moment",
     views: "views",
+    popularHeading: "Popular categories",
   },
   shop: {
     notFound: "Shop not found",
@@ -1313,6 +1371,15 @@ const en: Messages = {
     blur: "Hide object",
     stampLogo: "Stamp logo",
     stampPrice: "Stamp price",
+    addText: "Add text",
+    textPrompt: "Text to show on the image",
+    textPlaceholder: "Your text…",
+    needPrice: "Set the product price first",
+    deleteOverlay: "Delete element",
+    resizeOverlay: "Resize",
+    overlayHint:
+      "Drag to move · corner to resize · zoom to crop the logo",
+    cropZoom: "Crop",
     eraser: "Eraser",
     apply: "Apply",
     skip: "Skip",
@@ -1332,12 +1399,13 @@ const en: Messages = {
     reset: "Original image",
     select: "Select",
     autoFill: "Auto fill (nearby pixels)",
-    searchOnline: "Search online",
-    searchPlaceholder: "Name or title (e.g. rumba, news)",
+    searchOnline: "Find a sound online",
+    search: "Search",
+    searchPlaceholder: "e.g. rumba, jazz, news…",
     searching: "Searching…",
     searchEmpty: "No public-domain sound found — try another title",
     searchHint:
-      "No file on this device? Search a title: public-domain clips (Internet Archive), not pirate downloads.",
+      "Type a title or vibe — we’ll suggest free sounds you can try right away.",
     tempOnly: "Temporary — deleted after publishing",
     fetchOnline: "Use this sound",
     slidesTitle: "Images over 1 minute",
@@ -1349,12 +1417,31 @@ const en: Messages = {
     motionPanLeft: "Pan left",
     motionPanRight: "Pan right",
     motionPanUp: "Pan up",
+    optional: "Optional",
+    openHint: "Music, motion and edits — view details",
+    needMedia: "Add images or a video first",
+    activeSound: "Sound",
+    activeMotion: "Motion",
+    done: "Done",
   },
   publish: {
     titleProduct: "Title (product)",
     titlePlaceholder: "iPhone 15 Pro Max 256GB",
     shop: "Shop",
     media: "Images / videos",
+    category: "Category",
+    categoryHint:
+      "Tap a category — that’s where buyers look for this kind of item.",
+    moreOptions: "Size and color",
+    moreOptionsHint:
+      "Help buyers pick the right variant — clearer options, more sales.",
+    colors: "Colors",
+    colorsHint: "Pick the shades you offer for this item.",
+    sizes: "Sizes",
+    sizesHint: "Clothing or shoe sizes — tick what you have in stock.",
+    sizesClothing: "Clothing",
+    sizesShoes: "Shoes",
+    optionsSelected: "selected",
   },
   orderStatus: {
     PAID: "Paid and held",
@@ -1536,6 +1623,7 @@ const pt: Messages = {
     seeAll: "Ver tudo",
     videoOfMoment: "Vídeo do momento",
     views: "visualizações",
+    popularHeading: "Categorias populares",
   },
   shop: {
     notFound: "Loja não encontrada",
@@ -1772,6 +1860,15 @@ const pt: Messages = {
     blur: "Ocultar objeto",
     stampLogo: "Carimbo do logótipo",
     stampPrice: "Carimbo do preço",
+    addText: "Adicionar texto",
+    textPrompt: "Texto a mostrar na imagem",
+    textPlaceholder: "O seu texto…",
+    needPrice: "Indique primeiro o preço do produto",
+    deleteOverlay: "Eliminar elemento",
+    resizeOverlay: "Redimensionar",
+    overlayHint:
+      "Arraste para mover · canto para redimensionar · zoom para recortar o logo",
+    cropZoom: "Recortar",
     eraser: "Borracha",
     apply: "Aplicar",
     skip: "Saltar",
@@ -1791,12 +1888,13 @@ const pt: Messages = {
     reset: "Imagem original",
     select: "Selecionar",
     autoFill: "Fundo auto (pixels à volta)",
-    searchOnline: "Procurar online",
-    searchPlaceholder: "Nome ou título (ex. rumba, notícias)",
+    searchOnline: "Encontrar um som online",
+    search: "Procurar",
+    searchPlaceholder: "Ex. rumba, jazz, notícias…",
     searching: "A procurar…",
     searchEmpty: "Nenhum som livre encontrado — tente outro título",
     searchHint:
-      "Sem ficheiro no aparelho? Procure um título: excertos de domínio público (Internet Archive), sem descargas pirata.",
+      "Escreva um título ou estilo — sugerimos sons livres para experimentar já.",
     tempOnly: "Temporário — apagado após publicar",
     fetchOnline: "Usar este som",
     slidesTitle: "Imagens em 1 minuto",
@@ -1808,12 +1906,31 @@ const pt: Messages = {
     motionPanLeft: "Travelling esquerda",
     motionPanRight: "Travelling direita",
     motionPanUp: "Travelling cima",
+    optional: "Opcional",
+    openHint: "Música, animações e retoques — ver detalhes",
+    needMedia: "Adicione primeiro imagens ou um vídeo",
+    activeSound: "Som",
+    activeMotion: "Movimento",
+    done: "Concluído",
   },
   publish: {
     titleProduct: "Título (produto)",
     titlePlaceholder: "iPhone 15 Pro Max 256GB",
     shop: "Loja",
     media: "Imagens / vídeos",
+    category: "Categoria",
+    categoryHint:
+      "Toque numa categoria — é aí que os compradores procuram este tipo de artigo.",
+    moreOptions: "Tamanho e cor",
+    moreOptionsHint:
+      "Ajude os compradores a escolher a variante certa — opções claras, mais vendas.",
+    colors: "Cores",
+    colorsHint: "Escolha as tonalidades oferecidas para este artigo.",
+    sizes: "Tamanhos",
+    sizesHint: "Roupa ou calçado — marque o que tem em stock.",
+    sizesClothing: "Roupa",
+    sizesShoes: "Calçado",
+    optionsSelected: "selecionado(s)",
   },
   orderStatus: {
     PAID: "Pago e bloqueado",

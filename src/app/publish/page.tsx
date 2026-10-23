@@ -21,18 +21,82 @@ import {
   PublishMontage,
   type LocalMontageClip,
 } from "@/components/publish-montage";
-import { LOCAL_SOUNDTRACK_ID, normalizeMotions } from "@/lib/montage";
+import {
+  LOCAL_SOUNDTRACK_ID,
+  looksUnspecifiedMotions,
+  normalizeMotions,
+} from "@/lib/montage";
 import { useAppConfig } from "@/lib/use-app-config";
 import { type AddressState } from "@/components/kinshasa-address-form";
 import { composeAddress } from "@/lib/address";
 import { reverseGeocode } from "@/lib/browser-geolocation";
-import { type AppCurrency, parseCurrency } from "@/lib/money";
+import { APP_CURRENCIES, type AppCurrency, parseCurrency } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { CurrencyPicker } from "@/components/currency-picker";
-import { useI18n } from "@/components/i18n-provider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { notifyNewListing } from "@/lib/new-listing-events";
-import { PackagePlus, Search } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import type { LucideIcon } from "lucide-react";
+import {
+  BookOpen,
+  Car,
+  Check,
+  Clapperboard,
+  ChevronDown,
+  ChevronRight,
+  Cpu,
+  Dumbbell,
+  Footprints,
+  Gamepad2,
+  Home,
+  Music2,
+  PackagePlus,
+  Palette,
+  Search,
+  Shirt,
+  Sparkles,
+} from "lucide-react";
 import { isPublicUploadPath } from "@/lib/upload-url";
+
+const CATEGORY_ICON: Record<string, LucideIcon> = {
+  Tech: Cpu,
+  Mode: Shirt,
+  Maison: Home,
+  Gaming: Gamepad2,
+  Beauté: Sparkles,
+  Auto: Car,
+  Livres: BookOpen,
+  Sport: Dumbbell,
+};
+
+const CLOTHING_SIZES = PRESET_SIZES.filter((s) =>
+  ["XS", "S", "M", "L", "XL", "XXL", "Unique"].includes(s),
+);
+const SHOE_SIZES = PRESET_SIZES.filter((s) => /^\d+$/.test(s));
+
+/** Chiffres + au plus un point décimal (max 2 décimales). */
+function sanitizePriceInput(raw: string) {
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  const dot = cleaned.indexOf(".");
+  if (dot === -1) return cleaned;
+  const whole = cleaned.slice(0, dot);
+  const fraction = cleaned
+    .slice(dot + 1)
+    .replace(/\./g, "")
+    .slice(0, 2);
+  return `${whole}.${fraction}`;
+}
 
 type Shop = {
   id: string;
@@ -73,6 +137,7 @@ function PublishInner() {
   const [soundtrackId, setSoundtrackId] = useState<string | null>(null);
   const [soundtrackStartMs, setSoundtrackStartMs] = useState(0);
   const [localClip, setLocalClip] = useState<LocalMontageClip | null>(null);
+  const [montageOpen, setMontageOpen] = useState(false);
   const [imageMotions, setImageMotions] = useState<string[]>([]);
   const localClipRef = useRef<LocalMontageClip | null>(null);
   const [loading, setLoading] = useState(false);
@@ -104,13 +169,16 @@ function PublishInner() {
       const { data } = await fetchJson<{ shops?: Shop[] }>("/api/shops?mine=1");
       const list = data?.shops ?? [];
       setShops(list);
-      if (!shopId && list[0]) setShopId(list[0].id);
-      const selected = list.find((s) => s.id === (shopId || list[0]?.id));
+      const selected =
+        list.find((s) => s.id === shopId) ?? list[0] ?? null;
+      if (selected && selected.id !== shopId) setShopId(selected.id);
       if (selected?.currency) setCurrency(parseCurrency(selected.currency));
       if (selected) void applyShopLocation(selected);
     }
     if (session) load();
   }, [session, shopId]);
+
+  const activeShop = shops.find((s) => s.id === shopId) ?? shops[0] ?? null;
 
   async function applyShopLocation(shop: Shop) {
     const lat = shop.lat;
@@ -407,6 +475,11 @@ function PublishInner() {
     }
   }
 
+  const hasMontageSound = Boolean(soundtrackId || localClip);
+  const hasMontageMotion = !looksUnspecifiedMotions(imageMotions);
+  const montageReady = hasMontageSound || hasMontageMotion;
+  const canOpenMontage = images.length > 0 && !mediaBusy;
+
   return (
     <div className="mx-auto max-w-lg px-4 pb-6 pt-0">
       <div className="mb-6 flex gap-1.5">
@@ -462,29 +535,119 @@ function PublishInner() {
               onBusyChange={setMediaBusy}
             />
           </div>
-          <PublishMontage
-            images={images}
-            onImagesChange={setImages}
-            soundtrackId={soundtrackId}
-            onSoundtrackId={(id) => {
-              setSoundtrackId(id);
-              setSoundtrackStartMs(0);
+
+          <button
+            type="button"
+            disabled={!canOpenMontage}
+            onClick={() => {
+              if (!canOpenMontage) {
+                toast.message(t("montage.needMedia"));
+                return;
+              }
+              setMontageOpen(true);
             }}
-            soundtrackStartMs={soundtrackStartMs}
-            onSoundtrackStartMs={setSoundtrackStartMs}
-            localClip={localClip}
-            onLocalClip={replaceLocalClip}
-            imageMotions={imageMotions}
-            onImageMotions={setImageMotions}
-            productTitle={title}
-            shopLogoUrl={shops.find((s) => s.id === shopId)?.logoUrl}
-            priceCents={
-              Number.parseFloat(price) > 0
-                ? Math.round(Number.parseFloat(price) * 100)
-                : undefined
-            }
-            currency={currency}
-          />
+            className={cn(
+              "flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition",
+              canOpenMontage
+                ? "border-border bg-surface hover:border-primary/40 hover:bg-surface-2 active:scale-[0.99]"
+                : "cursor-not-allowed border-border/60 bg-surface-2/50 opacity-70",
+              montageReady && "border-trust/35 bg-trust/5",
+            )}
+          >
+            <span
+              className={cn(
+                "grid size-11 shrink-0 place-items-center rounded-xl",
+                montageReady
+                  ? "bg-trust/15 text-trust"
+                  : "bg-primary/12 text-primary",
+              )}
+            >
+              <Clapperboard className="size-5" strokeWidth={1.75} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="text-sm font-semibold text-foreground">
+                {t("montage.title")}
+              </span>
+              <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground">
+                {canOpenMontage
+                  ? t("montage.openHint")
+                  : t("montage.needMedia")}
+              </span>
+              {montageReady ? (
+                <span className="mt-1.5 flex flex-wrap gap-1.5">
+                  {hasMontageSound ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-trust/15 px-2 py-0.5 text-[10px] font-semibold text-trust">
+                      <Music2 className="size-3" />
+                      {t("montage.activeSound")}
+                    </span>
+                  ) : null}
+                  {hasMontageMotion ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      <Sparkles className="size-3" />
+                      {t("montage.activeMotion")}
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
+            </span>
+            <ChevronRight
+              className="size-5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+          </button>
+
+          <Sheet open={montageOpen} onOpenChange={setMontageOpen}>
+            <SheetContent
+              side="bottom"
+              className="mx-auto max-h-[min(92dvh,44rem)] !max-w-[34rem] gap-0 overflow-hidden rounded-t-3xl bg-surface p-0"
+            >
+              <SheetHeader className="border-b border-border px-4 pt-3 pb-2.5">
+                <SheetTitle className="flex items-center gap-2">
+                  <span className="grid size-8 place-items-center rounded-lg bg-primary/12 text-primary">
+                    <Clapperboard className="size-4" strokeWidth={1.75} />
+                  </span>
+                  {t("montage.title")}
+                </SheetTitle>
+                <SheetDescription className="sr-only">
+                  {t("montage.openHint")}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="overflow-y-auto overscroll-contain px-4 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <PublishMontage
+                  plain
+                  images={images}
+                  onImagesChange={setImages}
+                  soundtrackId={soundtrackId}
+                  onSoundtrackId={(id) => {
+                    setSoundtrackId(id);
+                    setSoundtrackStartMs(0);
+                  }}
+                  soundtrackStartMs={soundtrackStartMs}
+                  onSoundtrackStartMs={setSoundtrackStartMs}
+                  localClip={localClip}
+                  onLocalClip={replaceLocalClip}
+                  imageMotions={imageMotions}
+                  onImageMotions={setImageMotions}
+                  productTitle={title}
+                  shopId={activeShop?.id}
+                  shopLogoUrl={activeShop?.logoUrl ?? null}
+                  priceCents={
+                    Number.parseFloat(price) > 0
+                      ? Math.round(Number.parseFloat(price) * 100)
+                      : undefined
+                  }
+                  currency={currency}
+                />
+                <Button
+                  type="button"
+                  className="mt-4 h-11 w-full font-semibold"
+                  onClick={() => setMontageOpen(false)}
+                >
+                  {t("montage.done")}
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
 
           <Button
             className="h-12 w-full font-bold"
@@ -501,7 +664,6 @@ function PublishInner() {
           <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
             Prix · 2/3
           </p>
-          <h1 className="font-heading text-xl font-bold">Prix</h1>
           <div className="space-y-2">
             <Label>{t("publish.titleProduct")}</Label>
             <Input
@@ -511,127 +673,310 @@ function PublishInner() {
               className="bg-surface-2"
             />
           </div>
-          <div className="space-y-2">
-            <Label>Monnaie</Label>
-            <CurrencyPicker
-              value={currency}
-              onChange={(next) => {
-                setCurrency(next);
-                setPrice("");
-              }}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Prix ({currency})</Label>
-            <div className="flex items-center rounded-xl border border-border bg-surface-2 px-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Prix</Label>
+              <div className="flex h-11 items-center rounded-xl border border-border bg-surface-2 px-3">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  pattern="[0-9]*[.]?[0-9]{0,2}"
+                  value={price}
+                  onChange={(e) => setPrice(sanitizePriceInput(e.target.value))}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const text = e.clipboardData.getData("text");
+                    setPrice(sanitizePriceInput(text));
+                  }}
+                  className="h-full border-0 bg-transparent px-0 font-heading text-lg font-bold shadow-none focus-visible:ring-0"
+                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    type="button"
+                    className="inline-flex shrink-0 items-center gap-0.5 rounded-lg px-1.5 py-1 text-sm font-bold text-primary transition hover:bg-primary/10"
+                    aria-label="Changer la devise"
+                  >
+                    {currency}
+                    <ChevronDown className="size-3.5 opacity-70" aria-hidden />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-28">
+                    {APP_CURRENCIES.map((code) => (
+                      <DropdownMenuItem
+                        key={code}
+                        onClick={() => {
+                          if (code === currency) return;
+                          setCurrency(code);
+                          setPrice("");
+                        }}
+                        className={cn(
+                          "justify-between font-bold",
+                          code === currency && "text-primary",
+                        )}
+                      >
+                        {code}
+                        {code === currency ? (
+                          <Check className="size-3.5" strokeWidth={2.5} />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Qté</Label>
               <Input
                 type="number"
                 min="1"
-                step="1"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className="border-0 bg-transparent font-heading text-lg font-bold shadow-none focus-visible:ring-0"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="h-11 bg-surface-2 font-heading text-lg font-bold"
               />
-              <span className="text-sm text-muted-foreground">{currency}</span>
             </div>
           </div>
-          <details className="rounded-2xl border border-border bg-surface-2 p-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Categorie / taille et couleur
+
+          <section className="space-y-2.5">
+            <div>
+              <Label className="text-sm font-semibold">
+                {t("publish.category")}
+              </Label>
+              <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+                {t("publish.categoryHint")}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {CATEGORIES.map((c) => {
+                const Icon = CATEGORY_ICON[c.id] ?? Sparkles;
+                const selected = category === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCategory(c.id)}
+                    className={cn(
+                      "group relative flex flex-col items-start gap-2 overflow-hidden rounded-2xl border p-3 text-left transition active:scale-[0.98]",
+                      selected
+                        ? "border-primary/50 bg-primary/10 ring-2 ring-primary/35"
+                        : "border-border bg-surface hover:border-primary/35 hover:bg-surface-2",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid size-10 place-items-center rounded-xl bg-gradient-to-br text-white shadow-sm",
+                        c.gradient,
+                      )}
+                    >
+                      <Icon className="size-5" strokeWidth={1.75} />
+                    </span>
+                    <span className="text-[13px] font-semibold tracking-tight text-foreground">
+                      {t(`categories.${c.id}` as MessagePath)}
+                    </span>
+                    {selected ? (
+                      <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-primary" />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <details
+            className={cn(
+              "group overflow-hidden rounded-2xl border transition",
+              colors.length > 0 || sizes.length > 0
+                ? "border-primary/35 bg-primary/5"
+                : "border-border bg-surface hover:border-primary/30",
+            )}
+          >
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3.5 marker:content-none [&::-webkit-details-marker]:hidden">
+              <span
+                className={cn(
+                  "grid size-11 shrink-0 place-items-center rounded-xl",
+                  colors.length > 0 || sizes.length > 0
+                    ? "bg-primary/15 text-primary"
+                    : "bg-gradient-to-br from-rose-500/20 via-amber-400/15 to-sky-500/20 text-foreground",
+                )}
+              >
+                <Palette className="size-5" strokeWidth={1.75} />
+              </span>
+              <span className="min-w-0 flex-1 text-left">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  {t("publish.moreOptions")}
+                  {colors.length + sizes.length > 0 ? (
+                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
+                      {colors.length + sizes.length} {t("publish.optionsSelected")}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground">
+                  {t("publish.moreOptionsHint")}
+                </span>
+                {colors.length > 0 ? (
+                  <span className="mt-2 flex items-center gap-1.5">
+                    {colors.slice(0, 6).map((c) => (
+                      <span
+                        key={c}
+                        className="size-4 rounded-full border border-white/25 shadow-sm"
+                        style={{ backgroundColor: colorHex(c) }}
+                        title={c}
+                      />
+                    ))}
+                    {colors.length > 6 ? (
+                      <span className="text-[10px] font-semibold text-muted-foreground">
+                        +{colors.length - 6}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </span>
+              <ChevronDown
+                className="size-5 shrink-0 text-muted-foreground transition group-open:rotate-180"
+                aria-hidden
+              />
             </summary>
-            <div className="mt-3 space-y-4">
-          <div className="space-y-2">
-            <Label>Quantité</Label>
-            <Input
-              type="number"
-              min="1"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="h-11 bg-surface-2 font-heading text-lg font-bold"
-            />
-          </div>
-          <div>
-            <Label className="mb-2 block">Catégorie</Label>
-            <div className="h-scroll h-scroll-fade gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategory(c.id)}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-semibold whitespace-nowrap",
-                    category === c.id
-                      ? "border-primary bg-primary text-white"
-                      : "border-border bg-surface-2",
-                  )}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          <div>
-            <Label className="mb-2 block">Couleurs disponibles</Label>
-            <div className="h-scroll h-scroll-fade gap-2">
-              {PRESET_COLORS.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  title={c.name}
-                  onClick={() => toggleColor(c.name)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold whitespace-nowrap",
-                    colors.includes(c.name)
-                      ? "border-primary bg-primary/15"
-                      : "border-border bg-surface-2",
-                  )}
-                >
-                  <span
-                    className="size-3.5 rounded-full border border-white/20"
-                    style={{ backgroundColor: colorHex(c.name) }}
-                  />
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          </div>
+            <div className="space-y-5 border-t border-border/70 px-3.5 py-4">
+              <section className="space-y-2.5">
+                <div>
+                  <Label className="text-sm font-semibold">
+                    {t("publish.colors")}
+                  </Label>
+                  <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+                    {t("publish.colorsHint")}
+                  </p>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {PRESET_COLORS.map((c) => {
+                    const selected = colors.includes(c.name);
+                    const light =
+                      c.name === "Blanc" ||
+                      c.name === "Or" ||
+                      c.name === "Argent";
+                    return (
+                      <button
+                        key={c.name}
+                        type="button"
+                        title={c.name}
+                        onClick={() => toggleColor(c.name)}
+                        className={cn(
+                          "group/swatch flex flex-col items-center gap-1.5 rounded-2xl border p-2.5 transition active:scale-[0.97]",
+                          selected
+                            ? "border-primary/50 bg-primary/10 ring-2 ring-primary/30"
+                            : "border-border bg-surface-2 hover:border-primary/35",
+                        )}
+                      >
+                        <span className="relative grid size-9 place-items-center">
+                          <span
+                            className={cn(
+                              "size-9 rounded-full shadow-inner",
+                              light
+                                ? "border border-black/15"
+                                : "border border-white/15",
+                            )}
+                            style={{ backgroundColor: colorHex(c.name) }}
+                          />
+                          {selected ? (
+                            <span
+                              className={cn(
+                                "absolute inset-0 grid place-items-center rounded-full",
+                                light
+                                  ? "bg-black/25 text-white"
+                                  : "bg-black/35 text-white",
+                              )}
+                            >
+                              <Check className="size-3.5" strokeWidth={3} />
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="text-[11px] font-semibold tracking-tight text-foreground">
+                          {c.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
-          <div>
-            <Label className="mb-2 block">Tailles disponibles</Label>
-            <div className="h-scroll h-scroll-fade gap-2">
-              {PRESET_SIZES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => toggleSize(s)}
-                  className={cn(
-                    "rounded-xl border px-2.5 py-1.5 text-[11px] font-bold whitespace-nowrap",
-                    sizes.includes(s)
-                      ? "border-primary bg-primary text-white"
-                      : "border-border bg-surface-2",
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+              <section className="space-y-3">
+                <div>
+                  <Label className="text-sm font-semibold">
+                    {t("publish.sizes")}
+                  </Label>
+                  <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+                    {t("publish.sizesHint")}
+                  </p>
+                </div>
 
-          <div className="space-y-2">
-            <Label>Description</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="min-h-24 bg-surface-2"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Localisation boutique</Label>
-            <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
-              {composeAddress(address) || "Position de la boutique"}
-            </p>
-          </div>
+                <div className="space-y-2">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    <Shirt className="size-3.5" strokeWidth={2} />
+                    {t("publish.sizesClothing")}
+                  </p>
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                    {CLOTHING_SIZES.map((s) => {
+                      const selected = sizes.includes(s);
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => toggleSize(s)}
+                          className={cn(
+                            "flex h-11 items-center justify-center rounded-xl border text-[13px] font-bold transition active:scale-[0.97]",
+                            selected
+                              ? "border-primary bg-primary text-white shadow-sm"
+                              : "border-border bg-surface-2 text-foreground hover:border-primary/40 hover:bg-surface",
+                          )}
+                        >
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    <Footprints className="size-3.5" strokeWidth={2} />
+                    {t("publish.sizesShoes")}
+                  </p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {SHOE_SIZES.map((s) => {
+                      const selected = sizes.includes(s);
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => toggleSize(s)}
+                          className={cn(
+                            "flex h-10 items-center justify-center rounded-xl border text-[12px] font-bold transition active:scale-[0.97]",
+                            selected
+                              ? "border-primary bg-primary text-white shadow-sm"
+                              : "border-border bg-surface-2 text-foreground hover:border-primary/40 hover:bg-surface",
+                          )}
+                        >
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="min-h-24 bg-surface-2"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Localisation boutique</Label>
+                <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
+                  {composeAddress(address) || "Position de la boutique"}
+                </p>
+              </div>
             </div>
           </details>
           <div className="flex gap-2">

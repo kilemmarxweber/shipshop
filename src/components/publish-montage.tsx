@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import {
   BadgeDollarSign,
   Blend,
@@ -17,9 +23,11 @@ import {
   ScanSearch,
   Search,
   Store,
+  Trash2,
   Type,
   Undo2,
   Upload,
+  Globe2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchJson } from "@/lib/fetch-json";
@@ -116,9 +124,46 @@ type Suggestion = {
   height: number;
 };
 
+/** Calque logo/texte déplaçable sur l’image produit (coords relatives 0–1). */
+type ImageOverlay = {
+  id: string;
+  kind: "logo" | "text";
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  /** Logo : URL source */
+  src?: string;
+  /** Texte libre ou prix */
+  text?: string;
+  /** Zoom crop logo (≥1) */
+  zoom: number;
+  /** Décalage crop logo (−0.5…0.5) */
+  panX: number;
+  panY: number;
+};
+
 type Rgb = { r: number; g: number; b: number };
 type Tool = "select" | "eraser" | "eyedropper";
 type Point = { x: number; y: number };
+
+function newOverlayId() {
+  return `ov-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function logoCrop(zoom: number, panX: number, panY: number) {
+  const z = Math.max(1, zoom);
+  const size = 1 / z;
+  const maxPan = (1 - size) / 2;
+  const ox = Math.max(-maxPan, Math.min(maxPan, panX));
+  const oy = Math.max(-maxPan, Math.min(maxPan, panY));
+  return {
+    sx: 0.5 - size / 2 + ox,
+    sy: 0.5 - size / 2 + oy,
+    sw: size,
+    sh: size,
+  };
+}
 
 type Props = {
   images: string[];
@@ -132,9 +177,12 @@ type Props = {
   imageMotions: string[];
   onImageMotions: (motions: string[]) => void;
   productTitle?: string;
+  shopId?: string | null;
   shopLogoUrl?: string | null;
   priceCents?: number;
   currency?: string;
+  /** Sans cadre/titre (ex. dans un Sheet déjà titré). */
+  plain?: boolean;
 };
 
 const HISTORY_MAX = 16;
@@ -627,9 +675,11 @@ export function PublishMontage({
   imageMotions,
   onImageMotions,
   productTitle,
+  shopId,
   shopLogoUrl,
   priceCents,
   currency,
+  plain = false,
 }: Props) {
   const { t } = useI18n();
   const appConfig = useAppConfig();
@@ -659,8 +709,19 @@ export function PublishMontage({
   const lastPtRef = useRef<Point | null>(null);
   const [importing, setImporting] = useState(false);
   const [clipPlaying, setClipPlaying] = useState(false);
+  const [overlays, setOverlays] = useState<ImageOverlay[]>([]);
+  const [activeOverlayId, setActiveOverlayId] = useState<string | null>(null);
+  const dragRef = useRef<{
+    id: string;
+    mode: "move" | "resize" | "pan";
+    startX: number;
+    startY: number;
+    orig: ImageOverlay;
+  } | null>(null);
 
   const firstImage = images.find((u) => !isVideoUrl(u)) ?? null;
+  const activeOverlay =
+    overlays.find((o) => o.id === activeOverlayId) ?? null;
 
   const searchSeeded = useRef(false);
   useEffect(() => {
@@ -724,6 +785,8 @@ export function PublishMontage({
       snapshotFrom(ctx);
       setSuggestions([]);
       setSelected(null);
+      setOverlays([]);
+      setActiveOverlayId(null);
     };
     img.src = firstImage;
   }, [firstImage]);
@@ -765,48 +828,220 @@ export function PublishMontage({
     ctx.restore();
   }
 
-  function stampLogo(s?: Suggestion) {
-    if (!shopLogoUrl) {
+  async function resolveShopLogoUrl() {
+    const fromProp = shopLogoUrl?.trim() || null;
+    if (fromProp) return fromProp;
+    if (!shopId) return null;
+    const { data } = await fetchJson<{
+      shops?: Array<{ id: string; logoUrl?: string | null }>;
+    }>("/api/shops?mine=1");
+    return (
+      data?.shops?.find((shop) => shop.id === shopId)?.logoUrl?.trim() || null
+    );
+  }
+
+  function updateOverlay(id: string, patch: Partial<ImageOverlay>) {
+    setOverlays((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+    );
+  }
+
+  async function addLogoOverlay(s?: Suggestion) {
+    const rawUrl = await resolveShopLogoUrl();
+    if (!rawUrl) {
       toast.error(t("montage.needLogo"));
       return;
     }
+    const src = rawUrl.startsWith("/")
+      ? `${window.location.origin}${rawUrl}`
+      : rawUrl;
+    const size = s ? Math.min(s.width, s.height) : 0.22;
+    const id = newOverlayId();
+    const next: ImageOverlay = {
+      id,
+      kind: "logo",
+      src,
+      left: s ? s.left : 0.72,
+      top: s ? s.top : 0.72,
+      width: size,
+      height: size,
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+    };
+    setOverlays((prev) => [...prev, next]);
+    setActiveOverlayId(id);
+    setTool("select");
+  }
+
+  function addTextOverlay(text: string, s?: Suggestion) {
+    const value = text.trim();
+    if (!value) return;
+    const id = newOverlayId();
+    const next: ImageOverlay = {
+      id,
+      kind: "text",
+      text: value,
+      left: s ? s.left : 0.06,
+      top: s ? s.top : 0.78,
+      width: s ? Math.max(s.width, 0.28) : 0.4,
+      height: s ? Math.max(s.height, 0.08) : 0.1,
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+    };
+    setOverlays((prev) => [...prev, next]);
+    setActiveOverlayId(id);
+    setTool("select");
+  }
+
+  function addPriceOverlay(s?: Suggestion) {
+    if (!priceCents) {
+      toast.message(t("montage.needPrice"));
+      return;
+    }
+    addTextOverlay(formatMoney(priceCents, currency), s);
+  }
+
+  function addFreeTextOverlay(s?: Suggestion) {
+    const draft = window.prompt(t("montage.textPrompt"), "")?.trim();
+    if (!draft) return;
+    addTextOverlay(draft, s);
+  }
+
+  function removeActiveOverlay() {
+    if (!activeOverlayId) return;
+    setOverlays((prev) => prev.filter((o) => o.id !== activeOverlayId));
+    setActiveOverlayId(null);
+  }
+
+  function loadImage(src: string) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("logo"));
+      img.src = src;
+    });
+  }
+
+  async function bakeOverlays() {
+    if (!overlays.length) return;
     const canvas = canvasRef.current;
     const ctx = ctx2d();
     if (!canvas || !ctx) return;
-    const logo = new Image();
-    logo.crossOrigin = "anonymous";
-    logo.onload = () => {
-      pushHistory();
-      const size = s
-        ? Math.min(s.width, s.height) * canvas.width
-        : Math.min(canvas.width, canvas.height) * 0.18;
-      const x = s ? s.left * canvas.width : canvas.width - size - 24;
-      const y = s ? s.top * canvas.height : canvas.height - size - 24;
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(x, y, size, size, size * 0.2);
-      ctx.clip();
-      ctx.drawImage(logo, x, y, size, size);
-      ctx.restore();
-    };
-    logo.src = shopLogoUrl;
+    pushHistory();
+    for (const o of overlays) {
+      const x = o.left * canvas.width;
+      const y = o.top * canvas.height;
+      const w = o.width * canvas.width;
+      const h = o.height * canvas.height;
+      if (o.kind === "logo" && o.src) {
+        try {
+          const logo = await loadImage(o.src);
+          const crop = logoCrop(o.zoom, o.panX, o.panY);
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(x, y, w, h, Math.min(w, h) * 0.18);
+          ctx.clip();
+          ctx.drawImage(
+            logo,
+            crop.sx * logo.naturalWidth,
+            crop.sy * logo.naturalHeight,
+            crop.sw * logo.naturalWidth,
+            crop.sh * logo.naturalHeight,
+            x,
+            y,
+            w,
+            h,
+          );
+          ctx.restore();
+        } catch {
+          /* skip broken logo */
+        }
+        continue;
+      }
+      if (o.kind === "text" && o.text) {
+        ctx.fillStyle = "rgba(0,0,0,0.72)";
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, Math.min(w, h) * 0.22);
+        ctx.fill();
+        ctx.fillStyle = "#7dffb3";
+        ctx.font = `bold ${Math.max(14, h * 0.52)}px sans-serif`;
+        ctx.textBaseline = "middle";
+        ctx.fillText(o.text, x + w * 0.08, y + h * 0.55, w * 0.84);
+      }
+    }
+    setOverlays([]);
+    setActiveOverlayId(null);
   }
 
-  function stampPrice(s?: Suggestion) {
-    const canvas = canvasRef.current;
-    const ctx = ctx2d();
-    if (!canvas || !ctx || !priceCents) return;
-    pushHistory();
-    const text = formatMoney(priceCents, currency);
-    const x = s ? s.left * canvas.width : 24;
-    const y = s ? s.top * canvas.height : canvas.height - 48;
-    const w = s ? s.width * canvas.width : 160;
-    const h = s ? s.height * canvas.height : 40;
-    ctx.fillStyle = "rgba(0,0,0,0.75)";
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = "#22c55e";
-    ctx.font = `bold ${Math.max(16, h * 0.55)}px sans-serif`;
-    ctx.fillText(text, x + 8, y + h * 0.72, w - 16);
+  function onOverlayPointerDown(
+    e: ReactPointerEvent<HTMLElement>,
+    o: ImageOverlay,
+    mode: "move" | "resize" | "pan",
+  ) {
+    e.stopPropagation();
+    e.preventDefault();
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    setActiveOverlayId(o.id);
+    setTool("select");
+    dragRef.current = {
+      id: o.id,
+      mode,
+      startX: e.clientX,
+      startY: e.clientY,
+      orig: { ...o },
+    };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function onOverlayPointerMove(e: ReactPointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+    const wrap = wrapRef.current;
+    if (!drag || !wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const dx = (e.clientX - drag.startX) / rect.width;
+    const dy = (e.clientY - drag.startY) / rect.height;
+    const o = drag.orig;
+    if (drag.mode === "move") {
+      updateOverlay(drag.id, {
+        left: Math.max(0, Math.min(1 - o.width, o.left + dx)),
+        top: Math.max(0, Math.min(1 - o.height, o.top + dy)),
+      });
+      return;
+    }
+    if (drag.mode === "resize") {
+      const width = Math.max(0.08, Math.min(1 - o.left, o.width + dx));
+      const height = Math.max(0.06, Math.min(1 - o.top, o.height + dy));
+      updateOverlay(drag.id, {
+        width: o.kind === "logo" ? Math.min(width, height) : width,
+        height: o.kind === "logo" ? Math.min(width, height) : height,
+      });
+      return;
+    }
+    if (drag.mode === "pan" && o.kind === "logo") {
+      const sensitivity = 0.45 / Math.max(1, o.zoom);
+      updateOverlay(drag.id, {
+        panX: o.panX - dx * sensitivity,
+        panY: o.panY - dy * sensitivity,
+      });
+    }
+  }
+
+  function onOverlayPointerUp(e: ReactPointerEvent<HTMLElement>) {
+    dragRef.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   }
 
   async function analyze() {
@@ -837,7 +1072,7 @@ export function PublishMontage({
     if (c) setFill(c);
   }
 
-  function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+  function onPointerDown(e: ReactPointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     try {
@@ -871,7 +1106,7 @@ export function PublishMontage({
     setSelected(hit?.id ?? null);
   }
 
-  function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+  function onPointerMove(e: ReactPointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const pt = canvasPoint(canvas, e.clientX, e.clientY);
@@ -883,7 +1118,7 @@ export function PublishMontage({
     lastPtRef.current = pt;
   }
 
-  function onPointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+  function onPointerUp(e: ReactPointerEvent<HTMLCanvasElement>) {
     drawingRef.current = false;
     lastPtRef.current = null;
     try {
@@ -902,6 +1137,8 @@ export function PublishMontage({
     historyRef.current = [];
     historyIndexRef.current = -1;
     setHistoryIndex(-1);
+    setOverlays([]);
+    setActiveOverlayId(null);
     snapshotFrom(ctx);
     setFill(guessBackground(ctx));
   }
@@ -1006,6 +1243,7 @@ export function PublishMontage({
     if (!canvas || !firstImage) return;
     setApplying(true);
     try {
+      await bakeOverlays();
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9),
       );
@@ -1075,11 +1313,18 @@ export function PublishMontage({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border bg-surface p-3">
-      <div>
-        <p className="text-sm font-semibold">{t("montage.title")}</p>
-        <p className="text-xs text-muted-foreground">{t("montage.hint")}</p>
-      </div>
+    <div
+      className={cn(
+        "space-y-3",
+        !plain && "rounded-2xl border border-border bg-surface p-3",
+      )}
+    >
+      {!plain ? (
+        <div>
+          <p className="text-sm font-semibold">{t("montage.title")}</p>
+          <p className="text-xs text-muted-foreground">{t("montage.hint")}</p>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
@@ -1098,102 +1343,107 @@ export function PublishMontage({
             if (file) void importFromDevice(file);
           }}
         />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={importing}
-            onClick={() => importRef.current?.click()}
-          >
-            {importing ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Upload className="size-3.5" />
-            )}
-            {importing ? t("montage.importing") : t("montage.importDevice")}
-          </Button>
-        </div>
-        <p className="text-[11px] text-muted-foreground">{t("montage.searchHint")}</p>
-        <div className="flex gap-2">
-          <Input
-            value={searchQ}
-            onChange={(e) => setSearchQ(e.target.value)}
-            placeholder={t("montage.searchPlaceholder")}
-            className="h-9 bg-surface-2"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void searchOnline();
-              }
-            }}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={searching}
-            onClick={() => void searchOnline()}
-          >
-            {searching ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Search className="size-3.5" />
-            )}
-            {searching ? t("montage.searching") : t("montage.searchOnline")}
-          </Button>
-        </div>
-        {onlineHits.length > 0 && (
-          <ul className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
-            {onlineHits.map((hit) => (
-              <li key={`${hit.identifier}-${hit.file}`}>
-                <button
-                  type="button"
-                  disabled={fetchingId === hit.identifier}
-                  onClick={() => void useOnlineHit(hit)}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-surface-2"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold">{hit.title}</span>
-                    <span className="block truncate text-muted-foreground">
-                      {hit.artist}
+        <div className="rounded-2xl border border-primary/25 bg-primary/[0.06] p-3">
+          <div className="mb-2.5 flex items-start gap-2.5">
+            <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
+              <Globe2 className="size-4" strokeWidth={1.75} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold leading-tight text-foreground">
+                {t("montage.searchOnline")}
+              </p>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                {t("montage.searchHint")}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={searchQ}
+              onChange={(e) => setSearchQ(e.target.value)}
+              placeholder={t("montage.searchPlaceholder")}
+              className="h-10 border-border/80 bg-surface text-[13px] shadow-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void searchOnline();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={searching}
+              onClick={() => void searchOnline()}
+              className="h-10 shrink-0 gap-1.5 px-3 font-semibold"
+            >
+              {searching ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Search className="size-3.5" />
+              )}
+              {searching ? t("montage.searching") : t("montage.search")}
+            </Button>
+          </div>
+          {onlineHits.length > 0 && (
+            <ul className="mt-2.5 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-border/70 bg-surface p-2">
+              {onlineHits.map((hit) => (
+                <li key={`${hit.identifier}-${hit.file}`}>
+                  <button
+                    type="button"
+                    disabled={fetchingId === hit.identifier}
+                    onClick={() => void useOnlineHit(hit)}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-surface-2"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">
+                        {hit.title}
+                      </span>
+                      <span className="block truncate text-muted-foreground">
+                        {hit.artist}
+                      </span>
                     </span>
-                  </span>
-                  {fetchingId === hit.identifier ? (
-                    <Loader2 className="size-3.5 shrink-0 animate-spin" />
-                  ) : (
-                    <span className="shrink-0 text-[10px] font-semibold text-primary">
-                      {t("montage.fetchOnline")}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                    {fetchingId === hit.identifier ? (
+                      <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                    ) : (
+                      <span className="shrink-0 text-[10px] font-semibold text-primary">
+                        {t("montage.fetchOnline")}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={importing}
+          onClick={() => importRef.current?.click()}
+          className="w-full justify-center gap-1.5 border-dashed"
+        >
+          {importing ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Upload className="size-3.5" />
+          )}
+          {importing ? t("montage.importing") : t("montage.importDevice")}
+        </Button>
         {localClip && soundtrackId === LOCAL_SOUNDTRACK_ID && (
           <p className="text-[11px] text-muted-foreground">{t("montage.tempOnly")}</p>
         )}
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              onLocalClip(null);
-              onSoundtrackId(null);
-              onSoundtrackStartMs(0);
-            }}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-              !soundtrackId
-                ? "border-primary bg-primary text-white"
-                : "border-border"
-            }`}
-          >
-            {t("montage.none")}
-          </button>
           {localClip && (
             <button
               type="button"
               onClick={() => {
+                if (soundtrackId === LOCAL_SOUNDTRACK_ID) {
+                  onSoundtrackId(null);
+                  onSoundtrackStartMs(0);
+                  return;
+                }
                 onSoundtrackId(LOCAL_SOUNDTRACK_ID);
                 onSoundtrackStartMs(0);
               }}
@@ -1211,6 +1461,12 @@ export function PublishMontage({
               key={tr.id}
               type="button"
               onClick={() => {
+                if (soundtrackId === tr.id) {
+                  onLocalClip(null);
+                  onSoundtrackId(null);
+                  onSoundtrackStartMs(0);
+                  return;
+                }
                 onLocalClip(null);
                 onSoundtrackId(tr.id);
                 onSoundtrackStartMs(0);
@@ -1299,6 +1555,63 @@ export function PublishMontage({
                   )}
                 </button>
               ))}
+            {overlays.map((o) => {
+              const active = o.id === activeOverlayId;
+              return (
+                <div
+                  key={o.id}
+                  role="button"
+                  tabIndex={0}
+                  onPointerDown={(e) => onOverlayPointerDown(e, o, "move")}
+                  onPointerMove={onOverlayPointerMove}
+                  onPointerUp={onOverlayPointerUp}
+                  onPointerCancel={onOverlayPointerUp}
+                  className={cn(
+                    "absolute touch-none overflow-hidden rounded-xl border-2 shadow-md",
+                    active
+                      ? "z-20 border-primary ring-2 ring-primary/40"
+                      : "z-10 border-white/70",
+                  )}
+                  style={{
+                    left: `${o.left * 100}%`,
+                    top: `${o.top * 100}%`,
+                    width: `${o.width * 100}%`,
+                    height: `${o.height * 100}%`,
+                  }}
+                >
+                  {o.kind === "logo" && o.src ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={o.src}
+                      alt=""
+                      draggable={false}
+                      className="pointer-events-none size-full object-cover"
+                      style={{
+                        transform: `scale(${o.zoom}) translate(${o.panX * 40}%, ${o.panY * 40}%)`,
+                        transformOrigin: "center center",
+                      }}
+                    />
+                  ) : (
+                    <div className="flex size-full items-center bg-black/75 px-2">
+                      <span className="truncate text-[11px] font-bold text-[#7dffb3] sm:text-xs">
+                        {o.text}
+                      </span>
+                    </div>
+                  )}
+                  {active ? (
+                    <button
+                      type="button"
+                      aria-label={t("montage.resizeOverlay")}
+                      className="absolute right-0 bottom-0 z-30 size-4 translate-x-1/3 translate-y-1/3 rounded-full border-2 border-white bg-primary shadow"
+                      onPointerDown={(e) => onOverlayPointerDown(e, o, "resize")}
+                      onPointerMove={onOverlayPointerMove}
+                      onPointerUp={onOverlayPointerUp}
+                      onPointerCancel={onOverlayPointerUp}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
             {tool === "eraser" && cursorCss && (
               <span
                 className="pointer-events-none absolute rounded-full border border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
@@ -1388,11 +1701,30 @@ export function PublishMontage({
             >
               <EyeOff className="size-3.5" />
             </IconBtn>
-            <IconBtn title={t("montage.stampLogo")} onClick={() => stampLogo(current)}>
+            <IconBtn
+              title={t("montage.stampLogo")}
+              onClick={() => void addLogoOverlay(current)}
+            >
               <Store className="size-3.5" />
             </IconBtn>
-            <IconBtn title={t("montage.stampPrice")} onClick={() => stampPrice(current)}>
+            <IconBtn
+              title={t("montage.addText")}
+              onClick={() => addFreeTextOverlay(current)}
+            >
+              <Type className="size-3.5" />
+            </IconBtn>
+            <IconBtn
+              title={t("montage.stampPrice")}
+              onClick={() => addPriceOverlay(current)}
+            >
               <BadgeDollarSign className="size-3.5" />
+            </IconBtn>
+            <IconBtn
+              title={t("montage.deleteOverlay")}
+              disabled={!activeOverlay}
+              onClick={removeActiveOverlay}
+            >
+              <Trash2 className="size-3.5" />
             </IconBtn>
             <IconBtn
               title={t("montage.apply")}
@@ -1406,6 +1738,82 @@ export function PublishMontage({
               )}
             </IconBtn>
           </div>
+
+          {activeOverlay?.kind === "logo" ? (
+            <div className="space-y-1.5 rounded-xl border border-border bg-surface-2/60 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">
+                {t("montage.overlayHint")}
+              </p>
+              <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <span className="w-16 shrink-0">{t("montage.cropZoom")}</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={2.8}
+                  step={0.05}
+                  value={activeOverlay.zoom}
+                  onChange={(e) =>
+                    updateOverlay(activeOverlay.id, {
+                      zoom: Number(e.target.value),
+                    })
+                  }
+                  className="w-full accent-primary"
+                />
+              </label>
+              {activeOverlay.zoom > 1.05 ? (
+                <>
+                  <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="w-16 shrink-0">↔</span>
+                    <input
+                      type="range"
+                      min={-0.45}
+                      max={0.45}
+                      step={0.01}
+                      value={activeOverlay.panX}
+                      onChange={(e) =>
+                        updateOverlay(activeOverlay.id, {
+                          panX: Number(e.target.value),
+                        })
+                      }
+                      className="w-full accent-primary"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="w-16 shrink-0">↕</span>
+                    <input
+                      type="range"
+                      min={-0.45}
+                      max={0.45}
+                      step={0.01}
+                      value={activeOverlay.panY}
+                      onChange={(e) =>
+                        updateOverlay(activeOverlay.id, {
+                          panY: Number(e.target.value),
+                        })
+                      }
+                      className="w-full accent-primary"
+                    />
+                  </label>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {activeOverlay?.kind === "text" ? (
+            <div className="space-y-1.5 rounded-xl border border-border bg-surface-2/60 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">
+                {t("montage.overlayHint")}
+              </p>
+              <Input
+                value={activeOverlay.text ?? ""}
+                onChange={(e) =>
+                  updateOverlay(activeOverlay.id, { text: e.target.value })
+                }
+                placeholder={t("montage.textPlaceholder")}
+                className="h-9 bg-surface text-[13px]"
+              />
+            </div>
+          ) : null}
 
           <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span className="shrink-0">{t("montage.brush")}</span>

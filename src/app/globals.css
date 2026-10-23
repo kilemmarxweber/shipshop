@@ -367,9 +367,37 @@
 /* iPhone Safari : coller le shell à l’écran, nav en bas (comme Android). */
 @supports (-webkit-touch-callout: none) {
   @media (max-width: 767px) {
+    html,
+    body {
+      min-height: 100svh;
+      height: 100%;
+    }
     .app-viewport {
       min-height: 100svh;
     }
+  }
+
+  /* Coins arrondis + médias : même découpe que Chrome Android */
+  .feed-snap-item,
+  .feed-product-list .feed-snap-item,
+  article[data-feed-card],
+  .discover-scroll section.overflow-hidden,
+  .discover-scroll article.overflow-hidden {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    isolation: isolate;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+
+  .feed-snap-item .ss-reel-bg,
+  .feed-snap-item .ss-reel-fg,
+  .feed-snap-item .ss-reel-fg-video,
+  .feed-snap-item .ss-reel-fg-cover,
+  article[data-feed-card] img,
+  article[data-feed-card] video {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
   }
 }
 
@@ -447,6 +475,13 @@
 }
 
 .h-scroll-fade {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 12px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
   mask-image: linear-gradient(
     to right,
     transparent 0,
@@ -512,7 +547,7 @@
   .feed-product-list {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
+    gap: 0.875rem;
     height: auto;
     flex: none;
     overflow: visible;
@@ -523,9 +558,9 @@
   }
 
   .feed-product-list .feed-snap-item {
-    height: min(520px, 70dvh);
+    height: clamp(340px, 48vw, 620px);
     min-height: 0;
-    border-radius: 1rem;
+    border-radius: 1.3rem;
     scroll-snap-align: start;
   }
 
@@ -538,12 +573,12 @@
   .app-main.app-main-feed.app-main-shop-feed .feed-product-list {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
+    gap: 0.875rem;
     padding: 1rem 1rem 2rem;
   }
 
   .app-main.app-main-feed.app-main-shop-feed .feed-product-list .feed-snap-item {
-    height: min(520px, 70dvh);
+    height: clamp(340px, 48vw, 620px);
     min-height: 0;
   }
 }
@@ -684,6 +719,11 @@
   .ss-reel-fg.ss-reel-fg-portrait {
     top: clamp(52%, var(--ss-portrait-top, 56%), 62%);
   }
+
+  .ss-reel-bg {
+    -webkit-filter: blur(18px) saturate(1.15) brightness(0.85) contrast(1.04);
+    filter: blur(18px) saturate(1.15) brightness(0.85) contrast(1.04);
+  }
 }
 .ss-reel-vignette {
   pointer-events: none;
@@ -798,33 +838,6 @@
   }
 }
 
-@keyframes fox-emoji-load {
-  0% {
-    transform: translateY(0) rotate(-20deg) scale(1);
-  }
-  25% {
-    transform: translateY(-11px) rotate(14deg) scale(1.18);
-  }
-  50% {
-    transform: translateY(2px) rotate(-10deg) scale(0.94);
-  }
-  75% {
-    transform: translateY(-9px) rotate(18deg) scale(1.14);
-  }
-  100% {
-    transform: translateY(0) rotate(-20deg) scale(1);
-  }
-}
-
-@keyframes fox-emoji-load-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.55);
-  }
-  50% {
-    box-shadow: 0 0 12px 4px rgba(0, 214, 143, 0.45);
-  }
-}
 
 .fox-emoji-ok {
   animation: fox-emoji-ok 0.95s cubic-bezier(0.22, 1.45, 0.36, 1);
@@ -841,14 +854,53 @@
   animation: fox-emoji-ok-ring 0.85s ease-out;
 }
 
+@keyframes fox-emoji-load-glow {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 3px rgb(255 210 80 / 0.85),
+      0 0 0 0 rgba(255, 170, 0, 0.45);
+  }
+  50% {
+    transform: scale(1.14);
+    box-shadow:
+      0 0 0 3px rgb(255 220 100 / 0.95),
+      0 0 14px 5px rgba(0, 214, 143, 0.5);
+  }
+}
+
 .fox-emoji-load {
-  animation: fox-emoji-load 0.65s ease-in-out infinite;
-  transform-origin: center bottom;
+  position: relative;
+  z-index: 1;
 }
 
 .fox-emoji-load-wrap {
-  animation: fox-emoji-load-glow 1.1s ease-in-out infinite;
   border-radius: 999px;
+  padding: 3px;
+}
+
+.fox-emoji-load-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 35% 30%,
+    #fff6a8 0%,
+    #ffd84a 45%,
+    #ffb020 100%
+  );
+  pointer-events: none;
+  transform-origin: center center;
+  will-change: transform, box-shadow;
+  animation: fox-emoji-load-glow 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fox-emoji-load-wrap::before {
+    animation: none;
+  }
 }
 
 @keyframes fox-emoji-sad {

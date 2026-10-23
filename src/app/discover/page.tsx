@@ -9,8 +9,8 @@ import {
   Cpu,
   Dumbbell,
   Gamepad2,
-  Heart,
   Home,
+  ChevronRight,
   MapPin,
   Play,
   Search,
@@ -31,6 +31,7 @@ import {
   type VideoSoundState,
 } from "@/components/video-sound-button";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FeedLoadSentinel } from "@/components/feed-load-trigger";
 import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
@@ -41,8 +42,8 @@ import {
 import { ChallengeCard } from "@/components/growth/challenge-card";
 import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
 import { usePaginatedList } from "@/lib/use-paginated-list";
-import { compactCount } from "@/lib/growth/challenge-look";
-import { Face } from "@/components/growth/cover-image";
+import { firstVisualUrl } from "@/lib/growth/challenge-look";
+import { SellerMeta } from "@/components/growth/cover-image";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import {
   getPinnedFeedAudioId,
@@ -72,6 +73,7 @@ type Product = {
   category: string;
   soundtrackStartMs?: number;
   likesCount?: number;
+  viewsCount?: number;
   soundtrack?: { audioUrl: string; durationMs?: number } | null;
   shop?: { id: string; name: string; logoUrl?: string | null };
   boosted?: boolean;
@@ -152,6 +154,17 @@ export default function DiscoverPage() {
   });
 
   const products = feed.items;
+  const popularCats = useMemo(
+    () =>
+      CATEGORIES.map((c) => {
+        const hit = products.find(
+          (p) => p.category === c.id && firstVisualUrl(p.images),
+        );
+        const image = hit ? firstVisualUrl(hit.images) : null;
+        return image ? { id: c.id, image } : null;
+      }).filter((row): row is { id: string; image: string } => Boolean(row)),
+    [products],
+  );
   const featuredEntries: CardEntry[] = products
     .slice(0, 12)
     .map((product, index) => ({ key: `featured:${product.id}:${index}`, product }));
@@ -362,13 +375,13 @@ export default function DiscoverPage() {
           },
         }}
       />
-      <div className="mb-5 flex items-center gap-2 rounded-full border border-border/70 bg-surface-2/90 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <Search className="size-4 text-muted-foreground" />
+      <div className="mb-5 flex h-12 items-center gap-2 rounded-full border border-[#30303b] bg-[#22222c] px-4 sm:h-[3.4rem]">
+        <Search className="size-5 text-muted-foreground" />
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder={t("discover.searchPlaceholder")}
-          className="h-11 border-0 bg-transparent shadow-none focus-visible:ring-0"
+          className="h-full border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
         />
       </div>
 
@@ -419,10 +432,18 @@ export default function DiscoverPage() {
         </div>
       </section>
 
-      <h2 className="mb-4 flex items-center gap-1.5 font-heading text-[1.05rem] font-bold tracking-tight">
-        <MapPin className="size-4 text-primary" />
-        {t("discover.trendsHeading")}
-      </h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-1.5 font-heading text-[1.05rem] font-bold tracking-tight">
+          <MapPin className="size-4 text-primary" />
+          {t("discover.trendsHeading")}
+        </h2>
+        <Link
+          href="#discover-results"
+          className="inline-flex items-center text-white/50 hover:text-white"
+        >
+          <ChevronRight className="size-5" />
+        </Link>
+      </div>
       {(featuredEntries.length > 0 ||
         videoEntries.length > 0 ||
         budgetEntries.length > 0) && (
@@ -566,6 +587,50 @@ export default function DiscoverPage() {
         </div>
       )}
 
+      {popularCats.length > 1 ? (
+        <section className="mb-7">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="font-heading text-[1.05rem] font-bold tracking-tight">
+              {t("discover.popularHeading")}
+            </h2>
+            <Link
+              href="#discover-results"
+              className="inline-flex items-center text-white/50 hover:text-white"
+            >
+              <ChevronRight className="size-5" />
+            </Link>
+          </div>
+          <div className="h-scroll h-scroll-fade gap-2.5 pb-1">
+            {popularCats.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => {
+                  setCategory((prev) => (prev === row.id ? null : row.id));
+                  void fetch("/api/growth/activity", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ kind: "category" }),
+                  });
+                }}
+                className="relative h-[5.5rem] w-[7.25rem] shrink-0 overflow-hidden rounded-2xl [transform:translateZ(0)] [isolation:isolate] sm:h-24 sm:w-32"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={row.image}
+                  alt=""
+                  className="absolute inset-0 size-full object-cover"
+                />
+                <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                <span className="absolute inset-x-0 bottom-2 text-center text-[12px] font-semibold text-white">
+                  {t(`categories.${row.id}` as MessagePath)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <h2
         id="discover-results"
         className="mb-3.5 font-heading text-[1.05rem] font-bold tracking-tight"
@@ -660,38 +725,36 @@ export default function DiscoverPage() {
                   />
                 </div>
               ) : null}
-              <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-2.5 sm:p-3">
+              <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/25 to-transparent p-2.5 sm:p-3">
                 <Link href={`/product/${p.id}`} className="block cursor-pointer">
                   <p className="line-clamp-2 text-[13px] font-extrabold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                     {p.title}
                   </p>
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <Face
+                  <div className="mt-1.5">
+                    <SellerMeta
                       name={p.shop?.name ?? "?"}
                       image={p.shop?.logoUrl ?? null}
+                      views={p.viewsCount || p.likesCount || 0}
+                      locale={locale}
+                      viewsLabel={t("discover.views")}
+                      likes={p.likesCount ?? 0}
                     />
-                    <div className="min-w-0">
-                      <p className="truncate text-[11px] font-semibold text-white">
-                        {p.shop?.name}
-                      </p>
-                      <p className="text-[10px] font-bold text-[#7dffb3]">
-                        {formatMoney(p.priceCents, p.currency)}
-                      </p>
-                    </div>
-                    <p className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-white">
-                      <Heart className="size-3.5 fill-white/90" />
-                      {compactCount(p.likesCount ?? 0, locale)}
-                    </p>
                   </div>
                 </Link>
                 {p.shop ? (
-                  <button
-                    type="button"
-                    onClick={() => setBuyProduct(p)}
-                    className="mt-2 inline-flex h-8 min-w-20 cursor-pointer items-center justify-center rounded-full bg-primary px-3 text-[10px] font-bold text-white shadow-sm"
-                  >
-                    {t("buy.cta")}
-                  </button>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-bold text-[#7dffb3]">
+                      {formatMoney(p.priceCents, p.currency)}
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setBuyProduct(p)}
+                      className="h-7 cursor-pointer rounded-full px-3 text-[10px] font-bold"
+                    >
+                      {t("buy.cta")}
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             </DiscoverTile>
@@ -792,9 +855,10 @@ function DiscoverStripCard({
     };
   }, [cardKey, onVisible]);
 
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const duration = clipLabel(product.soundtrack?.durationMs);
   const likes = product.likesCount ?? 0;
+  const views = product.viewsCount || likes;
 
   return (
     <article
@@ -802,10 +866,10 @@ function DiscoverStripCard({
       data-feed-card
       data-audio-key={cardKey}
       {...(!sound.muted ? { "data-feed-sound-on": "1" } : {})}
-      className="relative w-[11.25rem] shrink-0 overflow-hidden rounded-[1.15rem] bg-[#121218] sm:w-52"
+      className="relative w-[67vw] max-w-[270px] shrink-0 overflow-hidden rounded-[1.55rem] bg-[#17171c] [transform:translateZ(0)] [isolation:isolate] sm:w-[clamp(190px,18vw,270px)]"
     >
-      <Link href={`/product/${product.id}`} className="block cursor-pointer">
-        <div className="relative aspect-[3/4] overflow-hidden bg-surface-2">
+      <div className="relative h-[330px] overflow-hidden bg-surface-2 sm:h-[clamp(280px,29vw,410px)]">
+        <Link href={`/product/${product.id}`} className="absolute inset-0">
           <ProductImageCarousel
             images={audio ? product.images.slice(0, 8) : product.images.slice(0, 1)}
             className="absolute inset-0"
@@ -820,61 +884,58 @@ function DiscoverStripCard({
             onActivateSound={audio ? onActivateSound : undefined}
             onPlaybackEnded={onPlaybackEnded}
           />
-          {product.soundtrack?.audioUrl ? (
-            <FeedSoundtrackPlayer
-              audioUrl={product.soundtrack.audioUrl}
-              startMs={product.soundtrackStartMs}
+        </Link>
+        {product.soundtrack?.audioUrl ? (
+          <FeedSoundtrackPlayer
+            audioUrl={product.soundtrack.audioUrl}
+            startMs={product.soundtrackStartMs}
+            sound={sound}
+            active={focused}
+            onCycleEnd={onPlaybackEnded}
+          />
+        ) : null}
+        {duration || withVideoBadge ? (
+          <span className="pointer-events-none absolute top-2.5 left-2.5 z-20 inline-flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+            <Play className="size-2.5 fill-white" />
+            {duration ?? "Video"}
+          </span>
+        ) : null}
+        {audio ? (
+          <div className="absolute top-2.5 right-2.5 z-20">
+            <VideoSoundButton
+              images={product.images}
+              hasSoundtrack={Boolean(product.soundtrack?.audioUrl)}
               sound={sound}
-              active={focused}
-              onCycleEnd={onPlaybackEnded}
+              onChange={onSoundChange}
             />
-          ) : null}
-          {duration || withVideoBadge ? (
-            <span className="absolute top-2.5 left-2.5 z-20 inline-flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
-              <Play className="size-2.5 fill-white" />
-              {duration ?? "Video"}
-            </span>
-          ) : null}
-          {audio ? (
-            <div className="absolute top-2 right-2 z-20">
-              <VideoSoundButton
-                images={product.images}
-                hasSoundtrack={Boolean(product.soundtrack?.audioUrl)}
-                sound={sound}
-                onChange={onSoundChange}
-              />
-            </div>
-          ) : null}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/88 via-black/28 to-transparent px-2.5 pb-2.5 pt-12">
-            <p className="flex items-center gap-1.5">
-              <Face
-                name={product.shop?.name ?? "?"}
-                image={product.shop?.logoUrl ?? null}
-              />
-              <span className="min-w-0 truncate text-[12px] font-semibold text-white">
-                {product.shop?.name ?? product.title}
-              </span>
-            </p>
-            <div className="mt-1 flex items-center justify-between gap-2 pl-7">
+          </div>
+        ) : null}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent px-2.5 pb-2.5 pt-14">
+          <SellerMeta
+            name={product.shop?.name ?? product.title}
+            image={product.shop?.logoUrl ?? null}
+            views={views}
+            locale={locale}
+            viewsLabel={t("discover.views")}
+            likes={likes}
+          />
+          {product.shop ? (
+            <div className="pointer-events-auto mt-2 flex items-center justify-between gap-2">
               <p className="truncate text-[11px] font-semibold text-[#7dffb3]">
                 {formatMoney(product.priceCents, product.currency)}
               </p>
-              <p className="inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-white">
-                <Heart className="size-3.5 fill-white" />
-                {compactCount(likes, locale)}
-              </p>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onBuy}
+                className="h-7 cursor-pointer rounded-full px-3 text-[10px] font-bold"
+              >
+                {buyLabel}
+              </Button>
             </div>
-          </div>
+          ) : null}
         </div>
-      </Link>
-      {product.shop ? (
-        <button
-          type="button"
-          onClick={onBuy}
-          aria-label={buyLabel}
-          className="absolute inset-x-0 bottom-0 z-20 h-12 cursor-pointer bg-transparent"
-        />
-      ) : null}
+      </div>
     </article>
   );
 }
@@ -919,7 +980,7 @@ function DiscoverTile({
       data-feed-card
       data-audio-key={id}
       {...(soundOn ? { "data-feed-sound-on": "1" } : {})}
-      className="group relative aspect-[3/4] overflow-hidden rounded-[1.15rem]"
+      className="group relative aspect-[3/4] overflow-hidden rounded-[1.25rem] [transform:translateZ(0)] [isolation:isolate]"
     >
       {children}
     </article>

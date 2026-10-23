@@ -138,9 +138,8 @@ export function ChallengeCard({
       : template === "ribbon"
         ? t("discover.challengeMission")
         : t("discover.challengeHeading");
-  const frame = feed
-    ? "h-full min-h-0"
-    : "h-[268px] sm:h-[292px] lg:h-[320px]";
+  const frame =
+    "h-[268px] sm:h-[292px] lg:h-[320px] [transform:translateZ(0)] [isolation:isolate]";
 
   if (template === "poster") {
     return (
@@ -201,7 +200,7 @@ export function ChallengeCard({
           className,
         )}
       >
-        <div className={cn("relative", feed ? "min-h-0 flex-1" : "h-[140px] sm:h-[160px]")}>
+        <div className="relative h-[140px] sm:h-[160px]">
           <CoverImage
             candidates={covers}
             className="absolute inset-0 size-full object-cover object-[center_18%]"
@@ -310,7 +309,7 @@ export function ChallengeCard({
       <section
         className={cn(
           "relative flex overflow-hidden rounded-[1.5rem] bg-[#0e0e16] sm:rounded-[1.75rem]",
-          feed ? "h-full min-h-0" : "h-[176px] sm:h-[196px]",
+          frame,
           className,
         )}
       >
@@ -377,7 +376,10 @@ export function ChallengeCard({
       </svg>
       <div
         className="absolute inset-y-0 left-0 z-0 w-[40%] bg-[#f4d0c2] sm:w-[38%]"
-        style={{ clipPath: `url(#${coverClipId})` }}
+        style={{
+          clipPath: `url(#${coverClipId})`,
+          WebkitClipPath: `url(#${coverClipId})`,
+        }}
       >
         <CoverImage
           candidates={covers}

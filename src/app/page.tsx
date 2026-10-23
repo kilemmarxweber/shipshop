@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
+import { compactCount } from "@/lib/growth/challenge-look";
+import { Button } from "@/components/ui/button";
 import { useAppConfig } from "@/lib/use-app-config";
 import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
@@ -76,6 +78,7 @@ type Product = {
   sizes: string[];
   location: string | null;
   likesCount: number;
+  viewsCount?: number;
   commentsCount: number;
   likedByMe: boolean;
   soundtrackStartMs?: number;
@@ -115,7 +118,7 @@ function categoryLabel(
 }
 
 export default function FeedPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   const [tab, setTab] = useState<FeedTab>("foryou");
@@ -617,7 +620,7 @@ export default function FeedPage() {
             productId={p.id}
             enabled={Boolean(session)}
             soundOn={!soundFor(p.id).muted}
-            className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden"
+            className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden [transform:translateZ(0)] [isolation:isolate]"
           >
             <ProductImageCarousel
               images={p.images}
@@ -680,21 +683,21 @@ export default function FeedPage() {
               >
                 <span
                   className={cn(
-                    "grid size-10 place-items-center rounded-full border backdrop-blur transition hover:scale-105 active:scale-95",
+                    "grid size-10 place-items-center rounded-full border backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12",
                     p.likedByMe
-                      ? "border-destructive/50 bg-destructive/25"
-                      : "border-white/15 bg-white/10",
+                      ? "border-white/80 bg-white text-[#ff3863]"
+                      : "border-white/45 bg-white/20 text-white",
                   )}
                 >
                   <Heart
                     className={cn(
-                      "size-5 text-white",
-                      p.likedByMe && "fill-destructive text-destructive",
+                      "size-5",
+                      p.likedByMe && "fill-current",
                     )}
                   />
                 </span>
                 <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
-                  {p.likesCount || 0}
+                  {compactCount(p.likesCount || 0, locale)}
                 </span>
               </button>
               <button
@@ -703,11 +706,11 @@ export default function FeedPage() {
                 className="grid cursor-pointer place-items-center"
                 aria-label={t("feed.comments")}
               >
-                <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95">
+                <span className="grid size-10 place-items-center rounded-full border border-white/45 bg-white/20 text-white backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12">
                   <MessageCircle className="size-5" />
                 </span>
                 <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
-                  {p.commentsCount || 0}
+                  {compactCount(p.commentsCount || 0, locale)}
                 </span>
               </button>
               <ShareMenu
@@ -720,7 +723,7 @@ export default function FeedPage() {
                 triggerClassName="grid cursor-pointer place-items-center border-0 bg-transparent p-0"
               >
                 <span
-                  className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95"
+                  className="grid size-10 place-items-center rounded-full border border-white/45 bg-white/20 text-white backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12"
                   aria-label={t("feed.share")}
                 >
                   <Share2 className="size-5" />
@@ -730,14 +733,21 @@ export default function FeedPage() {
 
             <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
               <div className="mb-2 flex items-center gap-2">
-                <ShopBrand
-                  name={p.shop.name}
-                  slug={p.shop.slug}
-                  logoUrl={p.shop.logoUrl}
-                  className="min-w-0 flex-1"
-                  nameClassName="text-sm text-white underline-offset-2 hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                />
+                <div className="min-w-0 flex-1">
+                  <ShopBrand
+                    name={p.shop.name}
+                    slug={p.shop.slug}
+                    logoUrl={p.shop.logoUrl}
+                    showAt={false}
+                    className="min-w-0"
+                    nameClassName="text-sm text-white underline-offset-2 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <p className="pl-10 text-[11px] text-white/70">
+                    {compactCount(p.viewsCount || p.likesCount || 0, locale)}{" "}
+                    {t("discover.views")}
+                  </p>
+                </div>
                 <FollowShopButton
                   slug={p.shop.slug}
                   followedByMe={Boolean(p.shop.followedByMe)}
@@ -804,16 +814,17 @@ export default function FeedPage() {
                     {formatMoney(p.priceCents, p.currency)}
                   </p>
                 </div>
-                <button
+                <Button
                   type="button"
+                  size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
                     setBuyProduct(p);
                   }}
-                  className="min-h-11 shrink-0 cursor-pointer rounded-full bg-primary px-4 py-2 text-[11px] font-bold text-white"
+                  className="min-h-10 shrink-0 cursor-pointer rounded-full px-4 text-[11px] font-bold"
                 >
                   {t("buy.cta")}
-                </button>
+                </Button>
               </div>
             </div>
           </DwellArticle>
