@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Heart, MessageCircle, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
@@ -18,7 +18,6 @@ import { ShopBrand } from "@/components/shop-brand";
 import { ShareMenu } from "@/components/share-menu";
 import {
   DEFAULT_VIDEO_SOUND,
-  VideoSoundButton,
   productHasVideo,
   type VideoSoundState,
 } from "@/components/video-sound-button";
@@ -31,7 +30,6 @@ import {
   useResumeFeedSoundWhenVisible,
 } from "@/lib/feed-audio-focus";
 import {
-  disableFeedSound,
   enableFeedSound,
   playFirstVisibleFeedSound,
 } from "@/lib/try-play-media";
@@ -59,6 +57,9 @@ import { usePaginatedList } from "@/lib/use-paginated-list";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { DwellArticle } from "@/components/dwell-article";
 import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
+import { GrowthFeedFormats } from "@/components/growth/feed-formats";
+import { ChallengeCard } from "@/components/growth/challenge-card";
+import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
 
 type Product = {
   id: string;
@@ -207,6 +208,18 @@ export default function FeedPage() {
   });
   const products = productFeed.items;
   const setProducts = productFeed.setItems;
+  const { busyId, joinChallenge, placeChallenges } = useGrowthSurface();
+  const feedRows = useMemo(
+    () =>
+      tab === "foryou"
+        ? placeChallenges("feed", products, (item) => item.id)
+        : products.map((item) => ({
+            kind: "item" as const,
+            item,
+            key: item.id,
+          })),
+    [tab, products, placeChallenges],
+  );
   const wanted = wantedFeed.items;
   const loading =
     tab === "wanted" ? wantedFeed.loading : productFeed.loading;
@@ -323,7 +336,7 @@ export default function FeedPage() {
     );
   }
 
-  const prefetchAt = Math.max(0, products.length - 4);
+  const prefetchAt = Math.max(0, feedRows.length - 4);
 
   useEffect(() => {
     const root = document.querySelector(".app-main");
@@ -570,6 +583,7 @@ export default function FeedPage() {
   return (
     <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden">
       {tabs}
+      {tab === "foryou" ? <GrowthFeedFormats variant="feed" /> : null}
 
       <div
         key={tab}
@@ -580,7 +594,24 @@ export default function FeedPage() {
           unpinFeedAudio();
         }}
       >
-        {products.map((p, index) => (
+        {feedRows.map((row, index) => {
+          if (row.kind === "challenge") {
+            return (
+              <article
+                key={`${tab}:${row.key}`}
+                className="feed-snap-item feed-challenge-item relative col-span-2 w-full shrink-0 px-4 md:px-0"
+              >
+                <ChallengeCard
+                  challenge={row.challenge}
+                  template={row.template}
+                  busy={busyId === row.challenge.id}
+                  onJoin={() => void joinChallenge(row.challenge.id)}
+                />
+              </article>
+            );
+          }
+          const p = row.item;
+          return (
           <DwellArticle
             key={`${tab}:${p.id}`}
             productId={p.id}
@@ -617,7 +648,7 @@ export default function FeedPage() {
                 active={audioFocusId === p.id}
               />
             ) : null}
-            {index === prefetchAt || index === products.length - 1 ? (
+            {index === prefetchAt || index === feedRows.length - 1 ? (
               <FeedLoadTrigger
                 onNearEnd={loadMoreProducts}
                 disabled={!productFeed.hasMore}
@@ -695,25 +726,6 @@ export default function FeedPage() {
                   <Share2 className="size-5" />
                 </span>
               </ShareMenu>
-              <VideoSoundButton
-                images={p.images}
-                hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
-                sound={soundFor(p.id)}
-                onChange={(next) => {
-                  if (next.muted) {
-                    disableFeedSound();
-                    setSoundById((prev) =>
-                      applyExclusiveVideoSound(prev, p.id, next),
-                    );
-                    return;
-                  }
-                  enableFeedSound(false);
-                  requestFeedAudioFocus(p.id);
-                  setSoundById((prev) =>
-                    applyExclusiveVideoSound(prev, p.id, next),
-                  );
-                }}
-              />
             </div>
 
             <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
@@ -805,7 +817,8 @@ export default function FeedPage() {
               </div>
             </div>
           </DwellArticle>
-        ))}
+          );
+        })}
         {productFeed.hasMore ? (
           <FeedLoadSentinel
             onVisible={loadMoreProducts}

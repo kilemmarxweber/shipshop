@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { recordUserActivity } from "@/lib/growth/activity";
+import { followCreator } from "@/lib/growth/subscribers";
+import { refreshAccountBadges } from "@/lib/growth/badges";
 
 async function shopBySlug(slug: string) {
   return withDbRetry(() =>
@@ -74,6 +77,11 @@ export async function POST(
       update: {},
     }),
   );
+  if (shop.ownerUserId) {
+    await followCreator(session.user.id, shop.ownerUserId).catch(() => undefined);
+    void refreshAccountBadges(shop.ownerUserId);
+  }
+  void recordUserActivity(session.user.id, "follow");
 
   const followersCount = await withDbRetry(() =>
     prisma.shopFollow.count({ where: { shopId: shop.id } }),

@@ -20,7 +20,13 @@ import {
   uploadCompressedMedia,
 } from "@/lib/compress-media";
 import { fetchJson } from "@/lib/fetch-json";
-import { parseCurrency, walletCents, type WalletBalances } from "@/lib/money";
+import {
+  parseCurrency,
+  walletCents,
+  type AppCurrency,
+  type WalletBalances,
+} from "@/lib/money";
+import { WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
 import { formatMoney, cn } from "@/lib/utils";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { Button } from "@/components/ui/button";
@@ -35,6 +41,7 @@ import { isValidContactPhone } from "@/lib/phone";
 import { orderStatusLabel } from "@/lib/order-status-label";
 import { PageLoader } from "@/components/page-loader";
 import { PhoneField } from "@/components/phone-field";
+import { AccountBadges, type BadgeRow } from "@/components/growth/account-badges";
 
 type Order = {
   id: string;
@@ -80,6 +87,7 @@ export default function ProfilePage() {
   const [mode, setMode] = useState<"buyer" | "seller">("buyer");
   const [orders, setOrders] = useState<Order[]>([]);
   const [balance, setBalance] = useState(0);
+  const [walletCurrency, setWalletCurrency] = useState<AppCurrency>("USD");
   const [cartCount, setCartCount] = useState(0);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileUser | null>(null);
@@ -94,6 +102,7 @@ export default function ProfilePage() {
   const [tab, setTab] = useState<Tab>("active");
   const [kyc, setKyc] = useState<KycSummary | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [badges, setBadges] = useState<BadgeRow[]>([]);
 
   function applyProfile(user: ProfileUser) {
     setProfile(user);
@@ -126,18 +135,30 @@ export default function ProfilePage() {
     );
     setOrders(list);
     const w = walletRes.data?.wallet;
-    setBalance(w ? walletCents(w, parseCurrency(w.currency)) : 0);
+    const code = parseCurrency(w?.currency);
+    setWalletCurrency(code);
+    setBalance(w ? walletCents(w, code) : 0);
     setCartCount(cartRes.data?.count ?? 0);
     if (profileRes.data?.user) {
       applyProfile(profileRes.data.user);
     }
     setKyc(kycRes.data?.kyc ?? null);
     setIsOwner(Boolean(kycRes.data?.isOwner));
+    const growth = await fetchJson<{ badges?: BadgeRow[] }>("/api/growth/me");
+    setBadges(growth.data?.badges ?? []);
   }
 
   useEffect(() => {
     if (!userId) return;
     refresh().catch(() => undefined);
+  }, [userId, period, tab]);
+
+  useEffect(() => {
+    const onWallet = () => {
+      void refresh().catch(() => undefined);
+    };
+    window.addEventListener(WALLET_UPDATED_EVENT, onWallet);
+    return () => window.removeEventListener(WALLET_UPDATED_EVENT, onWallet);
   }, [userId, period, tab]);
 
   async function syncSessionUser(patch: {
@@ -454,6 +475,25 @@ export default function ProfilePage() {
         </button>
       )}
 
+      {badges.length > 0 ? (
+        <div className="mt-4">
+          <AccountBadges badges={badges} />
+          <Link
+            href="/community"
+            className="mt-2 inline-block text-xs font-semibold text-primary"
+          >
+            Missions, classement et lives
+          </Link>
+        </div>
+      ) : (
+        <Link
+          href="/community"
+          className="mt-4 block text-xs font-semibold text-primary"
+        >
+          Rejoindre la communauté (badges, missions, lives)
+        </Link>
+      )}
+
       <div
         className={cn(
           "mt-4 rounded-2xl border p-3 text-left",
@@ -555,11 +595,12 @@ export default function ProfilePage() {
         >
           <Wallet className="mb-1 size-4 text-trust" />
           <p className="font-heading text-lg font-extrabold">
-            {formatMoney(balance)}
+            {formatMoney(balance, walletCurrency)}
           </p>
           <p className="text-[10px] tracking-wide text-muted-foreground uppercase">
-            Solde
+            {t("wallet.title")}
           </p>
+          <p className="text-[10px] text-trust">{t("wallet.heldChip")}</p>
         </Link>
         <Link
           href="/cart"
@@ -737,6 +778,8 @@ export default function ProfilePage() {
             [
               ["/shops/products", "Mes produits (prix, stock…)"],
               ["/shops/orders", "Commandes & livreurs"],
+              ["/community", "Communauté & badges"],
+              ["/creator", "Studio créateur / live"],
               ["/shops/reports", "Rapports & statistiques"],
               ["/courier", "Espace livreur"],
               ["/shops/contacts", "Contacts (acheteurs, abonnés, invités)"],
@@ -746,6 +789,9 @@ export default function ProfilePage() {
                     ["/shops/admin/products", "Modération produits (tout)"],
                     ["/shops/admin/vendors", "Vendeurs & clients"],
                     ["/shops/admin/ledger", "Ledger paiements"],
+                    ["/shops/admin/attention", "KPI attention"],
+                    ["/shops/admin/campaigns", "Packs partenaires"],
+                    ["/shops/admin/expansion", "Playbook expansion"],
                     ["/shops/admin/content", "Contenu (Système / Sanity)"],
                     ["/shops/kyc", "Revue KYC"],
                     ["/shops/admin/moderation", "Modération NSFW"],

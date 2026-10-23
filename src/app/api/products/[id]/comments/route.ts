@@ -4,6 +4,7 @@ import { shopIdsForSellerInbox } from "@/lib/conversation-access";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { takeRateLimit } from "@/lib/rate-limit";
 import { getSession } from "@/lib/session";
+import { recordUserActivity } from "@/lib/growth/activity";
 
 const createSchema = z.object({
   body: z.string().trim().min(1).max(500),
@@ -123,5 +124,6 @@ export async function POST(
     prisma.productComment.count({ where: { productId } }),
   );
 
+  void recordUserActivity(session.user.id, "comment");
   return NextResponse.json({ comment, commentsCount }, { status: 201 });
 }

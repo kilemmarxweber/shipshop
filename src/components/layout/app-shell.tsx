@@ -9,12 +9,10 @@ import {
   Search,
   Plus,
   User,
-  Wallet,
   ShoppingCart,
   MessageCircle,
 } from "lucide-react";
-import { parseCurrency, walletCents, type AppCurrency } from "@/lib/money";
-import { cn, formatMoney } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/fetch-json";
 import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
@@ -30,7 +28,6 @@ import { useVisualViewportLock } from "@/hooks/use-visual-viewport";
 import { armFeedSoundUnlock, enableFeedSound } from "@/lib/try-play-media";
 import { useI18n } from "@/components/i18n-provider";
 import { CART_UPDATED_EVENT, cartCountFromEvent } from "@/lib/cart-events";
-import { WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
 import { useBindPageMediaSession } from "@/lib/page-media-session";
 
 const NAV = [
@@ -69,11 +66,9 @@ export function AppShell({
   const { t } = useI18n();
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
-  const [balance, setBalance] = useState<number | null>(null);
-  const [walletCurrency, setWalletCurrency] = useState<AppCurrency>("USD");
   const [cartCount, setCartCount] = useState(0);
   const inbox = useInboxUnread(userId, pathname);
-  const [walletTick, setWalletTick] = useState(0);
+  const [cartTick, setCartTick] = useState(0);
   const [hasShop, setHasShop] = useState(false);
   useVisualViewportLock();
   useEffect(() => {
@@ -81,16 +76,13 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    const bumpWallet = () => setWalletTick((n) => n + 1);
     const bumpCart = (event: Event) => {
       const count = cartCountFromEvent(event);
       if (typeof count === "number") setCartCount(count);
-      setWalletTick((n) => n + 1);
+      setCartTick((n) => n + 1);
     };
-    window.addEventListener(WALLET_UPDATED_EVENT, bumpWallet);
     window.addEventListener(CART_UPDATED_EVENT, bumpCart);
     return () => {
-      window.removeEventListener(WALLET_UPDATED_EVENT, bumpWallet);
       window.removeEventListener(CART_UPDATED_EVENT, bumpCart);
     };
   }, []);
@@ -98,37 +90,20 @@ export function AppShell({
   useEffect(() => {
     if (!userId) {
       setHasShop(false);
-      setBalance(null);
       setCartCount(0);
       return;
     }
     void fetchJson<{ shops?: { id: string }[] }>("/api/shops?mine=1")
       .then(({ data }) => setHasShop((data?.shops?.length ?? 0) > 0))
       .catch(() => setHasShop(false));
-    Promise.all([
-      fetchJson<{
-        wallet?: {
-          balanceCents?: number;
-          currency?: string;
-          usdCents?: number;
-          cdfCents?: number;
-          kwCents?: number;
-        };
-      }>("/api/wallet"),
-      fetchJson<{ count?: number }>("/api/cart"),
-    ])
-      .then(([wallet, cart]) => {
-        const w = wallet.data?.wallet;
-        const code = parseCurrency(w?.currency);
-        setWalletCurrency(code);
-        setBalance(w ? walletCents(w, code) : 0);
+    void fetchJson<{ count?: number }>("/api/cart")
+      .then((cart) => {
         setCartCount(cart.data?.count ?? 0);
       })
       .catch(() => {
-        setBalance(null);
         setCartCount(0);
       });
-  }, [userId, pathname, walletTick]);
+  }, [userId, pathname, cartTick]);
 
   const hideChrome =
     pathname.startsWith("/auth") ||
@@ -181,12 +156,12 @@ export function AppShell({
           <PullToRefresh>
           {!hideChrome && (
             <header className="z-40 shrink-0 border-b border-border bg-background px-3 pb-1.5 pt-[max(0.65rem,env(safe-area-inset-top))] sm:px-4">
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+              <div className="flex items-center justify-between gap-1.5">
                 <Link
                   href="/"
                   aria-label={appName}
                   onClick={(event) => onChromeNav(event, "/")}
-                  className="flex min-w-0 items-center gap-1.5 justify-self-start md:gap-2"
+                  className="flex min-w-0 items-center gap-1.5 md:gap-2"
                 >
                   <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-transparent">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -200,28 +175,7 @@ export function AppShell({
                     <BrandLabel name={appName} />
                   </span>
                 </Link>
-                {session ? (
-                  <Link
-                    href="/wallet"
-                    onClick={(event) => onChromeNav(event, "/wallet")}
-                    className="flex items-center gap-1.5 justify-self-center rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-semibold text-trust transition hover:bg-muted"
-                  >
-                    <Wallet className="size-3.5" />
-                    <span className="flex flex-col items-start leading-tight">
-                      <span>
-                        {balance === null
-                          ? "…"
-                          : formatMoney(balance, walletCurrency)}
-                      </span>
-                      <span className="text-[9px] font-medium text-trust/90">
-                        {t("wallet.heldChip")}
-                      </span>
-                    </span>
-                  </Link>
-                ) : (
-                  <span />
-                )}
-                <div className="flex items-center justify-end gap-2 justify-self-end">
+                <div className="flex items-center justify-end gap-2">
                   <LocaleToggle />
                   {session ? (
                     <NotificationsBell

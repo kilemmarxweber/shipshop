@@ -136,6 +136,15 @@ function ShopInner() {
   const prevAudioFocus = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!session?.user?.id || !slug) return;
+    void fetch("/api/growth/activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "shop_visit" }),
+    });
+  }, [session?.user?.id, slug]);
+
+  useEffect(() => {
     // Entrée shop: repartir en non-mute local; sortie shop: couper tout le son.
     setShopAudioMuted(false);
     return () => {

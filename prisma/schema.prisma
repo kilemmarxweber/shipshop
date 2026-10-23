@@ -62,6 +62,18 @@ model User {
   creatorSales      Order[]            @relation("CreatorSales")
   funnelEvents      CommerceFunnelEvent[]
   brandCampaigns    BrandCampaign[]
+  activityDays      UserActivityDay[]
+  accountBadges     AccountBadge[]
+  missionProgress   UserMissionProgress[]
+  rewardGrants      RewardGrant[]
+  creatorFollowers  UserFollow[]          @relation("CreatorFollowers")
+  creatorFollowing  UserFollow[]          @relation("CreatorFollowing")
+  livesHosted       CreatorLive[]
+  giftsSent         CreatorGift[]         @relation("GiftsSent")
+  giftsReceived     CreatorGift[]         @relation("GiftsReceived")
+  liveChats         LiveChatMessage[]
+  challengeDone     ChallengeCompletion[]
+  campaignInfluencer BrandCampaign[]      @relation("CampaignInfluencer")
 
   @@unique([email])
   @@map("user")
@@ -339,6 +351,7 @@ model Product {
   boosts        ShopBoost[]
   creatorShares ProductCreatorShare[]
   funnelEvents  CommerceFunnelEvent[]
+  lives         CreatorLive[]
 
   @@index([category, status])
   @@index([shopId, status])
@@ -1088,6 +1101,8 @@ model BrandCampaign {
   id          String    @id @default(cuid())
   title       String
   kind        String    @default("FEED")
+  /// DISCOVERY | ENGAGEMENT | CONVERSION
+  objective   String    @default("DISCOVERY")
   category    String?
   budgetCents Int       @default(0)
   currency    String    @default("USD")
@@ -1097,9 +1112,174 @@ model BrandCampaign {
   createdAt   DateTime  @default(now())
   ownerUserId String?
   owner       User?     @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  impressions Int       @default(0)
+  clicks      Int       @default(0)
+  conversions Int       @default(0)
+  ctaUrl      String?
+  mediaUrl    String?
+  body        String?
+  productId   String?
+  influencerUserId String?
+  influencer  User?     @relation("CampaignInfluencer", fields: [influencerUserId], references: [id], onDelete: SetNull)
+  challenges  DailyChallenge[]
 
   @@index([status, startsAt])
+  @@index([objective, status])
   @@map("brand_campaign")
+}
+
+model AccountBadge {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  earnedAt  DateTime         @default(now())
+  lostAt    DateTime?
+  active    Boolean          @default(true)
+  cycleKey  String?
+
+  @@unique([userId, kind])
+  @@index([kind, active])
+  @@map("account_badge")
+}
+
+model UserActivityDay {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day           DateTime @db.Date
+  interactions  Int      @default(0)
+  city          String?
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, day])
+  @@index([day, interactions])
+  @@index([city, day])
+  @@map("user_activity_day")
+}
+
+model UserMissionProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  missionKey  String
+  periodKey   String
+  progress    Int       @default(0)
+  target      Int
+  completedAt DateTime?
+
+  @@unique([userId, missionKey, periodKey])
+  @@index([periodKey, completedAt])
+  @@map("user_mission_progress")
+}
+
+model RewardGrant {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        String
+  title       String
+  createdAt   DateTime  @default(now())
+  consumedAt  DateTime?
+
+  @@index([userId, createdAt])
+  @@map("reward_grant")
+}
+
+model UserFollow {
+  id         String   @id @default(cuid())
+  followerId String
+  follower   User     @relation("CreatorFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  creatorId  String
+  creator    User     @relation("CreatorFollowers", fields: [creatorId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([followerId, creatorId])
+  @@index([creatorId])
+  @@map("user_follow")
+}
+
+model DailyChallenge {
+  id                 String    @id @default(cuid())
+  title              String
+  body               String
+  category           String?
+  city               String?
+  startsAt           DateTime
+  endsAt             DateTime
+  sponsorCampaignId  String?
+  sponsorCampaign    BrandCampaign? @relation(fields: [sponsorCampaignId], references: [id], onDelete: SetNull)
+  completions        Int       @default(0)
+  createdAt          DateTime  @default(now())
+
+  done ChallengeCompletion[]
+
+  @@index([startsAt, endsAt])
+  @@map("daily_challenge")
+}
+
+model ChallengeCompletion {
+  id          String         @id @default(cuid())
+  challengeId String
+  challenge   DailyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+
+  @@unique([challengeId, userId])
+  @@map("challenge_completion")
+}
+
+model CreatorLive {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  productId   String?
+  product     Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  status      String    @default("LIVE")
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  viewerPeak  Int       @default(0)
+  giftCents   Int       @default(0)
+
+  gifts CreatorGift[]
+  chats LiveChatMessage[]
+
+  @@index([status, startedAt])
+  @@index([userId, status])
+  @@map("creator_live")
+}
+
+model CreatorGift {
+  id          String      @id @default(cuid())
+  fromUserId  String
+  from        User        @relation("GiftsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  to          User        @relation("GiftsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  liveId      String?
+  live        CreatorLive? @relation(fields: [liveId], references: [id], onDelete: SetNull)
+  kind        String
+  amountCents Int
+  currency    String      @default("USD")
+  createdAt   DateTime    @default(now())
+
+  @@index([toUserId, createdAt])
+  @@index([liveId])
+  @@map("creator_gift")
+}
+
+model LiveChatMessage {
+  id        String      @id @default(cuid())
+  liveId    String
+  live      CreatorLive @relation(fields: [liveId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime    @default(now())
+
+  @@index([liveId, createdAt])
+  @@map("live_chat_message")
 }
 
 /// Reçu / preuve de remise (retrait boutique OU livraison) — QR à scanner

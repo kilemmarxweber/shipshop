@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { formatMoney } from "@/lib/utils";
+import { recordUserActivity } from "@/lib/growth/activity";
 
 const LIKE_MARKER = "❤️ Nouveau like Chip Shop";
 
@@ -196,6 +197,7 @@ export async function POST(
     } catch (error) {
       console.error("[like notify]", error);
     }
+    void recordUserActivity(session.user.id, "like");
   }
 
   const likesCount = await withDbRetry(() =>

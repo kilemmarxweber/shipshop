@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { recordUserActivity } from "@/lib/growth/activity";
 
 export async function POST(
   _req: Request,
@@ -32,5 +33,6 @@ export async function POST(
     }),
   );
 
+  void recordUserActivity(session.user.id, "share");
   return NextResponse.json({ ok: true });
 }

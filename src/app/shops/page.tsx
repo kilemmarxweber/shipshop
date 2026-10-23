@@ -377,6 +377,24 @@ export default function ShopsPage() {
                 KYC
               </Link>
               <Link
+                href="/shops/admin/attention"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                KPI
+              </Link>
+              <Link
+                href="/shops/admin/campaigns"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Packs pub
+              </Link>
+              <Link
+                href="/shops/admin/expansion"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Expansion
+              </Link>
+              <Link
                 href="/shops/admin/content"
                 className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
               >

@@ -312,7 +312,12 @@ function ShipAdsDrafts() {
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="text-sm font-semibold">ShipAds (brouillons)</h2>
+      <h2 className="text-sm font-semibold">
+        ShipAds (brouillons){" "}
+        <Link href="/shops/admin/campaigns" className="text-primary">
+          Packs Discovery / Engagement / Conversion
+        </Link>
+      </h2>
       <p className="mt-1 text-[11px] text-muted-foreground">
         À activer seulement avec audience et attribution réelles. Ne taxer pas le
         feed organique.

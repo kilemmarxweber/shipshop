@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 38;
+const PRISMA_SCHEMA_REV = 40;
 
 /** Forces a reload if the generated client predates cart_item.quantity. */
 const CART_ITEM_HAS_QUANTITY = Prisma.CartItemScalarFieldEnum.quantity === "quantity";
@@ -70,6 +70,9 @@ function getPrismaClient() {
     typeof existing.commerceFunnelEvent?.findMany === "function" &&
     typeof existing.productCreatorShare?.findMany === "function" &&
     typeof existing.brandCampaign?.findMany === "function" &&
+    typeof existing.accountBadge?.findMany === "function" &&
+    typeof existing.userActivityDay?.findMany === "function" &&
+    typeof existing.creatorLive?.findMany === "function" &&
     CART_ITEM_HAS_QUANTITY &&
     SHOP_HAS_HOURS &&
     COURIER_HAS_ARCHIVE &&

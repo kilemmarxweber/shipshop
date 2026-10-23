@@ -1,8 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  BookOpen,
+  Car,
+  Cpu,
+  Dumbbell,
+  Gamepad2,
+  Heart,
+  Home,
+  MapPin,
+  Play,
+  Search,
+  Shirt,
+  Sparkles,
+} from "lucide-react";
 import { CATEGORIES } from "@/lib/categories";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { useAppConfig } from "@/lib/use-app-config";
@@ -20,7 +34,15 @@ import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { Input } from "@/components/ui/input";
 import { FeedLoadSentinel } from "@/components/feed-load-trigger";
 import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
+import {
+  GrowthFeedFormats,
+  highlightAudioKey,
+} from "@/components/growth/feed-formats";
+import { ChallengeCard } from "@/components/growth/challenge-card";
+import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
 import { usePaginatedList } from "@/lib/use-paginated-list";
+import { compactCount } from "@/lib/growth/challenge-look";
+import { Face } from "@/components/growth/cover-image";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import {
   getPinnedFeedAudioId,
@@ -49,10 +71,30 @@ type Product = {
   sizes?: string[];
   category: string;
   soundtrackStartMs?: number;
+  likesCount?: number;
   soundtrack?: { audioUrl: string; durationMs?: number } | null;
-  shop?: { id: string; name: string };
+  shop?: { id: string; name: string; logoUrl?: string | null };
   boosted?: boolean;
 };
+
+const CATEGORY_ICON: Record<string, LucideIcon> = {
+  Tech: Cpu,
+  Mode: Shirt,
+  Maison: Home,
+  Gaming: Gamepad2,
+  Beauté: Sparkles,
+  Auto: Car,
+  Livres: BookOpen,
+  Sport: Dumbbell,
+};
+
+function clipLabel(durationMs?: number) {
+  if (!durationMs || durationMs < 1000) return null;
+  const total = Math.round(durationMs / 1000);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 type CardEntry = {
   key: string;
@@ -64,7 +106,7 @@ function hasAudio(p: Product) {
 }
 
 export default function DiscoverPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const appConfig = useAppConfig();
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -125,14 +167,28 @@ export default function DiscoverPage() {
     key: `results:${product.id}:${index}`,
     product,
   }));
+  const { busyId, joinChallenge, placeChallenges, surface } = useGrowthSurface();
+  const momentHighlight = surface?.highlights?.find(
+    (item, index) => item.hasVideo && index === 0,
+  );
+  const momentAudioKey = momentHighlight
+    ? highlightAudioKey(momentHighlight.id)
+    : null;
+  const resultRows = useMemo(
+    () => placeChallenges("discover", resultEntries, (entry) => entry.key),
+    [resultEntries, placeChallenges],
+  );
   orderedAudioRef.current = [
+    ...(momentAudioKey ? [momentAudioKey] : []),
     ...featuredEntries,
     ...videoEntries,
     ...budgetEntries,
     ...resultEntries,
   ]
-    .filter((entry) => hasAudio(entry.product))
-    .map((entry) => entry.key);
+    .filter((entry) =>
+      typeof entry === "string" ? true : hasAudio(entry.product),
+    )
+    .map((entry) => (typeof entry === "string" ? entry : entry.key));
   userPinnedRef.current = userPinned;
   audioOffRef.current = audioOff;
   audioFocusRef.current = audioFocusId;
@@ -219,7 +275,7 @@ export default function DiscoverPage() {
     );
   }
 
-  const productSoundKey = `${products.length}:${products[0]?.id ?? ""}:${products.at(-1)?.id ?? ""}`;
+  const productSoundKey = `${products.length}:${products[0]?.id ?? ""}:${products.at(-1)?.id ?? ""}:${momentAudioKey ?? ""}`;
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -279,50 +335,101 @@ export default function DiscoverPage() {
   return (
     <div className="discover-scroll px-4 pb-4 pt-3 md:px-8">
       <ScrollAdFeedSurface on />
-      <div className="mb-4 flex items-center gap-2 rounded-2xl border border-border bg-surface-2 px-3">
+      <GrowthFeedFormats
+        variant="discover"
+        pinChallenges
+        playback={{
+          clipMs: appConfig.clipMs,
+          soundFor,
+          focused: (key) => audioFocusId === key && !audioOff,
+          onVisible: onTileVisible,
+          onActivateSound: onTileActivate,
+          onPlaybackEnded: playNext,
+          onSoundChange: (key, next) => {
+            setAudioOff(next.muted);
+            if (next.muted) {
+              disableFeedSound();
+              if (userPinned === key) {
+                setUserPinned(null);
+                unpinFeedAudio();
+              }
+            } else {
+              enableFeedSound(false);
+              setUserPinned(key);
+              requestFeedAudioFocus(key);
+            }
+            setSoundById((prev) => applyExclusiveVideoSound(prev, key, next));
+          },
+        }}
+      />
+      <div className="mb-5 flex items-center gap-2 rounded-full border border-border/70 bg-surface-2/90 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
         <Search className="size-4 text-muted-foreground" />
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder={t("discover.searchPlaceholder")}
-          className="border-0 bg-transparent shadow-none focus-visible:ring-0"
+          className="h-11 border-0 bg-transparent shadow-none focus-visible:ring-0"
         />
       </div>
 
-      <h2 className="mb-3 font-heading text-sm font-bold">
-        {t("discover.categoriesHeading")}
-      </h2>
-      <div className="h-scroll h-scroll-fade mb-5 gap-2.5">
-        {CATEGORIES.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() =>
-              setCategory((prev) => (prev === c.id ? null : c.id))
-            }
-            className={cn(
-              "relative size-[4.5rem] shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br p-2 sm:size-20",
-              c.gradient,
-              category === c.id && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-            )}
-          >
-            <span className="absolute inset-x-0 bottom-1 text-center text-[9px] font-bold">
-              {t(`categories.${c.id}` as MessagePath)}
-            </span>
-          </button>
-        ))}
-      </div>
+      <section className="mb-6">
+        <h2 className="mb-3.5 font-heading text-[1.05rem] font-bold tracking-tight">
+          {t("discover.categoriesHeading")}
+        </h2>
+        <div className="h-scroll h-scroll-fade items-start gap-2.5 sm:gap-3 md:justify-between md:overflow-visible md:[mask-image:none]">
+          {CATEGORIES.map((c) => {
+            const Icon = CATEGORY_ICON[c.id] ?? Sparkles;
+            const selected = category === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  setCategory((prev) => (prev === c.id ? null : c.id));
+                  void fetch("/api/growth/activity", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ kind: "category" }),
+                  });
+                }}
+                className="flex w-[3.55rem] shrink-0 flex-col items-center gap-1.5 sm:w-[4.25rem]"
+              >
+                <span
+                  className={cn(
+                    "grid size-12 place-items-center rounded-full bg-gradient-to-br text-white shadow-[0_8px_20px_rgba(0,0,0,0.28)] transition duration-200 sm:size-14",
+                    c.gradient,
+                    selected
+                      ? "scale-[1.04] ring-2 ring-white/90 ring-offset-2 ring-offset-background"
+                      : "opacity-95 hover:scale-[1.03]",
+                  )}
+                >
+                  <Icon className="size-5 sm:size-[1.35rem]" strokeWidth={1.75} />
+                </span>
+                <span
+                  className={cn(
+                    "text-center text-[11px] font-medium leading-tight",
+                    selected ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {t(`categories.${c.id}` as MessagePath)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
-      <h2 className="mb-3 font-heading text-sm font-bold">
+      <h2 className="mb-4 flex items-center gap-1.5 font-heading text-[1.05rem] font-bold tracking-tight">
+        <MapPin className="size-4 text-primary" />
         {t("discover.trendsHeading")}
       </h2>
       {(featuredEntries.length > 0 ||
         videoEntries.length > 0 ||
         budgetEntries.length > 0) && (
-        <div className="mb-6 space-y-4">
+        <div className="mb-7 space-y-6">
           {featuredEntries.length > 0 ? (
             <section>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-3 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
                 {t("discover.featuredHeading")}
               </p>
               <div className="h-scroll h-scroll-fade gap-3 pb-1">
@@ -367,7 +474,7 @@ export default function DiscoverPage() {
           ) : null}
           {videoEntries.length > 0 ? (
             <section>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-3 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
                 {t("discover.videoHeading")}
               </p>
               <div className="h-scroll h-scroll-fade gap-3 pb-1">
@@ -413,7 +520,7 @@ export default function DiscoverPage() {
           ) : null}
           {budgetEntries.length > 0 ? (
             <section>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-3 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
                 {t("discover.budgetHeading")}
               </p>
               <div className="h-scroll h-scroll-fade gap-3 pb-1">
@@ -459,11 +566,30 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      <h2 className="mb-3 font-heading text-sm font-bold">
+      <h2
+        id="discover-results"
+        className="mb-3.5 font-heading text-[1.05rem] font-bold tracking-tight"
+      >
         {t("discover.resultsHeading")}
       </h2>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-        {resultEntries.map((entry) => {
+        {resultRows.map((row) => {
+          if (row.kind === "challenge") {
+            return (
+              <div
+                key={row.key}
+                className="col-span-2 md:col-span-3 lg:col-span-4"
+              >
+                <ChallengeCard
+                  challenge={row.challenge}
+                  template={row.template}
+                  busy={busyId === row.challenge.id}
+                  onJoin={() => void joinChallenge(row.challenge.id)}
+                />
+              </div>
+            );
+          }
+          const entry = row.item;
           const p = entry.product;
           const cardKey = entry.key;
           const cover = p.images[0] ? [p.images[0]] : [];
@@ -534,17 +660,29 @@ export default function DiscoverPage() {
                   />
                 </div>
               ) : null}
-              <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3">
+              <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-2.5 sm:p-3">
                 <Link href={`/product/${p.id}`} className="block cursor-pointer">
-                  <p className="line-clamp-2 text-sm font-extrabold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                  <p className="line-clamp-2 text-[13px] font-extrabold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                     {p.title}
                   </p>
-                  <p className="mt-0.5 text-[10px] font-medium text-white/75">
-                    {p.shop?.name}
-                  </p>
-                  <p className="text-[11px] font-bold text-trust">
-                    {formatMoney(p.priceCents, p.currency)}
-                  </p>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <Face
+                      name={p.shop?.name ?? "?"}
+                      image={p.shop?.logoUrl ?? null}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-semibold text-white">
+                        {p.shop?.name}
+                      </p>
+                      <p className="text-[10px] font-bold text-[#7dffb3]">
+                        {formatMoney(p.priceCents, p.currency)}
+                      </p>
+                    </div>
+                    <p className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-white">
+                      <Heart className="size-3.5 fill-white/90" />
+                      {compactCount(p.likesCount ?? 0, locale)}
+                    </p>
+                  </div>
                 </Link>
                 {p.shop ? (
                   <button
@@ -654,16 +792,20 @@ function DiscoverStripCard({
     };
   }, [cardKey, onVisible]);
 
+  const { locale } = useI18n();
+  const duration = clipLabel(product.soundtrack?.durationMs);
+  const likes = product.likesCount ?? 0;
+
   return (
     <article
       ref={ref}
       data-feed-card
       data-audio-key={cardKey}
       {...(!sound.muted ? { "data-feed-sound-on": "1" } : {})}
-      className="relative w-48 shrink-0 overflow-hidden rounded-2xl border border-border bg-surface"
+      className="relative w-[11.25rem] shrink-0 overflow-hidden rounded-[1.15rem] bg-[#121218] sm:w-52"
     >
       <Link href={`/product/${product.id}`} className="block cursor-pointer">
-        <div className="relative aspect-[4/5] overflow-hidden bg-surface-2">
+        <div className="relative aspect-[3/4] overflow-hidden bg-surface-2">
           <ProductImageCarousel
             images={audio ? product.images.slice(0, 8) : product.images.slice(0, 1)}
             className="absolute inset-0"
@@ -687,9 +829,10 @@ function DiscoverStripCard({
               onCycleEnd={onPlaybackEnded}
             />
           ) : null}
-          {withVideoBadge ? (
-            <span className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-              Video
+          {duration || withVideoBadge ? (
+            <span className="absolute top-2.5 left-2.5 z-20 inline-flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+              <Play className="size-2.5 fill-white" />
+              {duration ?? "Video"}
             </span>
           ) : null}
           {audio ? (
@@ -702,26 +845,36 @@ function DiscoverStripCard({
               />
             </div>
           ) : null}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/88 via-black/28 to-transparent px-2.5 pb-2.5 pt-12">
+            <p className="flex items-center gap-1.5">
+              <Face
+                name={product.shop?.name ?? "?"}
+                image={product.shop?.logoUrl ?? null}
+              />
+              <span className="min-w-0 truncate text-[12px] font-semibold text-white">
+                {product.shop?.name ?? product.title}
+              </span>
+            </p>
+            <div className="mt-1 flex items-center justify-between gap-2 pl-7">
+              <p className="truncate text-[11px] font-semibold text-[#7dffb3]">
+                {formatMoney(product.priceCents, product.currency)}
+              </p>
+              <p className="inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-white">
+                <Heart className="size-3.5 fill-white" />
+                {compactCount(likes, locale)}
+              </p>
+            </div>
+          </div>
         </div>
       </Link>
-      <div className="space-y-1 p-2.5">
-        <p className="line-clamp-2 text-xs font-semibold leading-tight text-foreground">
-          {product.title}
-        </p>
-        <p className="text-[10px] text-muted-foreground">{product.shop?.name}</p>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-bold text-trust">
-            {formatMoney(product.priceCents, product.currency)}
-          </p>
-          <button
-            type="button"
-            onClick={onBuy}
-            className="inline-flex h-7 cursor-pointer items-center justify-center rounded-full bg-primary px-2.5 text-[10px] font-bold text-white"
-          >
-            {buyLabel}
-          </button>
-        </div>
-      </div>
+      {product.shop ? (
+        <button
+          type="button"
+          onClick={onBuy}
+          aria-label={buyLabel}
+          className="absolute inset-x-0 bottom-0 z-20 h-12 cursor-pointer bg-transparent"
+        />
+      ) : null}
     </article>
   );
 }
@@ -766,7 +919,7 @@ function DiscoverTile({
       data-feed-card
       data-audio-key={id}
       {...(soundOn ? { "data-feed-sound-on": "1" } : {})}
-      className="group relative aspect-[3/4] overflow-hidden rounded-2xl"
+      className="group relative aspect-[3/4] overflow-hidden rounded-[1.15rem]"
     >
       {children}
     </article>

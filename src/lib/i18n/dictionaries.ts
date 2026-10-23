@@ -151,6 +151,18 @@ export type Messages = {
     resultsHeading: string;
     emptyResults: string;
     nearMe: string;
+    challengeHeading: string;
+    challengeMission: string;
+    challengePulse: string;
+    storiesHeading: string;
+    challengeJoin: string;
+    challengeJoinPlus: string;
+    challengeJoined: string;
+    participants: string;
+    participantsOther: string;
+    seeAll: string;
+    videoOfMoment: string;
+    views: string;
   };
   shop: {
     notFound: string;
@@ -594,6 +606,18 @@ const fr: Messages = {
     resultsHeading: "Tous les produits",
     emptyResults: "Aucun résultat",
     nearMe: "Près de moi",
+    challengeHeading: "Challenge du jour",
+    challengeMission: "Mission",
+    challengePulse: "En ce moment",
+    storiesHeading: "Stories partenaires",
+    challengeJoin: "Je relève",
+    challengeJoinPlus: "+1 Je relève",
+    challengeJoined: "Relevé",
+    participants: "participant",
+    participantsOther: "participants",
+    seeAll: "Voir tout",
+    videoOfMoment: "Vidéo du moment",
+    views: "vues",
   },
   shop: {
     notFound: "Boutique introuvable",
@@ -1041,6 +1065,18 @@ const en: Messages = {
     resultsHeading: "All products",
     emptyResults: "No results",
     nearMe: "Near me",
+    challengeHeading: "Challenge of the day",
+    challengeMission: "Mission",
+    challengePulse: "Right now",
+    storiesHeading: "Partner stories",
+    challengeJoin: "I take it on",
+    challengeJoinPlus: "+1 I take it on",
+    challengeJoined: "Joined",
+    participants: "participant",
+    participantsOther: "participants",
+    seeAll: "See all",
+    videoOfMoment: "Video of the moment",
+    views: "views",
   },
   shop: {
     notFound: "Shop not found",
@@ -1488,6 +1524,18 @@ const pt: Messages = {
     resultsHeading: "Todos os produtos",
     emptyResults: "Sem resultados",
     nearMe: "Perto de mim",
+    challengeHeading: "Desafio do dia",
+    challengeMission: "Missão",
+    challengePulse: "Agora",
+    storiesHeading: "Stories de parceiros",
+    challengeJoin: "Eu topo",
+    challengeJoinPlus: "+1 Eu topo",
+    challengeJoined: "Feito",
+    participants: "participante",
+    participantsOther: "participantes",
+    seeAll: "Ver tudo",
+    videoOfMoment: "Vídeo do momento",
+    views: "visualizações",
   },
   shop: {
     notFound: "Loja não encontrada",
