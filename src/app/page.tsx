@@ -27,6 +27,7 @@ import {
   getPinnedFeedAudioId,
   requestFeedAudioFocus,
   resetFeedAudioFocus,
+  setFeedSnapAudioFocus,
   unpinFeedAudio,
   useFeedAudioFocus,
   useResumeFeedSoundWhenVisible,
@@ -38,6 +39,13 @@ import {
 import { resetAllPageMedia } from "@/lib/page-media-session";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { useFeedOrientation } from "@/hooks/use-feed-orientation";
+import {
+  FEED_WARM_RADIUS,
+  isFeedIndexWarm,
+  useSnapActiveIndex,
+} from "@/hooks/use-snap-active-index";
+import { warmFeedMediaBatch } from "@/lib/feed-media-pool";
+import { isVideoUrl } from "@/lib/media";
 import { colorHex } from "@/lib/product-options";
 import { AuthInline } from "@/components/auth-inline";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
@@ -370,7 +378,47 @@ export default function FeedPage() {
     );
   }
 
-  const prefetchAt = Math.max(0, feedRows.length - 4);
+  // Précharge pagination plus tôt (lot en mémoire comme TikTok)
+  const prefetchAt = Math.max(0, feedRows.length - 5);
+  const activeSnapIndex = useSnapActiveIndex(
+    snapRef,
+    feedRows.length,
+    `${tab}:${audioEpoch}`,
+  );
+
+  // Son TikTok : index snap → une card, ferme la précédente / ouvre la suivante
+  useEffect(() => {
+    if (tab !== "foryou" && tab !== "following") {
+      setFeedSnapAudioFocus(null);
+      return;
+    }
+    const row = feedRows[activeSnapIndex];
+    if (!row || row.kind === "challenge" || !("item" in row)) {
+      setFeedSnapAudioFocus(null);
+      return;
+    }
+    const p = row.item;
+    const hasAudio =
+      productHasVideo(p.images) || Boolean(p.soundtrack?.audioUrl);
+    setFeedSnapAudioFocus(hasAudio ? p.id : null);
+  }, [activeSnapIndex, feedRows, tab]);
+
+  useEffect(() => {
+    if (tab !== "foryou" && tab !== "following") return;
+    const urls: string[] = [];
+    for (
+      let i = Math.max(0, activeSnapIndex - FEED_WARM_RADIUS);
+      i <= Math.min(feedRows.length - 1, activeSnapIndex + FEED_WARM_RADIUS + 1);
+      i += 1
+    ) {
+      const row = feedRows[i];
+      if (!row || row.kind === "challenge" || !("item" in row)) continue;
+      const images = row.item.images;
+      const first = images.find((u) => isVideoUrl(u)) ?? images[0];
+      if (first) urls.push(first);
+    }
+    warmFeedMediaBatch(urls);
+  }, [activeSnapIndex, feedRows, tab]);
 
   useEffect(() => {
     const root = document.querySelector(".app-main");
@@ -668,6 +716,7 @@ export default function FeedPage() {
               hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
               clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
               motions={p.imageMotions}
+              feedWarm={isFeedIndexWarm(index, activeSnapIndex)}
               audioKey={
                 productHasVideo(p.images) || p.soundtrack?.audioUrl
                   ? p.id

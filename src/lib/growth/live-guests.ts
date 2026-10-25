@@ -4,8 +4,9 @@ export const LIVE_GUEST_MAX_ON_STAGE = 4;
 
 export type LiveGuestPublic = {
   id: string;
-  status: "PENDING" | "ON_STAGE" | "REFUSED" | "LEFT" | string;
+  status: "PENDING" | "INVITED" | "ON_STAGE" | "REFUSED" | "LEFT" | string;
   cameraOn: boolean;
+  micOn: boolean;
   requestedAt: Date | string;
   decidedAt?: Date | string | null;
   user: { id: string; name: string; image?: string | null };
@@ -38,6 +39,7 @@ const guestSelect = {
   id: true,
   status: true,
   cameraOn: true,
+  micOn: true,
   requestedAt: true,
   decidedAt: true,
   user: { select: { id: true, name: true, image: true } },
@@ -50,7 +52,10 @@ export async function listLiveGuests(
   try {
     return await withDbRetry(() =>
       prisma.liveGuest.findMany({
-        where: { liveId, status: { in: ["PENDING", "ON_STAGE"] } },
+        where: {
+          liveId,
+          status: { in: ["PENDING", "INVITED", "ON_STAGE"] },
+        },
         orderBy: { requestedAt: "asc" },
         select: guestSelect,
       }),
@@ -86,11 +91,15 @@ export async function closeLiveGuests(liveId: string) {
   try {
     await withDbRetry(() =>
       prisma.liveGuest.updateMany({
-        where: { liveId, status: { in: ["PENDING", "ON_STAGE"] } },
+        where: {
+          liveId,
+          status: { in: ["PENDING", "INVITED", "ON_STAGE"] },
+        },
         data: {
           status: "LEFT",
           leftAt: new Date(),
           cameraOn: false,
+          micOn: false,
         },
       }),
     );

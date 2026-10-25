@@ -42,6 +42,7 @@ import { orderStatusLabel } from "@/lib/order-status-label";
 import { PageLoader } from "@/components/page-loader";
 import { PhoneField } from "@/components/phone-field";
 import { AccountBadges, type BadgeRow } from "@/components/growth/account-badges";
+import { GoLiveCard } from "@/components/live/go-live-card";
 
 type Order = {
   id: string;
@@ -482,7 +483,7 @@ export default function ProfilePage() {
             href="/community"
             className="mt-2 inline-block text-xs font-semibold text-primary"
           >
-            Missions, classement et lives
+            Missions & classement
           </Link>
         </div>
       ) : (
@@ -490,9 +491,11 @@ export default function ProfilePage() {
           href="/community"
           className="mt-4 block text-xs font-semibold text-primary"
         >
-          Rejoindre la communauté (badges, missions, lives)
+          Rejoindre la communauté (badges & missions)
         </Link>
       )}
+
+      <GoLiveCard className="mt-4" variant="profile" />
 
       <div
         className={cn(
@@ -779,7 +782,8 @@ export default function ProfilePage() {
               ["/shops/products", "Mes produits (prix, stock…)"],
               ["/shops/orders", "Commandes & livreurs"],
               ["/community", "Communauté & badges"],
-              ["/creator", "Studio créateur / live"],
+              ["/creator", "Studio créateur"],
+              ["/live", "Voir les lives en cours"],
               ["/shops/reports", "Rapports & statistiques"],
               ["/courier", "Espace livreur"],
               ["/shops/contacts", "Contacts (acheteurs, abonnés, invités)"],

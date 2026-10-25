@@ -81,14 +81,6 @@ function isPlayingUnmuted(el: HTMLMediaElement) {
   return !el.muted && !el.paused;
 }
 
-function rewindMedia(node: HTMLMediaElement) {
-  try {
-    if (node.currentTime > 0.04) node.currentTime = 0;
-  } catch {
-    /* ignore */
-  }
-}
-
 function haltMediaNode(node: HTMLMediaElement) {
   node.dataset.wantSound = "0";
   waitingSound.delete(node);
@@ -121,25 +113,27 @@ export function haltTrackedFeedMedia() {
   });
 }
 
-/** Un seul son : mute (et pause audio) tout sauf `keep`. Ne touche pas `keep`. */
+/**
+ * Un seul son : mute tout sauf `keep`.
+ * Pas de rewind — le seek en rafale au scroll crash / redemande un clic.
+ * Audio toujours en pause ; vidéo : pause sur iOS, sinon reste en preview muette (md 2 cols).
+ */
 export function silenceFeedMediaExcept(keep: HTMLMediaElement | null) {
   if (typeof document === "undefined") return;
   const ios = isIosDevice();
   document.querySelectorAll("audio, video").forEach((node) => {
     if (!isFeedMedia(node) || node === keep) return;
+    const wantAudioPaused =
+      node instanceof HTMLAudioElement || ios;
     const alreadyOff =
       node.muted &&
       node.dataset.wantSound === "0" &&
-      (node instanceof HTMLAudioElement ? node.paused : true) &&
-      (!ios || node.paused);
-    if (!alreadyOff) {
-      node.muted = true;
-      node.dataset.wantSound = "0";
-      waitingSound.delete(node);
-      if (node instanceof HTMLAudioElement && !node.paused) node.pause();
-      if (ios && node instanceof HTMLVideoElement && !node.paused) node.pause();
-    }
-    rewindMedia(node);
+      (wantAudioPaused ? node.paused : true);
+    if (alreadyOff) return;
+    node.muted = true;
+    node.dataset.wantSound = "0";
+    waitingSound.delete(node);
+    if (wantAudioPaused && !node.paused) node.pause();
   });
 }
 
@@ -315,8 +309,16 @@ function stillWantsSound(el: HTMLMediaElement) {
   return el.dataset.wantSound !== "0";
 }
 
+/** Invalide les play() en vol (changement de card au scroll). */
+let playGen = 0;
+
+export function bumpFeedPlayGeneration() {
+  playGen += 1;
+}
+
 async function ensureExclusivePlay(el: HTMLMediaElement) {
   const epoch = mediaEpoch;
+  const gen = ++playGen;
   trackFeedMedia(el);
   el.dataset.wantSound = "1";
   if (isPlayingUnmuted(el)) {
@@ -326,12 +328,12 @@ async function ensureExclusivePlay(el: HTMLMediaElement) {
     return true;
   }
   silenceFeedMediaExcept(el);
-  if (el.paused) rewindMedia(el);
+  // Reprise depuis la position courante (pas de seek 0) — bascule scroll fluide
   el.muted = false;
   const playNow = el.play();
   try {
     await playNow;
-    if (epoch !== mediaEpoch) {
+    if (epoch !== mediaEpoch || gen !== playGen) {
       haltMediaNode(el);
       return false;
     }
@@ -339,7 +341,25 @@ async function ensureExclusivePlay(el: HTMLMediaElement) {
   } catch {
     /* Chrome : autoplay son bloqué tant qu’il n’y a pas de geste */
   }
-  if (epoch !== mediaEpoch) {
+  if (epoch !== mediaEpoch || gen !== playGen) {
+    haltMediaNode(el);
+    return false;
+  }
+  // Déjà débloqué une fois → retente unmuted (évite de redemander un clic à chaque card)
+  if (soundUnlocked && userEnabledSound && !userMutedSound) {
+    el.muted = false;
+    try {
+      await el.play();
+      if (epoch !== mediaEpoch || gen !== playGen) {
+        haltMediaNode(el);
+        return false;
+      }
+      if (confirmUnmutedPlay(el)) return true;
+    } catch {
+      /* encore bloqué */
+    }
+  }
+  if (epoch !== mediaEpoch || gen !== playGen) {
     haltMediaNode(el);
     return false;
   }
@@ -349,7 +369,7 @@ async function ensureExclusivePlay(el: HTMLMediaElement) {
   } catch {
     /* ignore */
   }
-  if (epoch !== mediaEpoch) {
+  if (epoch !== mediaEpoch || gen !== playGen) {
     haltMediaNode(el);
     return false;
   }

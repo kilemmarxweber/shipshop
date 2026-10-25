@@ -5,6 +5,7 @@ import { prisma, withDbRetry } from "@/lib/prisma";
 import { hasActiveBadge, refreshAccountBadges } from "@/lib/growth/badges";
 import { assertChipShopOwner } from "@/lib/kyc";
 import { notifySubscribersLiveStarted } from "@/lib/growth/live-notify";
+import { endActiveLivesForHost } from "@/lib/growth/live-backdrop-purge";
 
 const schema = z.object({
   title: z.string().min(2).max(80),
@@ -65,16 +66,7 @@ export async function POST(req: Request) {
       title,
       productId: raw.productId ?? null,
     });
-    await withDbRetry(() =>
-      prisma.creatorLive.updateMany({
-        where: { userId: session.user.id, status: { in: ["LIVE", "PAUSED"] } },
-        data: {
-          status: "ENDED",
-          endedAt: new Date(),
-          endReason: "host",
-        },
-      }),
-    );
+    await endActiveLivesForHost(session.user.id);
     const live = await withDbRetry(() =>
       prisma.creatorLive.create({
         data: {

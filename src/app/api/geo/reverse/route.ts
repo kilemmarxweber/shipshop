@@ -56,15 +56,42 @@ async function nominatimReverse(
   nominatim.searchParams.set("addressdetails", "1");
   nominatim.searchParams.set("accept-language", "fr");
 
-  const res = await fetch(nominatim, {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "ShipShop/1.0 (delivery reverse-geocode)",
-    },
-    next: { revalidate: 0 },
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as NominatimReverse;
+  try {
+    const res = await fetch(nominatim, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "ShipShop/1.0 (delivery reverse-geocode)",
+      },
+      signal: AbortSignal.timeout(8_000),
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as NominatimReverse;
+  } catch (error) {
+    // DNS / offline / timeout (ex. ENOTFOUND nominatim.openstreetmap.org)
+    console.warn(
+      "[geo/reverse] nominatim unreachable",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
+/** Fallback local si OSM est down — commune la plus proche via delivery zones. */
+async function offlineFallback(lat: number, lng: number) {
+  const commune = await snapCommune(lat, lng, "");
+  const inKinBox =
+    lat >= -4.55 && lat <= -4.2 && lng >= 15.1 && lng <= 15.55;
+  const city = inKinBox || commune ? "Kinshasa" : "";
+  return {
+    city,
+    commune: commune || "",
+    quartier: "",
+    avenue: "",
+    houseNumber: "",
+    displayName: [commune, city].filter(Boolean).join(", "),
+    offline: true as const,
+  };
 }
 
 function mergeParsed(
@@ -116,10 +143,8 @@ export async function GET(req: Request) {
 
   const streetLevel = await nominatimReverse(lat, lng, 18);
   if (!streetLevel) {
-    return NextResponse.json(
-      { error: "Adresse introuvable pour ce point" },
-      { status: 502 },
-    );
+    // Pas de 500 : le feed / checkout continuent avec une adresse approximative
+    return NextResponse.json(await offlineFallback(lat, lng));
   }
 
   const isKin = inKinshasa(streetLevel.address ?? {}, lat, lng);

@@ -224,8 +224,14 @@ function OverlayChrome({
     <>
       <button
         type="button"
-        className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-destructive text-white shadow"
+        className="absolute -right-2 -top-2 z-30 grid size-7 place-items-center rounded-full bg-destructive text-white shadow"
+        onPointerDown={(e) => {
+          // Empêche le drag parent (sinon le X ne ferme jamais)
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
           onRemove();
         }}
@@ -235,7 +241,7 @@ function OverlayChrome({
       </button>
       <button
         type="button"
-        className="absolute -bottom-2 -right-2 size-5 rounded-full border-2 border-white bg-trust shadow"
+        className="absolute -bottom-2 -right-2 z-30 size-5 rounded-full border-2 border-white bg-trust shadow"
         onPointerDown={(e) => {
           e.stopPropagation();
           onScale(e);

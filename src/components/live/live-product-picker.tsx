@@ -54,7 +54,14 @@ export function LiveProductPicker({ liveId, open, onClose, onPick }: Props) {
   if (!open) return null;
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-40 flex max-h-[70%] flex-col rounded-t-3xl border border-white/15 bg-[#121218]/98 shadow-2xl backdrop-blur-xl">
+    <>
+      <button
+        type="button"
+        aria-label="Fermer le catalogue"
+        className="absolute inset-0 z-[39] bg-black/45"
+        onClick={onClose}
+      />
+      <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex max-h-[70%] flex-col rounded-t-3xl border border-white/15 bg-[#121218]/98 shadow-2xl backdrop-blur-xl">
       <div className="flex items-center justify-between px-4 pt-3">
         <div className="flex items-center gap-2">
           <ShoppingBag className="size-4 text-[#7dffb3]" />
@@ -62,8 +69,12 @@ export function LiveProductPicker({ liveId, open, onClose, onPick }: Props) {
         </div>
         <button
           type="button"
-          onClick={onClose}
-          className="grid size-8 place-items-center rounded-full bg-white/10"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="grid size-9 place-items-center rounded-full bg-white/15"
           aria-label="Fermer"
         >
           <X className="size-4" />
@@ -146,6 +157,7 @@ export function LiveProductPicker({ liveId, open, onClose, onPick }: Props) {
         )}
       </ul>
     </div>
+    </>
   );
 }
 

@@ -28,8 +28,18 @@ export function FeedSoundtrackPlayer({
   const ref = useRef<HTMLAudioElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const inViewRef = useRef(false);
+  const wasActiveRef = useRef(false);
   const pageLive = usePageMediaLive();
   const canPlay = pageLive && active && !sound.muted;
+  const startSec = Math.max(0, startMs / 1000);
+
+  function seekToStart(audio: HTMLAudioElement) {
+    try {
+      audio.currentTime = startSec;
+    } catch {
+      /* ignore */
+    }
+  }
 
   useEffect(() => {
     const el = rootRef.current?.closest("article") ?? rootRef.current;
@@ -39,10 +49,14 @@ export function FeedSoundtrackPlayer({
         inViewRef.current = (entry?.intersectionRatio ?? 0) >= 0.08;
         const audio = ref.current;
         if (!audio) return;
-        if (canPlay) {
+        if (canPlay && inViewRef.current) {
+          if (!wasActiveRef.current) seekToStart(audio);
+          wasActiveRef.current = true;
           void tryPlayMedia(audio, !sound.muted);
         } else {
+          wasActiveRef.current = false;
           audio.pause();
+          seekToStart(audio);
         }
       },
       { threshold: [0, 0.08, 0.45, 1] },
@@ -52,7 +66,7 @@ export function FeedSoundtrackPlayer({
       io.disconnect();
       ref.current?.pause();
     };
-  }, [canPlay, sound.muted]);
+  }, [canPlay, sound.muted, startSec]);
 
   useEffect(() => {
     return () => {
@@ -69,19 +83,18 @@ export function FeedSoundtrackPlayer({
     if (!audio) return;
     audio.volume = Math.min(1, Math.max(0, sound.volume));
     if (canPlay) {
+      if (!wasActiveRef.current) seekToStart(audio);
+      wasActiveRef.current = true;
       if (audio.paused || audio.muted) {
         void tryPlayMedia(audio, !sound.muted);
       }
-    } else if (!audio.paused || !audio.muted) {
+    } else if (!audio.paused || !audio.muted || wasActiveRef.current) {
+      wasActiveRef.current = false;
       audio.muted = true;
       audio.pause();
-      try {
-        if (audio.currentTime > 0.04) audio.currentTime = 0;
-      } catch {
-        /* ignore */
-      }
+      seekToStart(audio);
     }
-  }, [canPlay, sound.muted, sound.volume, audioUrl]);
+  }, [canPlay, sound.muted, sound.volume, audioUrl, startSec]);
 
   useEffect(() => {
     const retry = () => {
@@ -97,10 +110,11 @@ export function FeedSoundtrackPlayer({
   useEffect(() => {
     const audio = ref.current;
     if (!audio) return;
-    const start = Math.max(0, startMs / 1000);
     const clipEnd = () => {
-      const dur = Number.isFinite(audio.duration) ? audio.duration : start + clipSeconds;
-      return Math.min(start + clipSeconds, Math.max(start + 0.2, dur));
+      const dur = Number.isFinite(audio.duration)
+        ? audio.duration
+        : startSec + clipSeconds;
+      return Math.min(startSec + clipSeconds, Math.max(startSec + 0.2, dur));
     };
     let finished = false;
     const finishOnce = () => {
@@ -110,19 +124,19 @@ export function FeedSoundtrackPlayer({
       onCycleEnd?.();
     };
     const onLoaded = () => {
-      audio.currentTime = start;
+      audio.currentTime = startSec;
     };
     const onTime = () => {
       if (audio.currentTime < clipEnd()) return;
       if (loop) {
-        audio.currentTime = start;
+        audio.currentTime = startSec;
         return;
       }
       finishOnce();
     };
     const onEnded = () => {
       if (loop) {
-        audio.currentTime = start;
+        audio.currentTime = startSec;
         if (canPlay) {
           void tryPlayMedia(audio, !sound.muted);
         }
@@ -138,7 +152,7 @@ export function FeedSoundtrackPlayer({
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("ended", onEnded);
     };
-  }, [startMs, audioUrl, canPlay, loop, onCycleEnd, clipSeconds]);
+  }, [startSec, audioUrl, canPlay, loop, onCycleEnd, clipSeconds, sound.muted]);
 
   return (
     <div ref={rootRef} className="pointer-events-none absolute size-0 overflow-hidden">

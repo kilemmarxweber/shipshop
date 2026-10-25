@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 45;
+const PRISMA_SCHEMA_REV = 51;
 const CHALLENGE_HAS_PRODUCT =
   Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
 
@@ -17,6 +17,16 @@ const PRODUCT_HAS_CREATOR_BPS =
 const ORDER_HAS_FEE_BPS = Prisma.OrderScalarFieldEnum.saleFeeBps === "saleFeeBps";
 const SHOP_BOOST_HAS_TARGET_CITY =
   Prisma.ShopBoostScalarFieldEnum.targetCity === "targetCity";
+const LIVE_GUEST_HAS_MIC =
+  Prisma.LiveGuestScalarFieldEnum.micOn === "micOn";
+const CREATOR_LIVE_HAS_MIC =
+  Prisma.CreatorLiveScalarFieldEnum.micOn === "micOn";
+const CREATOR_LIVE_HAS_LIKE =
+  Prisma.CreatorLiveScalarFieldEnum.likeCount === "likeCount";
+const CREATOR_LIVE_HAS_BACKDROP =
+  Prisma.CreatorLiveScalarFieldEnum.backdropPreset === "backdropPreset";
+const LIVE_HAS_RTC_SIGNAL =
+  Prisma.ModelName.LiveRtcSignal === "LiveRtcSignal";
 
 export const PRISMA_FEATURES = {
   shopBoostZoneTargeting: SHOP_BOOST_HAS_TARGET_CITY,
@@ -75,6 +85,8 @@ function getPrismaClient() {
     typeof existing.accountBadge?.findMany === "function" &&
     typeof existing.userActivityDay?.findMany === "function" &&
     typeof existing.creatorLive?.findMany === "function" &&
+    typeof existing.liveGuest?.findMany === "function" &&
+    typeof existing.liveRtcSignal?.findMany === "function" &&
     CART_ITEM_HAS_QUANTITY &&
     SHOP_HAS_HOURS &&
     COURIER_HAS_ARCHIVE &&
@@ -82,7 +94,12 @@ function getPrismaClient() {
     PRODUCT_HAS_CREATOR_BPS &&
     ORDER_HAS_FEE_BPS &&
     SHOP_BOOST_HAS_TARGET_CITY &&
-    CHALLENGE_HAS_PRODUCT
+    CHALLENGE_HAS_PRODUCT &&
+    LIVE_GUEST_HAS_MIC &&
+    CREATOR_LIVE_HAS_MIC &&
+    CREATOR_LIVE_HAS_LIKE &&
+    CREATOR_LIVE_HAS_BACKDROP &&
+    LIVE_HAS_RTC_SIGNAL
   ) {
     return existing;
   }

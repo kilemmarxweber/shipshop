@@ -244,3 +244,19 @@ export function extForMedia(
   if (file.type?.includes("avif")) return "avif";
   return "jpg";
 }
+
+/** Supprime un fichier d’upload local (fond live temporaire, etc.). No-op si absent. */
+export async function deleteUploadByPublicUrl(
+  url: string | null | undefined,
+): Promise<boolean> {
+  const relative = relativeUploadPathFromUrl(url);
+  if (!relative) return false;
+  const absolute = await findUploadedFilePath(relative);
+  if (!absolute) return false;
+  try {
+    await fs.unlink(/*turbopackIgnore: true*/ absolute);
+    return true;
+  } catch {
+    return false;
+  }
+}

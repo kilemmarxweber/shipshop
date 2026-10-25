@@ -28,10 +28,14 @@ export default function LiveListPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-4 px-4 py-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="font-heading text-xl font-bold">Lives</h1>
-        <Link href="/creator" className="text-xs font-semibold text-primary">
-          Lancer un live
+        <Link
+          href="/profile"
+          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#ff2d45] px-3.5 text-[12px] font-extrabold text-white shadow-[0_8px_20px_rgba(255,45,69,0.3)] transition hover:bg-[#ff4056]"
+        >
+          <Radio className="size-3.5" />
+          Go live
         </Link>
       </div>
       {lives.length === 0 ? (

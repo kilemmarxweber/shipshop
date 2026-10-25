@@ -20,7 +20,9 @@ export function giftByKind(kind: string) {
 export async function sendCreatorGift(input: {
   fromUserId: string;
   toUserId: string;
-  kind: GiftKind;
+  kind?: GiftKind | "CUSTOM";
+  /** Montant libre (centimes) — prioritaire sur le catalogue. */
+  amountCents?: number;
   liveId?: string | null;
 }) {
   if (input.fromUserId === input.toUserId) {
@@ -40,8 +42,29 @@ export async function sendCreatorGift(input: {
   if (!influencer && !liveOpen) {
     throw new Error("Ce compte n’est pas encore influenceur");
   }
-  const gift = giftByKind(input.kind);
-  if (!gift) throw new Error("Cadeau inconnu");
+
+  let kind: string;
+  let amountCents: number;
+  if (
+    typeof input.amountCents === "number" &&
+    Number.isFinite(input.amountCents)
+  ) {
+    amountCents = Math.round(input.amountCents);
+    if (amountCents < 10) throw new Error("Montant trop faible (min. 0,10 $)");
+    if (amountCents > GIFT_DAILY_CAP_CENTS) {
+      throw new Error("Montant trop élevé");
+    }
+    const catalog = giftByKind(input.kind ?? "");
+    kind =
+      catalog && catalog.amountCents === amountCents
+        ? catalog.kind
+        : "CUSTOM";
+  } else {
+    const gift = giftByKind(input.kind ?? "");
+    if (!gift) throw new Error("Cadeau inconnu");
+    kind = gift.kind;
+    amountCents = gift.amountCents;
+  }
 
   const today = utcDay();
   const spent = await prisma.creatorGift.aggregate({
@@ -51,12 +74,12 @@ export async function sendCreatorGift(input: {
     },
     _sum: { amountCents: true },
   });
-  if ((spent._sum.amountCents ?? 0) + gift.amountCents > GIFT_DAILY_CAP_CENTS) {
+  if ((spent._sum.amountCents ?? 0) + amountCents > GIFT_DAILY_CAP_CENTS) {
     throw new Error("Limite quotidienne de cadeaux atteinte");
   }
 
   const creatorShare = Math.round(
-    (gift.amountCents * CREATOR_GIFT_SHARE_BPS) / 10_000,
+    (amountCents * CREATOR_GIFT_SHARE_BPS) / 10_000,
   );
   const currency = parseCurrency("USD");
 
@@ -65,7 +88,7 @@ export async function sendCreatorGift(input: {
       tx,
       input.fromUserId,
       currency,
-      gift.amountCents,
+      amountCents,
     );
     const credit = await creditWalletLocked(
       tx,
@@ -78,27 +101,27 @@ export async function sendCreatorGift(input: {
         fromUserId: input.fromUserId,
         toUserId: input.toUserId,
         liveId: input.liveId ?? null,
-        kind: gift.kind,
-        amountCents: gift.amountCents,
+        kind,
+        amountCents,
         currency: "USD",
       },
     });
     if (input.liveId) {
       await tx.creatorLive.update({
         where: { id: input.liveId },
-        data: { giftCents: { increment: gift.amountCents } },
+        data: { giftCents: { increment: amountCents } },
       });
     }
     await tx.walletTransaction.create({
       data: {
         walletId: debit.wallet.id,
         type: "TRANSFER_OUT",
-        amountCents: gift.amountCents,
+        amountCents,
         currency: "USD",
         provider: "INTERNAL",
         reference: `GIFT-${row.id}`,
         status: "SUCCESS",
-        metadata: { kind: gift.kind, toUserId: input.toUserId },
+        metadata: { kind, toUserId: input.toUserId },
       },
     });
     await tx.walletTransaction.create({
@@ -110,12 +133,12 @@ export async function sendCreatorGift(input: {
         provider: "INTERNAL",
         reference: `GIFT-IN-${row.id}`,
         status: "SUCCESS",
-        metadata: { kind: gift.kind, fromUserId: input.fromUserId },
+        metadata: { kind, fromUserId: input.fromUserId },
       },
     });
     return {
       gift: row,
-      chargedCents: gift.amountCents,
+      chargedCents: amountCents,
       creatorCents: creatorShare,
     };
   });

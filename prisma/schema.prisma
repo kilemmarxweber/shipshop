@@ -1265,30 +1265,41 @@ model CreatorLive {
   /// Durée prévue (minutes) — alerte host avant la fin
   plannedMinutes   Int       @default(60)
   cameraOn         Boolean   @default(true)
+  micOn            Boolean   @default(true)
   viewerPeak       Int       @default(0)
   giftCents        Int       @default(0)
+  /// J’aime viewers (double-tap / bouton cœur)
+  likeCount        Int       @default(0)
+  /// Fond décoratif CSS (aurora | sunset | …) — session live uniquement
+  backdropPreset   String?
+  /// Image de fond custom (/uploads/…) — fichier supprimé à la fin du live
+  backdropUrl      String?
+  /// Filtre vidéo (natural | hd | studio | …) — défaut natural
+  videoFilter      String?
   /// Stickers texte + cartes produit (x/y/scale %) visibles par les viewers
   overlays         Json      @default("[]")
 
-  gifts  CreatorGift[]
-  chats  LiveChatMessage[]
-  guests LiveGuest[]
+  gifts    CreatorGift[]
+  chats    LiveChatMessage[]
+  guests   LiveGuest[]
+  rtcSignals LiveRtcSignal[]
 
   @@index([status, startedAt])
   @@index([userId, status])
   @@map("creator_live")
 }
 
-/// Follower qui demande à monter au live (caméra locale + acceptation host)
+/// Follower / invité live (demande viewer OU invitation host)
 model LiveGuest {
   id          String      @id @default(cuid())
   liveId      String
   live        CreatorLive @relation(fields: [liveId], references: [id], onDelete: Cascade)
   userId      String
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// PENDING | ON_STAGE | REFUSED | LEFT
+  /// PENDING (viewer→host) | INVITED (host→viewer) | ON_STAGE | REFUSED | LEFT
   status      String      @default("PENDING")
   cameraOn    Boolean     @default(false)
+  micOn       Boolean     @default(false)
   requestedAt DateTime    @default(now())
   decidedAt   DateTime?
   leftAt      DateTime?
@@ -1296,6 +1307,24 @@ model LiveGuest {
   @@unique([liveId, userId])
   @@index([liveId, status])
   @@map("live_guest")
+}
+
+/// Offre / réponse / candidats ICE entre peers (host, invités, viewers)
+model LiveRtcSignal {
+  id          String      @id @default(cuid())
+  liveId      String
+  live        CreatorLive @relation(fields: [liveId], references: [id], onDelete: Cascade)
+  fromPeerId  String
+  toPeerId    String
+  /// offer | answer | ice
+  kind        String
+  payload     Json
+  createdAt   DateTime    @default(now())
+  consumedAt  DateTime?
+
+  @@index([liveId, toPeerId, consumedAt])
+  @@index([createdAt])
+  @@map("live_rtc_signal")
 }
 
 model CreatorGift {

@@ -61,6 +61,11 @@ type Props = {
   clipMs?: number;
   /** Découvrir : la tuile choisie joue même si elle n’est pas la 1re de la grille. */
   forcePlay?: boolean;
+  /**
+   * Fenêtre feed (TikTok) : garder le player monté même hors écran proche.
+   * false → poster léger seulement (hors ±N du snap actif).
+   */
+  feedWarm?: boolean;
 };
 
 function HeartBurst() {
@@ -122,6 +127,7 @@ function SlideMedia({
   animate?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const wasPlayingRef = useRef(false);
   const video = isVideoUrl(src);
   const poster = video ? videoPosterUrl(src) : src;
   const [mediaRatio, setMediaRatio] = useState<number | null>(null);
@@ -139,6 +145,7 @@ function SlideMedia({
     setImgBroken(false);
     setPosterBroken(false);
     setMediaRatio(null);
+    wasPlayingRef.current = false;
   }, [src]);
 
   useEffect(() => {
@@ -166,19 +173,30 @@ function SlideMedia({
     }
 
     if (playing && !document.hidden) {
+      // Chaque entrée dans le viewport : lecture depuis 0 (pas de reprise mid-clip)
+      if (!wasPlayingRef.current) {
+        try {
+          if (el.currentTime > 0.04) el.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+      }
+      wasPlayingRef.current = true;
       if (el.paused || el.muted !== muted) {
         void tryPlayMedia(el, !muted).then((ok) => {
-          if (!ok) onAutoplayBlocked?.();
+          // Ne spam pas le CTA clic si le son a juste changé de card
+          if (!ok && !muted) onAutoplayBlocked?.();
         });
       }
     } else {
+      wasPlayingRef.current = false;
       el.dataset.wantSound = "0";
       if (!el.muted) el.muted = true;
       if (!el.paused) el.pause();
       try {
         if (el.currentTime > 0.04) el.currentTime = 0;
       } catch {
-        /* métadonnées pas prêtes */
+        /* ignore */
       }
     }
   }, [playing, shouldLoad, src, video, muted, onAutoplayBlocked]);
@@ -209,8 +227,20 @@ function SlideMedia({
       const el = videoRef.current;
       if (!el) return;
       if (document.hidden) {
+        wasPlayingRef.current = false;
         el.pause();
+        try {
+          if (el.currentTime > 0.04) el.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
       } else if (playing && shouldLoad) {
+        try {
+          el.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+        wasPlayingRef.current = true;
         void tryPlayMedia(el, !muted);
       }
     };
@@ -400,6 +430,7 @@ export function ProductImageCarousel({
   motions,
   clipMs,
   forcePlay = false,
+  feedWarm,
 }: Props) {
   const videoMuted = hasSoundtrack || muted;
   const cleaned = images.filter((u) => typeof u === "string" && u.trim());
@@ -413,6 +444,8 @@ export function ProductImageCarousel({
   const [index, setIndex] = useState(0);
   const [inView, setInView] = useState(eager);
   const [nearView, setNearView] = useState(eager);
+  /** Sticky : une fois proche, reste chaud jusqu’à sortie lointaine (évite remount). */
+  const [stickyWarm, setStickyWarm] = useState(eager || feedWarm === true);
   const [feedActiveIds, setFeedActiveIds] = useState<ReadonlySet<string>>(
     () => new Set(eager ? [feedId] : []),
   );
@@ -447,19 +480,19 @@ export function ProductImageCarousel({
   }, [inView]);
 
   useEffect(() => {
-    if (!nearView || !coverSrc) return;
-    if (isVideoUrl(coverSrc)) {
-      const video = document.createElement("video");
-      video.preload = "auto";
-      video.muted = true;
-      video.src = coverSrc;
-      return () => {
-        video.pause();
-      };
+    if (typeof feedWarm === "boolean") {
+      setStickyWarm(feedWarm || eager);
+      if (feedWarm) setNearView(true);
     }
-    const img = new Image();
-    img.src = coverSrc;
-  }, [nearView, coverSrc]);
+  }, [feedWarm, eager]);
+
+  useEffect(() => {
+    if (!nearView && !stickyWarm) return;
+    if (!coverSrc) return;
+    void import("@/lib/feed-media-pool").then(({ warmFeedMedia }) => {
+      warmFeedMedia(coverSrc);
+    });
+  }, [nearView, stickyWarm, coverSrc]);
 
   useEffect(() => {
     if (eager || !hasVideo) return;
@@ -479,14 +512,34 @@ export function ProductImageCarousel({
     const ios = isIosDevice();
     const ioRoot = ios ? null : root;
 
-    const loadIo = eager
+    // Entrée tôt (précharge) + sortie tardive (sticky) — style TikTok
+    const enterIo = eager
+      ? null
+      : new IntersectionObserver(
+          ([entry]) => {
+            if (!entry?.isIntersecting) return;
+            setNearView(true);
+            setStickyWarm(true);
+          },
+          { root: ioRoot, rootMargin: "180% 0px", threshold: 0.01 },
+        );
+    const leaveIo = eager
       ? null
       : new IntersectionObserver(
           ([entry]) => {
             if (!entry) return;
-            setNearView(entry.isIntersecting);
+            if (entry.isIntersecting) return;
+            // Hors fenêtre large → on peut démonter
+            if (feedWarm === false) {
+              setNearView(false);
+              setStickyWarm(false);
+              return;
+            }
+            if (feedWarm === true) return;
+            setNearView(false);
+            setStickyWarm(false);
           },
-          { root: ioRoot, rootMargin: "220% 0px", threshold: 0.01 },
+          { root: ioRoot, rootMargin: "320% 0px", threshold: 0 },
         );
 
     const applyVisibility = (ratio: number, left: number, top: number) => {
@@ -522,7 +575,8 @@ export function ProductImageCarousel({
       },
     );
 
-    loadIo?.observe(target);
+    enterIo?.observe(target);
+    leaveIo?.observe(target);
     playIo.observe(target);
 
     const measure = () => {
@@ -564,7 +618,8 @@ export function ProductImageCarousel({
     return () => {
       window.cancelAnimationFrame(bootId);
       if (raf) window.cancelAnimationFrame(raf);
-      loadIo?.disconnect();
+      enterIo?.disconnect();
+      leaveIo?.disconnect();
       playIo.disconnect();
       root?.removeEventListener("scroll", onScroll, scrollOpts);
       document.removeEventListener("scroll", onScroll, scrollOpts);
@@ -574,7 +629,7 @@ export function ProductImageCarousel({
       if (hasVideo && !eager) clearFeedVideoScore(feedId);
       if (audioKey) clearFeedAudioScore(audioKey);
     };
-  }, [audioKey, eager, feedId, hasVideo, pageKey]);
+  }, [audioKey, eager, feedId, feedWarm, hasVideo, pageKey]);
 
   const slotMs = clipMs
     ? slideshowSlotMs(list.length, clipMs)
@@ -716,6 +771,10 @@ export function ProductImageCarousel({
       ? feedActiveIds.has(feedId)
       : inView;
   const cardMayPlay = pageLive && !userPaused && (forcePlay || slotActive);
+  const coldShell = feedWarm === false;
+  const shellPoster = isVideoUrl(coverSrc ?? "")
+    ? videoPosterUrl(coverSrc!)
+    : coverSrc;
 
   return (
     <div
@@ -726,15 +785,26 @@ export function ProductImageCarousel({
         "relative overflow-hidden bg-black select-none [touch-action:pan-x_pan-y]",
         className,
       )}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
+      onPointerDown={coldShell ? undefined : onPointerDown}
+      onPointerMove={coldShell ? undefined : onPointerMove}
+      onPointerUp={coldShell ? undefined : onPointerUp}
+      onPointerCancel={coldShell ? undefined : onPointerCancel}
       role="group"
       aria-roledescription="carousel"
       aria-label="Images produit"
     >
-      {list.map((src, i) => {
+      {coldShell && shellPoster ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={shellPoster}
+          alt=""
+          draggable={false}
+          className="absolute inset-0 size-full object-cover"
+        />
+      ) : null}
+      {coldShell
+        ? null
+        : list.map((src, i) => {
         const active = i === index;
         const isVid = isVideoUrl(src);
         const neighbor =
@@ -742,19 +812,21 @@ export function ProductImageCarousel({
           (i === (index + 1) % list.length ||
             i === (index - 1 + list.length) % list.length);
 
+        const inWarmBand = stickyWarm || nearView || feedWarm === true;
         const mount = (() => {
           if (eager) return active || neighbor;
-          if (!nearView) return false;
+          // coldShell (feedWarm === false) déjà exclu — branche map uniquement
+          if (!inWarmBand) return false;
+          // TikTok : actif + voisins carousel restent en mémoire
           return active || neighbor;
         })();
 
         const playing = active && cardMayPlay;
-        // Garder la source tant que la card est proche — sinon play()+son
-        // est refusé en remontant le fil.
+        // Garder src tant que warm — pas de remount = scroll fluide
         const shouldLoad = isVid
           ? Boolean(
               mount ||
-                (nearView && active) ||
+                (inWarmBand && active) ||
                 (forcePlay && active) ||
                 userPaused,
             )
@@ -789,10 +861,8 @@ export function ProductImageCarousel({
           </div>
         );
       })}
-      {likeBurst && (
-        <HeartBurst />
-      )}
-      {showDots && list.length > 1 && (
+      {!coldShell && likeBurst ? <HeartBurst /> : null}
+      {!coldShell && showDots && list.length > 1 ? (
         <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
           {list.map((_, i) => (
             <button
@@ -812,7 +882,7 @@ export function ProductImageCarousel({
             />
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
