@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Bell,
   Home,
+  Minus,
   Search,
   Plus,
   User,
@@ -70,6 +71,7 @@ export function AppShell({
   const inbox = useInboxUnread(userId, pathname);
   const [cartTick, setCartTick] = useState(0);
   const [hasShop, setHasShop] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   useVisualViewportLock();
   useEffect(() => {
     armFeedSoundUnlock();
@@ -105,11 +107,54 @@ export function AppShell({
       });
   }, [userId, pathname, cartTick]);
 
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (navOpen) root.dataset.tabbarOpen = "1";
+    else delete root.dataset.tabbarOpen;
+    return () => {
+      delete root.dataset.tabbarOpen;
+    };
+  }, [navOpen]);
+
+  useEffect(() => {
+    if (!navOpen) return;
+    let armed = false;
+    const arm = window.setTimeout(() => {
+      armed = true;
+    }, 120);
+    const close = (event?: Event) => {
+      if (!armed) return;
+      const nav = document.querySelector(".app-tabbar");
+      const target = event?.target;
+      if (target instanceof Node && nav?.contains(target)) return;
+      setNavOpen(false);
+    };
+    const roots = document.querySelectorAll(
+      ".feed-snap, .app-main, .feed-wanted-scroll",
+    );
+    roots.forEach((el) => {
+      el.addEventListener("scroll", close, { passive: true });
+    });
+    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("touchmove", close, { passive: true });
+    return () => {
+      window.clearTimeout(arm);
+      roots.forEach((el) => {
+        el.removeEventListener("scroll", close);
+      });
+      window.removeEventListener("wheel", close);
+      window.removeEventListener("touchmove", close);
+    };
+  }, [navOpen]);
+
   const hideChrome =
     pathname.startsWith("/auth") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/studio");
-  // Racines onglets : pas de bouton retour (le bas nav suffit)
   const hideBackOn = new Set([
     "/",
     "/discover",
@@ -138,6 +183,7 @@ export function AppShell({
     }
     const unlockSound = href === "/" || href === "/discover";
     if (unlockSound) enableFeedSound();
+    setNavOpen(false);
     if (pathname === href) {
       event.preventDefault();
       if (href === "/") {
@@ -233,7 +279,9 @@ export function AppShell({
               pathname.startsWith("/messages/") && "app-main-chat",
               pathname.startsWith("/discover") && "app-main-discover",
               !hideChrome &&
+                !feedLayout &&
                 "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
+              feedLayout && "pb-0",
             )}
           >
             {showBack && (
@@ -252,88 +300,122 @@ export function AppShell({
           </main>
 
           {!hideChrome && (
-            <nav className="app-tabbar absolute bottom-0 left-0 right-0 z-40 shrink-0 border-t border-border bg-background px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
-              <div className="grid grid-cols-5 gap-0.5">
-                {NAV.map((item) => {
-                  const active =
-                    item.href === "/"
-                      ? pathname === "/"
-                      : pathname.startsWith(item.href);
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      prefetch={false}
-                      data-feed-sound={
-                        item.href === "/" || item.href === "/discover"
-                          ? "1"
-                          : undefined
-                      }
-                      onClick={(event) => onChromeNav(event, item.href)}
-                      className={cn(
-                        "flex flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition",
-                        active ? "text-primary" : "text-muted-foreground",
-                      )}
-                    >
-                      {item.href === "/publish" ? (
-                        <span
-                          className={cn(
-                            "relative grid h-7 w-10 place-items-center rounded-lg bg-gradient-to-br from-[#ff5722] via-[#ff7a45] to-[#00d68f]",
-                            !active && "motion-safe:animate-publish-attract",
-                          )}
-                        >
-                          {!active && (
-                            <span
-                              aria-hidden
-                              className="pointer-events-none absolute inset-0 rounded-lg shadow-[0_0_0_2px_rgba(255,87,34,0.55)] motion-safe:animate-publish-ring"
-                            />
-                          )}
-                          <Icon
+            <nav
+              className={cn(
+                "app-tabbar absolute bottom-0 left-0 right-0 z-40 shrink-0 px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]",
+                navOpen
+                  ? "pointer-events-auto border-t border-border bg-background/80 backdrop-blur-xl"
+                  : "pointer-events-none border-t border-transparent bg-transparent",
+              )}
+            >
+              {navOpen ? (
+                <div className="grid grid-cols-5 gap-0.5">
+                  {NAV.map((item) => {
+                    const active =
+                      item.href === "/"
+                        ? pathname === "/"
+                        : pathname.startsWith(item.href);
+                    const Icon = item.icon;
+                    const isPublish = item.href === "/publish";
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        prefetch={false}
+                        data-feed-sound={
+                          item.href === "/" || item.href === "/discover"
+                            ? "1"
+                            : undefined
+                        }
+                        onClick={(event) => onChromeNav(event, item.href)}
+                        className={cn(
+                          "flex flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition",
+                          active
+                            ? "text-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {isPublish ? (
+                          <span
                             className={cn(
-                              "relative size-4 text-white",
-                              !active && "motion-safe:animate-publish-plus",
+                              "relative -mt-4 grid size-16 place-items-center rounded-full bg-gradient-to-br from-[#ff5722] via-[#ff7a45] to-[#00d68f] text-white shadow-[0_8px_22px_rgba(255,87,34,0.45)]",
+                              !active && "motion-safe:animate-publish-attract",
                             )}
-                          />
-                        </span>
-                      ) : (
-                        <span className="relative">
-                          <Icon className="size-5" />
-                          {item.href === "/cart" && cartCount > 0 && (
-                            <span className="absolute -top-1 -right-2 grid min-w-3.5 place-items-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-white">
-                              {cartCount > 9 ? "9+" : cartCount}
-                            </span>
-                          )}
-                          {item.href === "/messages" &&
-                            (urgentCount > 0 || unreadMessages > 0) && (
+                          >
+                            {!active && (
                               <span
-                                className={cn(
-                                  "absolute -top-1.5 -right-2.5 grid min-w-4 place-items-center rounded-full px-0.5 text-[8px] font-bold shadow",
-                                  urgentCount > 0
-                                    ? "size-4 bg-amber-500 text-black"
-                                    : "bg-primary text-white",
-                                )}
-                              >
-                                {urgentCount > 0 ? (
-                                  <AlertTriangle className="size-2.5" />
-                                ) : unreadMessages > 9 ? (
-                                  "9+"
-                                ) : (
-                                  unreadMessages
-                                )}
+                                aria-hidden
+                                className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_0_3px_rgba(255,87,34,0.5)] motion-safe:animate-publish-ring"
+                              />
+                            )}
+                            <Plus
+                              className={cn(
+                                "relative size-7 text-white",
+                                !active && "motion-safe:animate-publish-plus",
+                              )}
+                              strokeWidth={2.6}
+                            />
+                          </span>
+                        ) : (
+                          <span className="relative">
+                            <Icon className="size-5" />
+                            {item.href === "/cart" && cartCount > 0 && (
+                              <span className="absolute -top-1 -right-2 grid min-w-3.5 place-items-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-white">
+                                {cartCount > 9 ? "9+" : cartCount}
                               </span>
                             )}
-                        </span>
-                      )}
-                      <span>
-                        {item.href === "/publish" && !hasShop
-                          ? t("nav.sellVideo")
-                          : t(`nav.${item.key}`)}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
+                            {item.href === "/messages" &&
+                              (urgentCount > 0 || unreadMessages > 0) && (
+                                <span
+                                  className={cn(
+                                    "absolute -top-1.5 -right-2.5 grid min-w-4 place-items-center rounded-full px-0.5 text-[8px] font-bold shadow",
+                                    urgentCount > 0
+                                      ? "size-4 bg-amber-500 text-black"
+                                      : "bg-primary text-white",
+                                  )}
+                                >
+                                  {urgentCount > 0 ? (
+                                    <AlertTriangle className="size-2.5" />
+                                  ) : unreadMessages > 9 ? (
+                                    "9+"
+                                  ) : (
+                                    unreadMessages
+                                  )}
+                                </span>
+                              )}
+                          </span>
+                        )}
+                        {isPublish ? (
+                          <span className="sr-only">
+                            {hasShop ? t("nav.publish") : t("nav.sellVideo")}
+                          </span>
+                        ) : (
+                          <span>{t(`nav.${item.key}`)}</span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex justify-center pb-1">
+                  <button
+                    type="button"
+                    aria-expanded={false}
+                    aria-label="Ouvrir le menu"
+                    onClick={() => setNavOpen(true)}
+                    className="pointer-events-auto relative grid size-16 place-items-center rounded-full bg-gradient-to-br from-[#ff5722] via-[#ff7a45] to-[#00d68f] text-white shadow-[0_8px_22px_rgba(255,87,34,0.45)] transition active:scale-95 motion-safe:animate-publish-attract"
+                  >
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_0_3px_rgba(255,87,34,0.5)] motion-safe:animate-publish-ring"
+                    />
+                    <Minus
+                      className="relative size-7 motion-safe:animate-publish-plus"
+                      strokeWidth={2.6}
+                    />
+                  </button>
+                </div>
+              )}
             </nav>
           )}
           </PullToRefresh>

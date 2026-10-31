@@ -15,7 +15,7 @@ export async function GET() {
   void flushNotifyOutbox();
 
   const wallet = await getOrCreateWallet(session.user.id);
-  const [transactions, contacts, user] = await Promise.all([
+  const [transactions, contacts, user, dailyCaps] = await Promise.all([
     prisma.walletTransaction.findMany({
       where: { walletId: wallet.id },
       orderBy: { createdAt: "desc" },
@@ -29,6 +29,7 @@ export async function GET() {
       where: { id: session.user.id },
       select: { phone: true },
     }),
+    loadDailyCaps(session.user.id),
   ]);
 
   const pots = Object.fromEntries(
@@ -49,5 +50,6 @@ export async function GET() {
     transactions,
     contacts,
     accountPhone: user?.phone ?? null,
+    dailyCaps,
   });
 }

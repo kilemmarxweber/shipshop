@@ -356,6 +356,7 @@ export async function GET(req: Request) {
               ownerUserId: true,
               lat: true,
               lng: true,
+              _count: { select: { followers: true } },
             },
           },
           _count: {
@@ -478,6 +479,7 @@ export async function GET(req: Request) {
 
     const mapped = products.map((p) => {
       const { _count, ...rest } = p;
+      const { _count: shopCount, ...shopRest } = p.shop;
       return {
         ...rest,
         likesCount: _count.likes,
@@ -486,7 +488,8 @@ export async function GET(req: Request) {
         viewsCount: viewsMap.get(p.id) ?? 0,
         likedByMe: likedIds.has(p.id),
         shop: {
-          ...p.shop,
+          ...shopRest,
+          followersCount: shopCount.followers,
           followedByMe: followedIds.has(p.shop.id),
         },
       };

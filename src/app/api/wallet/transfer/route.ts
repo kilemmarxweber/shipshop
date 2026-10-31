@@ -30,6 +30,9 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
+    if (isDailyCapError(error)) {
+      return NextResponse.json(dailyCapJson(error), { status: 429 });
+    }
     const message = error instanceof Error ? error.message : "Erreur wallet";
     return NextResponse.json({ error: message }, { status: 400 });
   }

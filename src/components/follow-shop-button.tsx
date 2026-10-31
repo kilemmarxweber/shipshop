@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { UserPlus, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { useI18n } from "@/components/i18n-provider";
 import { fetchJson } from "@/lib/fetch-json";
+import { compactCount } from "@/lib/growth/challenge-look";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -12,8 +14,10 @@ type Props = {
   followedByMe: boolean;
   isOwnShop?: boolean;
   compact?: boolean;
+  icon?: boolean;
+  count?: number;
   className?: string;
-  onChange?: (followed: boolean) => void;
+  onChange?: (followed: boolean, followersCount?: number) => void;
 };
 
 export function FollowShopButton({
@@ -21,11 +25,13 @@ export function FollowShopButton({
   followedByMe,
   isOwnShop = false,
   compact = false,
+  icon = false,
+  count = 0,
   className,
   onChange,
 }: Props) {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { data: session } = authClient.useSession();
 
   if (isOwnShop) return null;
@@ -41,14 +47,46 @@ export function FollowShopButton({
     onChange?.(!followedByMe);
     const { res, data } = await fetchJson<{
       followedByMe?: boolean;
+      followersCount?: number;
       error?: string;
     }>(`/api/shops/${slug}/follow`, { method });
     if (!res.ok) {
-      onChange?.(followedByMe);
+      onChange?.(followedByMe, count);
       toast.error(data?.error ?? t("follow.failed"));
       return;
     }
-    onChange?.(Boolean(data?.followedByMe));
+    onChange?.(Boolean(data?.followedByMe), data?.followersCount);
+  }
+
+  if (icon) {
+    const Icon = followedByMe ? UserCheck : UserPlus;
+    return (
+      <button
+        type="button"
+        onClick={toggle}
+        className={cn("grid cursor-pointer place-items-center", className)}
+        aria-label={
+          followedByMe ? t("follow.following") : t("follow.follow")
+        }
+      >
+        <span
+          className={cn(
+            "grid size-10 place-items-center rounded-full border backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12",
+            followedByMe
+              ? "border-white/80 bg-white text-trust"
+              : "border-white/45 bg-white/20 text-white",
+          )}
+        >
+          <Icon
+            className="size-5"
+            strokeWidth={2.2}
+          />
+        </span>
+        <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+          {compactCount(Math.max(0, count), locale)}
+        </span>
+      </button>
+    );
   }
 
   if (compact) {

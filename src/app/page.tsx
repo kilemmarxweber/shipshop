@@ -39,6 +39,7 @@ import {
 import { resetAllPageMedia } from "@/lib/page-media-session";
 import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { useFeedOrientation } from "@/hooks/use-feed-orientation";
+import { useFeedPageSnap } from "@/hooks/use-feed-page-snap";
 import {
   FEED_WARM_RADIUS,
   isFeedIndexWarm,
@@ -99,6 +100,7 @@ type Product = {
     logoUrl?: string | null;
     ownerUserId?: string | null;
     followedByMe?: boolean;
+    followersCount?: number;
     lat?: number | null;
     lng?: number | null;
   };
@@ -385,6 +387,10 @@ export default function FeedPage() {
     feedRows.length,
     `${tab}:${audioEpoch}`,
   );
+  useFeedPageSnap(
+    snapRef,
+    tab === "foryou" || tab === "following",
+  );
 
   // Son TikTok : index snap → une card, ferme la précédente / ouvre la suivante
   useEffect(() => {
@@ -432,16 +438,35 @@ export default function FeedPage() {
     return () => root.removeEventListener("scroll", onScroll);
   }, [productFeed.noteUserScroll, wantedFeed.noteUserScroll]);
 
-  function setShopFollowed(shopId: string, followed: boolean) {
+  function setShopFollowed(
+    shopId: string,
+    followed: boolean,
+    followersCount?: number,
+  ) {
     setProducts((prev) => {
       if (!followed && tab === "following") {
         return prev.filter((p) => p.shop.id !== shopId);
       }
-      return prev.map((p) =>
-        p.shop.id === shopId
-          ? { ...p, shop: { ...p.shop, followedByMe: followed } }
-          : p,
-      );
+      return prev.map((p) => {
+        if (p.shop.id !== shopId) return p;
+        const was = Boolean(p.shop.followedByMe);
+        const nextCount =
+          typeof followersCount === "number"
+            ? followersCount
+            : Math.max(
+                0,
+                (p.shop.followersCount ?? 0) +
+                  (followed === was ? 0 : followed ? 1 : -1),
+              );
+        return {
+          ...p,
+          shop: {
+            ...p.shop,
+            followedByMe: followed,
+            followersCount: nextCount,
+          },
+        };
+      });
     });
   }
 
@@ -509,59 +534,64 @@ export default function FeedPage() {
     }
   }
 
-  const tabs = (
+  function tabClass(id: FeedTab, overlay: boolean) {
+    const on = tab === id;
+    return cn(
+      "cursor-pointer pb-1",
+      overlay && "drop-shadow-[0_1px_8px_rgba(0,0,0,0.75)]",
+      on
+        ? overlay
+          ? "border-b-2 border-primary text-white"
+          : "border-b-2 border-primary text-foreground"
+        : overlay
+          ? "text-white/80"
+          : "text-muted-foreground",
+    );
+  }
+
+  const tabs = (overlay = false) => (
     <>
-    <ScrollAdFeedSurface on={tab !== "wanted"} />
-    <div
-      data-feed-tabs
-      className="flex shrink-0 justify-center gap-6 border-b border-border px-4 py-2 text-sm font-semibold"
-    >
-      <button
-        type="button"
-        data-feed-sound="1"
-        onClick={() => selectTab("following")}
+      <ScrollAdFeedSurface on={tab !== "wanted"} />
+      <div
+        data-feed-tabs
         className={cn(
-          "cursor-pointer pb-1",
-          tab === "following"
-            ? "border-b-2 border-primary text-foreground"
-            : "text-muted-foreground",
+          "flex shrink-0 justify-center gap-6 px-4 py-2.5 text-sm font-semibold",
+          overlay
+            ? "border-0 bg-gradient-to-b from-black/55 via-black/20 to-transparent"
+            : "border-0 bg-transparent",
         )}
       >
-        {t("feed.tabFollowing")}
-      </button>
-      <button
-        type="button"
-        data-feed-sound="1"
-        onClick={() => selectTab("foryou")}
-        className={cn(
-          "cursor-pointer pb-1",
-          tab === "foryou"
-            ? "border-b-2 border-primary text-foreground"
-            : "text-muted-foreground",
-        )}
-      >
-        {t("feed.tabForYou")}
-      </button>
-      <button
-        type="button"
-        onClick={() => selectTab("wanted")}
-        className={cn(
-          "cursor-pointer pb-1",
-          tab === "wanted"
-            ? "border-b-2 border-primary text-foreground"
-            : "text-muted-foreground",
-        )}
-      >
-        {t("feed.tabWanted")}
-      </button>
-    </div>
+        <button
+          type="button"
+          data-feed-sound="1"
+          onClick={() => selectTab("following")}
+          className={tabClass("following", overlay)}
+        >
+          {t("feed.tabFollowing")}
+        </button>
+        <button
+          type="button"
+          data-feed-sound="1"
+          onClick={() => selectTab("foryou")}
+          className={tabClass("foryou", overlay)}
+        >
+          {t("feed.tabForYou")}
+        </button>
+        <button
+          type="button"
+          onClick={() => selectTab("wanted")}
+          className={tabClass("wanted", overlay)}
+        >
+          {t("feed.tabWanted")}
+        </button>
+      </div>
     </>
   );
 
   if (holdFirstPaint) {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        {tabs}
+        {tabs()}
         <PageLoader />
       </div>
     );
@@ -570,7 +600,7 @@ export default function FeedPage() {
   if (tab === "following" && !session) {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        {tabs}
+        {tabs()}
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
           <p className="font-heading text-lg font-bold">
             {t("feed.loginToFollowTitle")}
@@ -592,7 +622,7 @@ export default function FeedPage() {
   if (tab === "wanted") {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        {tabs}
+        {tabs()}
         <div
           className="feed-wanted-scroll flex-1 overflow-y-auto px-4 py-3"
           onScroll={wantedFeed.noteUserScroll}
@@ -623,7 +653,7 @@ export default function FeedPage() {
   if (products.length === 0) {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        {tabs}
+        {tabs()}
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
           {tab === "following" ? (
             <>
@@ -663,9 +693,15 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="feed-reel-root flex h-full min-h-0 flex-col overflow-hidden">
-      {tabs}
-      {tab === "foryou" ? <GrowthFeedFormats variant="feed" /> : null}
+    <div className="feed-reel-root relative flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30">
+        <div className="pointer-events-auto">{tabs(true)}</div>
+        {tab === "foryou" ? (
+          <div className="pointer-events-auto">
+            <GrowthFeedFormats variant="feed" />
+          </div>
+        ) : null}
+      </div>
       {tab === "foryou" || tab === "following" ? (
         <LiveScrollTeaser />
       ) : null}
@@ -744,7 +780,7 @@ export default function FeedPage() {
               />
             ) : null}
 
-            <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
+            <div className="feed-card-chip absolute left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:left-4">
               {productHasVideo(p.images) ? (
                 <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
                   {t("buy.realVideo")}
@@ -756,7 +792,20 @@ export default function FeedPage() {
               )}
             </div>
 
-            <div className="absolute right-2.5 bottom-[7.5rem] z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:bottom-36 sm:gap-4 md:bottom-28">
+            <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
+              <FollowShopButton
+                slug={p.shop.slug}
+                followedByMe={Boolean(p.shop.followedByMe)}
+                isOwnShop={
+                  Boolean(session?.user?.id) &&
+                  p.shop.ownerUserId === session?.user?.id
+                }
+                icon
+                count={p.shop.followersCount ?? 0}
+                onChange={(followed, followersCount) =>
+                  setShopFollowed(p.shop.id, followed, followersCount)
+                }
+              />
               <button
                 type="button"
                 onClick={() => toggleLike(p)}
@@ -817,7 +866,7 @@ export default function FeedPage() {
               </ShareMenu>
             </div>
 
-            <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
+            <div className="feed-buy-pad relative z-10 mt-auto px-3 pt-3 pr-14 text-white sm:px-4 sm:pr-16">
               <div className="mb-2 flex items-center gap-2">
                 <div className="min-w-0 flex-1">
                   <ShopBrand
@@ -834,16 +883,6 @@ export default function FeedPage() {
                     {t("discover.views")}
                   </p>
                 </div>
-                <FollowShopButton
-                  slug={p.shop.slug}
-                  followedByMe={Boolean(p.shop.followedByMe)}
-                  isOwnShop={
-                    Boolean(session?.user?.id) &&
-                    p.shop.ownerUserId === session?.user?.id
-                  }
-                  compact
-                  onChange={(followed) => setShopFollowed(p.shop.id, followed)}
-                />
               </div>
               {(p.colors.length > 0 || p.sizes.length > 0) && (
                 <div className="mb-2 flex flex-wrap items-center gap-2">

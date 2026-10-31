@@ -724,7 +724,7 @@ function ShopInner() {
                 </span>
               </div>
 
-              <div className="absolute right-2.5 bottom-[7.5rem] z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:bottom-36 sm:gap-4 md:bottom-28">
+              <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
                 {isOwnShop && (
                   <>
                     <Link
@@ -844,7 +844,7 @@ function ShopInner() {
                 />
               </div>
 
-              <div className="relative z-10 mt-auto px-3 pb-5 pt-3 pr-14 text-white sm:px-4 sm:pb-6 sm:pr-16">
+              <div className="feed-buy-pad relative z-10 mt-auto px-3 pt-3 pr-14 text-white sm:px-4 sm:pr-16">
                 {(p.colors.length > 0 || p.sizes.length > 0) && (
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     {p.colors.slice(0, 5).map((c) => (
