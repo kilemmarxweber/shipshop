@@ -49,5 +49,7 @@ export async function GET() {
     transactions,
     contacts,
     accountPhone: user?.phone ?? null,
+    /** Unlimited: deposits, purchases and withdrawals follow wallet balance only. */
+    dailyCaps: null,
   });
 }

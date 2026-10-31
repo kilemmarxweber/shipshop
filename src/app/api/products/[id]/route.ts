@@ -207,57 +207,57 @@ export async function PATCH(
         prisma.$transaction((tx) => endProductPromo(tx, existing.id, false)),
       );
     }
+    const priceChanged =
+      body.priceCents !== undefined &&
+      body.priceCents !== existing.priceCents;
     const product = await withDbRetry(() =>
-      prisma.product.update({
-        where: { id },
-        data: {
-          ...(body.title !== undefined ? { title: body.title } : {}),
-          ...(body.description !== undefined
-            ? { description: body.description }
-            : {}),
-          ...(body.priceCents !== undefined
-            ? { priceCents: body.priceCents }
-            : {}),
-          ...(body.currency !== undefined ? { currency: body.currency } : {}),
-          ...(body.quantity !== undefined ? { quantity: body.quantity } : {}),
-          ...(body.category !== undefined ? { category: body.category } : {}),
-          ...(nextImages !== undefined ? { images: nextImages } : {}),
-          ...(body.colors !== undefined ? { colors: body.colors } : {}),
-          ...(body.sizes !== undefined ? { sizes: body.sizes } : {}),
-          ...(body.location !== undefined ? { location: body.location } : {}),
-          ...(body.soundtrackId !== undefined
-            ? { soundtrackId: body.soundtrackId }
-            : {}),
-          ...(body.soundtrackStartMs !== undefined
-            ? { soundtrackStartMs: body.soundtrackStartMs }
-            : {}),
-          ...(nextMotions !== undefined ? { imageMotions: nextMotions } : {}),
-          ...(status !== undefined ? { status } : {}),
-          ...(body.creatorCommissionBps !== undefined
-            ? { creatorCommissionBps: body.creatorCommissionBps }
-            : {}),
-        },
-        include: {
-          shop: { select: { id: true, name: true, slug: true } },
-          _count: { select: { orders: true } },
-        },
+      prisma.$transaction(async (tx) => {
+        const updated = await tx.product.update({
+          where: { id },
+          data: {
+            ...(body.title !== undefined ? { title: body.title } : {}),
+            ...(body.description !== undefined
+              ? { description: body.description }
+              : {}),
+            ...(body.priceCents !== undefined
+              ? { priceCents: body.priceCents }
+              : {}),
+            ...(body.currency !== undefined ? { currency: body.currency } : {}),
+            ...(body.quantity !== undefined ? { quantity: body.quantity } : {}),
+            ...(body.category !== undefined ? { category: body.category } : {}),
+            ...(nextImages !== undefined ? { images: nextImages } : {}),
+            ...(body.colors !== undefined ? { colors: body.colors } : {}),
+            ...(body.sizes !== undefined ? { sizes: body.sizes } : {}),
+            ...(body.location !== undefined ? { location: body.location } : {}),
+            ...(body.soundtrackId !== undefined
+              ? { soundtrackId: body.soundtrackId }
+              : {}),
+            ...(body.soundtrackStartMs !== undefined
+              ? { soundtrackStartMs: body.soundtrackStartMs }
+              : {}),
+            ...(nextMotions !== undefined ? { imageMotions: nextMotions } : {}),
+            ...(status !== undefined ? { status } : {}),
+            ...(body.creatorCommissionBps !== undefined
+              ? { creatorCommissionBps: body.creatorCommissionBps }
+              : {}),
+          },
+          include: {
+            shop: { select: { id: true, name: true, slug: true } },
+            _count: { select: { orders: true } },
+          },
+        });
+        if (priceChanged) {
+          await tx.productPriceHistory.create({
+            data: {
+              productId: updated.id,
+              shopId: updated.shopId,
+              priceCents: updated.priceCents,
+            },
+          });
+        }
+        return updated;
       }),
     );
-
-    if (
-      body.priceCents !== undefined &&
-      body.priceCents !== existing.priceCents
-    ) {
-      await withDbRetry(() =>
-        prisma.productPriceHistory.create({
-          data: {
-            productId: product.id,
-            shopId: product.shopId,
-            priceCents: product.priceCents,
-          },
-        }),
-      ).catch(() => undefined);
-    }
     const { _count, ...rest } = product;
     revalidatePath(`/product/${id}`);
     revalidatePath("/");

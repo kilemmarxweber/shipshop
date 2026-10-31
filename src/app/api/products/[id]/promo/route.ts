@@ -38,16 +38,35 @@ export async function GET(
   if (!product) {
     return NextResponse.json({ error: "Produit introuvable" }, { status: 404 });
   }
+  const row = product.activePromoId
+    ? await withDbRetry(() =>
+        prisma.productPromo.findUnique({
+          where: { id: product.activePromoId! },
+          select: {
+            percent: true,
+            tier: true,
+            compareAtSnapshot: true,
+            status: true,
+          },
+        }),
+      )
+    : null;
+  const complete =
+    row?.status === "ACTIVE" &&
+    Number.isFinite(row.percent) &&
+    Number.isFinite(row.compareAtSnapshot);
   return NextResponse.json({
-    promo: product.activePromoId
+    promo: complete
       ? {
-          percent: product.promoPercent,
-          tier: product.promoTier,
-          compareAtCents: product.compareAtCents,
+          percent: row.percent,
+          tier: row.tier,
+          compareAtCents: row.compareAtSnapshot,
           priceCents: product.priceCents,
         }
       : null,
-    previewTier: promoTierForPercent(product.promoPercent ?? 0),
+    previewTier: promoTierForPercent(
+      complete ? row.percent : (product.promoPercent ?? 0),
+    ),
   });
 }
 

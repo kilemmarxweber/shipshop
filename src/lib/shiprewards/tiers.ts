@@ -45,8 +45,8 @@ const TIER_TABLE: {
   boostHours: number;
 }[] = [
   { min: 5, max: 9, tier: "LIGHT", points: 50, boostHours: 0 },
-  { min: 10, max: 14, tier: "STANDARD", points: 150, boostHours: 48 },
-  { min: 15, max: 19, tier: "FORTE", points: 300, boostHours: 72 },
+  { min: 10, max: 14, tier: "STANDARD", points: 120, boostHours: 48 },
+  { min: 15, max: 19, tier: "FORTE", points: 250, boostHours: 72 },
   { min: 20, max: 100, tier: "FLASH", points: 500, boostHours: 72 },
 ];
 

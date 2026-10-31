@@ -597,42 +597,44 @@ export async function POST(req: Request) {
       soundtrackStartMs = 0;
     }
 
-    const product = await prisma.product.create({
-      data: {
-        shopId: body.shopId,
-        title: body.title,
-        description: body.description,
-        priceCents: body.priceCents,
-        currency: body.currency ?? parseCurrency(shop.currency),
-        quantity: body.quantity,
-        category: body.category,
-        images: images.length
-          ? images
-          : [
-              `https://picsum.photos/seed/${encodeURIComponent(body.title)}/800/1000`,
-            ],
-        colors: body.colors,
-        sizes: body.sizes,
-        location: body.location ?? "Kinshasa",
-        soundtrackId,
-        soundtrackStartMs,
-        imageMotions: normalizeMotions(
-          images.length,
-          body.imageMotions,
-          cfg.maxImages,
-        ),
-        status: body.status,
-      },
-      include: { shop: true },
+    const product = await prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          shopId: body.shopId,
+          title: body.title,
+          description: body.description,
+          priceCents: body.priceCents,
+          currency: body.currency ?? parseCurrency(shop.currency),
+          quantity: body.quantity,
+          category: body.category,
+          images: images.length
+            ? images
+            : [
+                `https://picsum.photos/seed/${encodeURIComponent(body.title)}/800/1000`,
+              ],
+          colors: body.colors,
+          sizes: body.sizes,
+          location: body.location ?? "Kinshasa",
+          soundtrackId,
+          soundtrackStartMs,
+          imageMotions: normalizeMotions(
+            images.length,
+            body.imageMotions,
+            cfg.maxImages,
+          ),
+          status: body.status,
+        },
+        include: { shop: true },
+      });
+      await tx.productPriceHistory.create({
+        data: {
+          productId: created.id,
+          shopId: created.shopId,
+          priceCents: created.priceCents,
+        },
+      });
+      return created;
     });
-
-    await prisma.productPriceHistory.create({
-      data: {
-        productId: product.id,
-        shopId: product.shopId,
-        priceCents: product.priceCents,
-      },
-    }).catch(() => undefined);
 
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
