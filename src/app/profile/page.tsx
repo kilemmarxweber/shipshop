@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
   Camera,
+  Trophy,
   LogOut,
   Pencil,
   Phone,
@@ -102,6 +103,7 @@ export default function ProfilePage() {
   const [period, setPeriod] = useState<Period>("30d");
   const [tab, setTab] = useState<Tab>("active");
   const [kyc, setKyc] = useState<KycSummary | null>(null);
+  const [kycReady, setKycReady] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [badges, setBadges] = useState<BadgeRow[]>([]);
 
@@ -144,6 +146,7 @@ export default function ProfilePage() {
       applyProfile(profileRes.data.user);
     }
     setKyc(kycRes.data?.kyc ?? null);
+    setKycReady(true);
     setIsOwner(Boolean(kycRes.data?.isOwner));
     const growth = await fetchJson<{ badges?: BadgeRow[] }>("/api/growth/me");
     setBadges(growth.data?.badges ?? []);
@@ -479,93 +482,88 @@ export default function ProfilePage() {
       {badges.length > 0 ? (
         <div className="mt-4">
           <AccountBadges badges={badges} />
-          <Link
-            href="/community"
-            className="mt-2 inline-block text-xs font-semibold text-primary"
-          >
-            Missions & classement
-          </Link>
         </div>
-      ) : (
-        <Link
-          href="/community"
-          className="mt-4 block text-xs font-semibold text-primary"
-        >
-          Rejoindre la communauté (badges & missions)
-        </Link>
-      )}
+      ) : null}
 
       <GoLiveCard className="mt-4" variant="profile" />
 
-      <div
-        className={cn(
-          "mt-4 rounded-2xl border p-3 text-left",
-          isPro
-            ? "border-trust/30 bg-trust/10"
-            : kycStatus === "PENDING"
-              ? "border-amber-500/30 bg-amber-500/10"
-              : kycStatus === "REJECTED"
-                ? "border-destructive/30 bg-destructive/10"
-                : "border-border bg-surface",
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              "grid size-9 place-items-center rounded-full",
-              isPro
-                ? "bg-trust text-trust-foreground"
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Link
+          href="/community"
+          className="rounded-2xl border border-border bg-surface p-3 text-left no-underline"
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-white/10 text-muted-foreground">
+              <Trophy className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1 text-xs">
+              <p className="font-bold text-foreground">Missions & classement</p>
+              <p className="text-muted-foreground">
+                Badges, défis et ranking
+              </p>
+            </div>
+          </div>
+        </Link>
+        <Link
+          href="/kyc"
+          className={cn(
+            "rounded-2xl border p-3 text-left no-underline",
+            !kycReady
+              ? "border-border bg-surface"
+              : isPro
+                ? "border-trust/30 bg-trust/10"
                 : kycStatus === "PENDING"
-                  ? "bg-amber-500/20 text-amber-400"
+                  ? "border-amber-500/30 bg-amber-500/10"
                   : kycStatus === "REJECTED"
-                    ? "bg-destructive/20 text-destructive"
-                    : "bg-white/10 text-muted-foreground",
-            )}
-          >
-            <BadgeCheck className="size-5" />
+                    ? "border-destructive/30 bg-destructive/10"
+                    : "border-border bg-surface",
+          )}
+        >
+          <div className="flex items-start gap-2.5">
+            <div
+              className={cn(
+                "grid size-9 shrink-0 place-items-center rounded-full",
+                isPro
+                  ? "bg-trust text-trust-foreground"
+                  : kycStatus === "PENDING"
+                    ? "bg-amber-500/20 text-amber-400"
+                    : kycStatus === "REJECTED"
+                      ? "bg-destructive/20 text-destructive"
+                      : "bg-white/10 text-muted-foreground",
+              )}
+            >
+              <BadgeCheck className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1 text-xs">
+              {!kycReady ? (
+                <>
+                  <p className="h-4 w-28 animate-pulse rounded bg-muted" />
+                  <p className="mt-1.5 h-3 w-20 animate-pulse rounded bg-muted/70" />
+                </>
+              ) : isPro ? (
+                <>
+                  <p className="font-bold text-trust">Vendeur pro vérifié</p>
+                  <p className="text-muted-foreground">Badge PRO actif</p>
+                </>
+              ) : kycStatus === "PENDING" ? (
+                <>
+                  <p className="font-bold text-amber-400">Dossier en revue</p>
+                  <p className="text-muted-foreground">Revue en cours</p>
+                </>
+              ) : kycStatus === "REJECTED" ? (
+                <>
+                  <p className="font-bold text-destructive">Dossier refusé</p>
+                  <p className="text-muted-foreground">Corriger le dossier</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-foreground">Devenir vendeur pro</p>
+                  <p className="text-muted-foreground">Badge PRO</p>
+                </>
+              )}
+            </div>
           </div>
-          <div className="min-w-0 flex-1 text-xs">
-            {isPro ? (
-              <>
-                <p className="font-bold text-trust">Vendeur pro vérifié</p>
-                <p className="text-muted-foreground">Badge PRO actif</p>
-              </>
-            ) : kycStatus === "PENDING" ? (
-              <>
-                <p className="font-bold text-amber-400">Dossier en revue</p>
-                <p className="text-muted-foreground">
-                  L&apos;équipe Chip Shop examine vos documents
-                </p>
-              </>
-            ) : kycStatus === "REJECTED" ? (
-              <>
-                <p className="font-bold text-destructive">Dossier refusé</p>
-                <p className="text-muted-foreground">
-                  {kyc?.rejectReason || "Corrigez et renvoyez votre dossier"}
-                </p>
-                <Link
-                  href="/kyc"
-                  className="mt-1 inline-block font-semibold text-primary"
-                >
-                  Corriger et renvoyer
-                </Link>
-              </>
-            ) : (
-              <>
-                <p className="font-bold">Devenir vendeur pro</p>
-                <p className="text-muted-foreground">
-                  Vérifiez votre identité pour le badge PRO
-                </p>
-                <Link
-                  href="/kyc"
-                  className="mt-1 inline-block font-semibold text-primary"
-                >
-                  Commencer la vérification
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
+        </Link>
       </div>
 
       <div className="mt-4 grid grid-cols-4 gap-1 rounded-2xl border border-border bg-surface p-1">

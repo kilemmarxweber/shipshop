@@ -34,23 +34,28 @@ type Props = {
 export function GoLiveCard({ className, variant = "profile" }: Props) {
   const { data: session } = authClient.useSession();
   const [me, setMe] = useState<GrowthMe | null>(null);
+  const [ready, setReady] = useState(false);
   const [title, setTitle] = useState("Live shopping");
   const [busy, setBusy] = useState(false);
   const [activeLive, setActiveLive] = useState<LiveRow | null>(null);
 
   const load = useCallback(async () => {
     if (!session?.user?.id) return;
-    const [growth, lives] = await Promise.all([
-      fetchJson<GrowthMe>("/api/growth/me"),
-      fetchJson<{ lives?: LiveRow[] }>("/api/growth/lives"),
-    ]);
-    if (growth.data) setMe(growth.data);
-    const mine = (lives.data?.lives ?? []).find(
-      (row) =>
-        row.user?.id === session.user.id &&
-        (row.status === "LIVE" || row.status === "PAUSED"),
-    );
-    setActiveLive(mine ?? null);
+    try {
+      const [growth, lives] = await Promise.all([
+        fetchJson<GrowthMe>("/api/growth/me"),
+        fetchJson<{ lives?: LiveRow[] }>("/api/growth/lives"),
+      ]);
+      if (growth.data) setMe(growth.data);
+      const mine = (lives.data?.lives ?? []).find(
+        (row) =>
+          row.user?.id === session.user.id &&
+          (row.status === "LIVE" || row.status === "PAUSED"),
+      );
+      setActiveLive(mine ?? null);
+    } finally {
+      setReady(true);
+    }
   }, [session?.user?.id]);
 
   useEffect(() => {
@@ -117,11 +122,13 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
             <p className="mt-1 text-[12px] leading-snug text-white/55">
               {activeLive
                 ? "Revenez sur scène pour reprendre caméra et chat."
-                : canGoLive
-                  ? "Shopping en direct · cadeaux · produits en vitrine"
-                  : me?.isPlatformOwner
-                    ? "Accès owner plateforme"
-                    : `Badge Influenceur · ${subscribers.toLocaleString("fr-FR")} / ${INFLUENCER_FOLLOWERS.toLocaleString("fr-FR")} abonnés`}
+                : !ready
+                  ? "\u00a0"
+                  : canGoLive
+                    ? "Shopping en direct · cadeaux · produits en vitrine"
+                    : me?.isPlatformOwner
+                      ? "Accès owner plateforme"
+                      : `Badge Influenceur · ${subscribers.toLocaleString("fr-FR")} / ${INFLUENCER_FOLLOWERS.toLocaleString("fr-FR")} abonnés`}
             </p>
           </div>
           {!studio ? (
@@ -134,7 +141,12 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
           ) : null}
         </div>
 
-        {activeLive ? (
+        {!ready ? (
+          <div className="mt-4 space-y-2.5" aria-hidden>
+            <div className="h-11 animate-pulse rounded-xl bg-white/10" />
+            <div className="h-12 animate-pulse rounded-2xl bg-white/10" />
+          </div>
+        ) : activeLive ? (
           <Link
             href={`/live/${activeLive.id}`}
             className={cn(
