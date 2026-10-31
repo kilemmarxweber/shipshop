@@ -4,11 +4,13 @@ import { getSession } from "@/lib/session";
 import { sendCreatorGift } from "@/lib/growth/gifts";
 import { GIFT_CATALOG, type GiftKind } from "@/lib/growth/constants";
 import { prisma, withDbRetry } from "@/lib/prisma";
+import { idempotencyFrom } from "@/lib/payments/ledger";
 
 const schema = z.object({
   toUserId: z.string().min(1),
   kind: z.enum(["SMALL", "MEDIUM", "PREMIUM"]),
   liveId: z.string().optional(),
+  idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
 export async function GET() {
@@ -45,6 +47,7 @@ export async function POST(req: Request) {
       toUserId: body.toUserId,
       kind: body.kind as GiftKind,
       liveId: body.liveId,
+      idempotencyKey: idempotencyFrom(req, body.idempotencyKey),
     });
     return NextResponse.json(result);
   } catch (error) {

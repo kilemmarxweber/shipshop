@@ -72,6 +72,7 @@ model User {
   liveGuests        LiveGuest[]
   giftsSent         CreatorGift[]         @relation("GiftsSent")
   giftsReceived     CreatorGift[]         @relation("GiftsReceived")
+  idempotentOps     IdempotentOperation[]
   liveChats         LiveChatMessage[]
   challengeDone     ChallengeCompletion[]
   campaignInfluencer BrandCampaign[]      @relation("CampaignInfluencer")
@@ -357,6 +358,8 @@ model Product {
 
   @@index([category, status])
   @@index([shopId, status])
+  @@index([status, createdAt])
+  @@index([status, category, createdAt])
   @@map("product")
 }
 
@@ -824,6 +827,8 @@ model WalletTransaction {
   updatedAt        DateTime            @updatedAt
 
   @@index([walletId, createdAt])
+  @@index([walletId, type, createdAt])
+  @@index([status, createdAt])
   @@index([reference])
   @@index([movementId])
   @@map("wallet_transaction")
@@ -882,7 +887,9 @@ model MoneyMovement {
   audits               PaymentAudit[]
 
   @@index([payerUserId, createdAt])
+  @@index([beneficiaryUserId, createdAt])
   @@index([status, expiresAt])
+  @@index([status, createdAt])
   @@map("money_movement")
 }
 
@@ -919,8 +926,28 @@ model PaymentAudit {
   createdAt    DateTime          @default(now())
 
   @@index([movementId, createdAt])
+  @@index([requestId])
   @@index([createdAt])
   @@map("payment_audit")
+}
+
+/// Rejeu HTTP : 1 clé client par utilisateur et par type d’opération financière.
+model IdempotentOperation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope       String
+  clientKey   String
+  requestHash String
+  status      String   @default("PENDING")
+  httpStatus  Int      @default(0)
+  response    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, scope, clientKey])
+  @@index([scope, createdAt])
+  @@map("idempotent_operation")
 }
 
 /// Numéros e-money par réseau (max 1 Airtel / Orange / Vodacom M-Pesa).
@@ -1039,7 +1066,9 @@ model Order {
   platformFees   PlatformFee[]
 
   @@index([buyerId, createdAt])
+  @@index([buyerId, status, createdAt])
   @@index([shopId, status])
+  @@index([status, createdAt])
   @@index([courierId])
   @@index([handoverId])
   @@index([attributedCreatorId])
@@ -1276,6 +1305,10 @@ model CreatorLive {
   backdropUrl      String?
   /// Filtre vidéo (natural | hd | studio | …) — défaut natural
   videoFilter      String?
+  /// Disposition scène multi-invités : rail | split | board
+  stageLayout      String    @default("rail")
+  /// true = personne ne peut demander à monter
+  guestJoinLocked  Boolean   @default(false)
   /// Stickers texte + cartes produit (x/y/scale %) visibles par les viewers
   overlays         Json      @default("[]")
 
@@ -1300,6 +1333,10 @@ model LiveGuest {
   status      String      @default("PENDING")
   cameraOn    Boolean     @default(false)
   micOn       Boolean     @default(false)
+  /// Main levée — demande la parole (multi-invités)
+  handRaised  Boolean     @default(false)
+  /// Parole accordée par le diffuseur (micro autorisé en mode multi)
+  hasFloor    Boolean     @default(false)
   requestedAt DateTime    @default(now())
   decidedAt   DateTime?
   leftAt      DateTime?
@@ -1328,19 +1365,21 @@ model LiveRtcSignal {
 }
 
 model CreatorGift {
-  id          String      @id @default(cuid())
-  fromUserId  String
-  from        User        @relation("GiftsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUserId    String
-  to          User        @relation("GiftsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
-  liveId      String?
-  live        CreatorLive? @relation(fields: [liveId], references: [id], onDelete: SetNull)
-  kind        String
-  amountCents Int
-  currency    String      @default("USD")
-  createdAt   DateTime    @default(now())
+  id                   String      @id @default(cuid())
+  fromUserId           String
+  from                 User        @relation("GiftsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId             String
+  to                   User        @relation("GiftsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  liveId               String?
+  live                 CreatorLive? @relation(fields: [liveId], references: [id], onDelete: SetNull)
+  kind                 String
+  amountCents          Int
+  currency             String      @default("USD")
+  clientIdempotencyKey String?     @unique
+  createdAt            DateTime    @default(now())
 
   @@index([toUserId, createdAt])
+  @@index([fromUserId, createdAt])
   @@index([liveId])
   @@map("creator_gift")
 }
@@ -1556,23 +1595,25 @@ model PlatformFee {
 }
 
 model Withdrawal {
-  id         String           @id @default(cuid())
-  userId     String
-  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bucket     WalletBucket
-  currency   String           @default("USD")
-  grossCents Int
-  feeCents   Int              @default(0)
-  netCents   Int
-  status     WithdrawalStatus @default(PENDING)
-  provider   MobileMoneyProvider
-  phone      String
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-  paidAt     DateTime?
-  platformFees PlatformFee[]
+  id                   String           @id @default(cuid())
+  userId               String
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bucket               WalletBucket
+  currency             String           @default("USD")
+  grossCents           Int
+  feeCents             Int              @default(0)
+  netCents             Int
+  status               WithdrawalStatus @default(PENDING)
+  provider             MobileMoneyProvider
+  phone                String
+  clientIdempotencyKey String?          @unique
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  paidAt               DateTime?
+  platformFees         PlatformFee[]
 
   @@index([userId, status])
+  @@index([userId, createdAt])
   @@map("withdrawal")
 }
 

@@ -17,6 +17,11 @@ import {
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import {
+  clearPaymentIdempotencyKey,
+  fetchPaymentJson,
+  paymentIdempotencyKey,
+} from "@/lib/payments/idempotency-client";
 import { useAppConfig } from "@/lib/use-app-config";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { parseCurrency } from "@/lib/money";
@@ -395,7 +400,10 @@ function ProductInner() {
       return;
     }
     setLoading("buy");
-    const { res, data: json } = await fetchJson<{
+    const intent = `order:${id}`;
+    const idempotencyKey = paymentIdempotencyKey(intent);
+    let res: Response;
+    let json: {
       error?: string;
       needed?: number;
       balance?: number;
@@ -404,26 +412,41 @@ function ProductInner() {
         handoverId?: string | null;
         handover?: { id: string } | null;
       };
-    }>("/api/orders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        productId: id,
-        fulfillmentType: fulfillment.fulfillmentType,
-        deliveryCity: fulfillment.deliveryCity || null,
-        deliveryAddress: fulfillment.deliveryAddress || null,
-        deliveryCommune: fulfillment.deliveryCommune || null,
-        deliveryQuartier: fulfillment.deliveryQuartier || null,
-        deliveryAvenue: fulfillment.deliveryAvenue || null,
-        deliveryParcelle: fulfillment.deliveryParcelle || null,
-        deliveryLat: fulfillment.deliveryLat,
-        deliveryLng: fulfillment.deliveryLng,
-        contactPhone,
-        optionColor: selectedColor,
-        optionSize: selectedSize,
-        attributedCreatorId: readCreatorAttribution(),
-      }),
-    });
+    };
+    try {
+      const paid = await fetchPaymentJson<typeof json>("/api/orders", {
+        method: "POST",
+        idempotencyKey,
+        replayScope: "ORDER",
+        body: JSON.stringify({
+          productId: id,
+          fulfillmentType: fulfillment.fulfillmentType,
+          deliveryCity: fulfillment.deliveryCity || null,
+          deliveryAddress: fulfillment.deliveryAddress || null,
+          deliveryCommune: fulfillment.deliveryCommune || null,
+          deliveryQuartier: fulfillment.deliveryQuartier || null,
+          deliveryAvenue: fulfillment.deliveryAvenue || null,
+          deliveryParcelle: fulfillment.deliveryParcelle || null,
+          deliveryLat: fulfillment.deliveryLat,
+          deliveryLng: fulfillment.deliveryLng,
+          contactPhone,
+          optionColor: selectedColor,
+          optionSize: selectedSize,
+          attributedCreatorId: readCreatorAttribution(),
+          idempotencyKey,
+        }),
+      });
+      res = paid.res;
+      json = paid.data;
+    } catch (error) {
+      setLoading(null);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Connexion interrompue — vérifiez vos commandes",
+      );
+      return;
+    }
     setLoading(null);
 
     if (res.status === 402) {
@@ -440,6 +463,7 @@ function ProductInner() {
       toast.error(json?.error ?? "Achat impossible");
       return;
     }
+    clearPaymentIdempotencyKey(intent);
     notifyWalletUpdated();
     const handoverId = json?.order?.handover?.id ?? json?.order?.handoverId;
     afterPayHref.current = handoverId

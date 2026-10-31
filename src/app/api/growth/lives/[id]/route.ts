@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { sendCreatorGift } from "@/lib/growth/gifts";
+import { idempotencyFrom } from "@/lib/payments/ledger";
 import {
   GIFT_DAILY_CAP_CENTS,
   type GiftKind,
@@ -27,8 +28,12 @@ import {
   closeLiveGuests,
   countOnStage,
   getMyLiveGuest,
+  grantGuestFloor,
   isLiveFollower,
   listLiveGuests,
+  promoteGuestOnStage,
+  reconcileSoloFloor,
+  revokeGuestFloor,
 } from "@/lib/growth/live-guests";
 import {
   enqueueRtcSignal,
@@ -42,6 +47,10 @@ import {
   isLiveBackdropUploadUrl,
 } from "@/lib/growth/live-backdrops";
 import { isLiveVideoFilterId } from "@/lib/growth/live-video-filters";
+import {
+  isLiveStageLayoutId,
+  normalizeStageLayout,
+} from "@/lib/growth/live-stage-layout";
 import { deleteUploadByPublicUrl } from "@/lib/upload-file.server";
 import { createAppNotice } from "@/lib/app-notice";
 
@@ -50,6 +59,8 @@ const guestSelect = {
   status: true,
   cameraOn: true,
   micOn: true,
+  handRaised: true,
+  hasFloor: true,
   requestedAt: true,
   decidedAt: true,
   user: { select: { id: true, name: true, image: true } },
@@ -81,6 +92,7 @@ const giftSchema = z
     kind: z.enum(["SMALL", "MEDIUM", "PREMIUM", "CUSTOM"]).optional(),
     /** Montant libre en centimes (ex. 50, 100, ou plus). */
     amountCents: z.number().int().min(10).max(GIFT_DAILY_CAP_CENTS).optional(),
+    idempotencyKey: z.string().min(8).max(128).optional(),
   })
   .refine((v) => v.amountCents != null || v.kind != null, {
     message: "Montant ou type de cadeau requis",
@@ -248,6 +260,12 @@ export async function GET(
     typeof (live as { videoFilter?: string | null }).videoFilter === "string"
       ? (live as { videoFilter: string }).videoFilter
       : null;
+  let stageLayout = normalizeStageLayout(
+    (live as { stageLayout?: string | null }).stageLayout,
+  );
+  let guestJoinLocked = Boolean(
+    (live as { guestJoinLocked?: boolean }).guestJoinLocked,
+  );
   try {
     const bg = await withDbRetry(() =>
       prisma.$queryRaw<
@@ -255,10 +273,13 @@ export async function GET(
           backdropPreset: string | null;
           backdropUrl: string | null;
           videoFilter: string | null;
+          stageLayout: string | null;
+          guestJoinLocked: boolean | null;
         }>
       >(
         Prisma.sql`
-          SELECT "backdropPreset", "backdropUrl", "videoFilter"
+          SELECT "backdropPreset", "backdropUrl", "videoFilter",
+                 "stageLayout", "guestJoinLocked"
           FROM "creator_live" WHERE id = ${id} LIMIT 1
         `,
       ),
@@ -267,6 +288,8 @@ export async function GET(
       backdropPreset = bg[0].backdropPreset;
       backdropUrl = bg[0].backdropUrl;
       videoFilter = bg[0].videoFilter;
+      stageLayout = normalizeStageLayout(bg[0].stageLayout);
+      guestJoinLocked = Boolean(bg[0].guestJoinLocked);
     }
   } catch {
     /* colonnes absentes */
@@ -291,6 +314,8 @@ export async function GET(
       backdropPreset,
       backdropUrl,
       videoFilter: videoFilter && videoFilter !== "natural" ? videoFilter : null,
+      stageLayout,
+      guestJoinLocked,
       overlays: parseLiveOverlays(live.overlays),
       chats: [...live.chats].reverse(),
       guests,
@@ -347,6 +372,8 @@ export async function POST(
     preset?: string | null;
     url?: string | null;
     filter?: string | null;
+    layout?: string | null;
+    locked?: boolean;
   };
 
   const isHost = live.userId === session.user.id;
@@ -774,17 +801,7 @@ export async function POST(
           // Déjà en demande → accepter directement
           const on = await countOnStage(id);
           if (on >= LIVE_GUEST_MAX_ON_STAGE) break;
-          await withDbRetry(() =>
-            prisma.liveGuest.update({
-              where: { id: existing.id },
-              data: {
-                status: "ON_STAGE",
-                decidedAt: new Date(),
-                cameraOn: true,
-                micOn: true,
-              },
-            }),
-          );
+          await promoteGuestOnStage(existing.id, id, { cameraOn: true });
           invitedCount += 1;
           void createAppNotice({
             userId: uid,
@@ -897,17 +914,7 @@ export async function POST(
           { status: 400 },
         );
       }
-      await withDbRetry(() =>
-        prisma.liveGuest.update({
-          where: { id: row.id },
-          data: {
-            status: "ON_STAGE",
-            decidedAt: new Date(),
-            cameraOn: true,
-            micOn: true,
-          },
-        }),
-      );
+      await promoteGuestOnStage(row.id, id, { cameraOn: true });
       void createAppNotice({
         userId: live.userId,
         title: "Invité sur scène",
@@ -927,6 +934,70 @@ export async function POST(
     }
   }
 
+  if (json.action === "stage_layout") {
+    if (!isHost) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+    if (live.status === "ENDED") {
+      return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    if (!isLiveStageLayoutId(json.layout)) {
+      return NextResponse.json({ error: "Disposition invalide" }, { status: 400 });
+    }
+    const stageLayout = json.layout;
+    try {
+      await withDbRetry(() =>
+        prisma.$executeRaw(
+          Prisma.sql`
+            UPDATE "creator_live"
+            SET "stageLayout" = ${stageLayout}, "lastHeartbeatAt" = ${new Date()}
+            WHERE id = ${id}
+          `,
+        ),
+      );
+      return NextResponse.json({
+        live: publicLive({ ...live, stageLayout }),
+      });
+    } catch (error) {
+      console.error("[api/growth/lives] stage_layout", error);
+      return NextResponse.json(
+        { error: "Disposition impossible — `pnpm exec prisma db push`" },
+        { status: 503 },
+      );
+    }
+  }
+
+  if (json.action === "guest_join_lock") {
+    if (!isHost) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+    if (live.status === "ENDED") {
+      return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    const guestJoinLocked = Boolean(json.locked);
+    try {
+      await withDbRetry(() =>
+        prisma.$executeRaw(
+          Prisma.sql`
+            UPDATE "creator_live"
+            SET "guestJoinLocked" = ${guestJoinLocked},
+                "lastHeartbeatAt" = ${new Date()}
+            WHERE id = ${id}
+          `,
+        ),
+      );
+      return NextResponse.json({
+        live: publicLive({ ...live, guestJoinLocked }),
+      });
+    } catch (error) {
+      console.error("[api/growth/lives] guest_join_lock", error);
+      return NextResponse.json(
+        { error: "Verrou impossible — `pnpm exec prisma db push`" },
+        { status: 503 },
+      );
+    }
+  }
+
   // —— Invités sur scène (followers) ——
   if (json.action === "guest_request") {
     if (isHost) {
@@ -937,6 +1008,23 @@ export async function POST(
     }
     if (live.status === "ENDED") {
       return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    try {
+      const lockRows = await withDbRetry(() =>
+        prisma.$queryRaw<Array<{ guestJoinLocked: boolean | null }>>(
+          Prisma.sql`
+            SELECT "guestJoinLocked" FROM "creator_live" WHERE id = ${id} LIMIT 1
+          `,
+        ),
+      );
+      if (lockRows[0]?.guestJoinLocked) {
+        return NextResponse.json(
+          { error: "Le diffuseur a fermé les montées sur scène" },
+          { status: 403 },
+        );
+      }
+    } catch {
+      /* colonne absente → autoriser */
     }
     const follower = await isLiveFollower(session.user.id, live.userId);
     if (!follower) {
@@ -1050,14 +1138,148 @@ export async function POST(
             leftAt: new Date(),
             cameraOn: false,
             micOn: false,
+            handRaised: false,
+            hasFloor: false,
           },
+          select: guestSelect,
+        }),
+      );
+      await reconcileSoloFloor(id);
+      return NextResponse.json({ guests: await guestsPayload(), guest });
+    } catch (error) {
+      console.error("[api/growth/lives] guest_leave", error);
+      return NextResponse.json({ error: "Impossible" }, { status: 500 });
+    }
+  }
+
+  if (
+    json.action === "guest_raise_hand" ||
+    json.action === "guest_lower_hand"
+  ) {
+    if (isHost) {
+      return NextResponse.json(
+        { error: "Action invité uniquement" },
+        { status: 400 },
+      );
+    }
+    if (live.status === "ENDED") {
+      return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    try {
+      const row = await withDbRetry(() =>
+        prisma.liveGuest.findUnique({
+          where: {
+            liveId_userId: { liveId: id, userId: session.user.id },
+          },
+        }),
+      );
+      if (!row || row.status !== "ON_STAGE") {
+        return NextResponse.json(
+          { error: "Vous n’êtes pas sur scène" },
+          { status: 400 },
+        );
+      }
+      if (json.action === "guest_raise_hand") {
+        const onStage = await countOnStage(id);
+        if (onStage < 2) {
+          return NextResponse.json({
+            guests: await guestsPayload(),
+            guest: await getMyLiveGuest(id, session.user.id),
+          });
+        }
+        if ((row as { hasFloor?: boolean }).hasFloor) {
+          return NextResponse.json({
+            guests: await guestsPayload(),
+            guest: await getMyLiveGuest(id, session.user.id),
+          });
+        }
+        const guest = await withDbRetry(() =>
+          prisma.liveGuest.update({
+            where: { id: row.id },
+            data: { handRaised: true },
+            select: guestSelect,
+          }),
+        );
+        void createAppNotice({
+          userId: live.userId,
+          title: "Main levée",
+          body: `${session.user.name ?? "Un invité"} demande la parole.`,
+          href: `/live/${id}`,
+        });
+        return NextResponse.json({
+          guests: await guestsPayload(),
+          guest,
+        });
+      }
+      const guest = await withDbRetry(() =>
+        prisma.liveGuest.update({
+          where: { id: row.id },
+          data: { handRaised: false },
           select: guestSelect,
         }),
       );
       return NextResponse.json({ guests: await guestsPayload(), guest });
     } catch (error) {
-      console.error("[api/growth/lives] guest_leave", error);
-      return NextResponse.json({ error: "Impossible" }, { status: 500 });
+      console.error("[api/growth/lives] guest_hand", error);
+      return NextResponse.json(
+        { error: "Main impossible — migrate live_guest ?" },
+        { status: 503 },
+      );
+    }
+  }
+
+  if (
+    json.action === "guest_grant_floor" ||
+    json.action === "guest_revoke_floor"
+  ) {
+    if (!isHost) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+    if (live.status === "ENDED") {
+      return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    const guestId = typeof json.guestId === "string" ? json.guestId : null;
+    if (!guestId) {
+      return NextResponse.json({ error: "Invité manquant" }, { status: 400 });
+    }
+    try {
+      const row = await withDbRetry(() =>
+        prisma.liveGuest.findFirst({
+          where: { liveId: id, id: guestId },
+          include: { user: { select: { id: true, name: true } } },
+        }),
+      );
+      if (!row || row.status !== "ON_STAGE") {
+        return NextResponse.json(
+          { error: "Invité hors scène" },
+          { status: 400 },
+        );
+      }
+      if (json.action === "guest_grant_floor") {
+        await grantGuestFloor(id, row.id);
+        void createAppNotice({
+          userId: row.userId,
+          title: "Parole accordée",
+          body: "Le diffuseur vous donne la parole — vous pouvez parler.",
+          href: `/live/${id}`,
+        });
+      } else {
+        await revokeGuestFloor(row.id);
+        await reconcileSoloFloor(id);
+        void createAppNotice({
+          userId: row.userId,
+          title: "Parole retirée",
+          body: "Le diffuseur a repris la parole — levez la main pour redemander.",
+          href: `/live/${id}`,
+        });
+      }
+      return NextResponse.json({ guests: await guestsPayload() });
+    } catch (error) {
+      console.error("[api/growth/lives] guest_floor", error);
+      return NextResponse.json(
+        { error: "Parole impossible" },
+        { status: 503 },
+      );
     }
   }
 
@@ -1081,6 +1303,19 @@ export async function POST(
           { error: "Vous n’êtes pas sur scène" },
           { status: 400 },
         );
+      }
+      if (json.action === "guest_mic" && Boolean(json.micOn)) {
+        const onStage = await countOnStage(id);
+        const hasFloor = Boolean((row as { hasFloor?: boolean }).hasFloor);
+        if (onStage >= 2 && !hasFloor) {
+          return NextResponse.json(
+            {
+              error:
+                "Levez la main — le diffuseur doit vous donner la parole",
+            },
+            { status: 403 },
+          );
+        }
       }
       const data =
         json.action === "guest_mic"
@@ -1146,21 +1381,15 @@ export async function POST(
             { status: 400 },
           );
         }
-        await withDbRetry(() =>
-          prisma.liveGuest.update({
-            where: { id: row.id },
-            data: {
-              status: "ON_STAGE",
-              decidedAt: new Date(),
-              cameraOn: true,
-              micOn: true,
-            },
-          }),
-        );
+        const promoted = await promoteGuestOnStage(row.id, id, {
+          cameraOn: true,
+        });
         void createAppNotice({
           userId: row.userId,
           title: "Vous êtes sur scène",
-          body: "Le diffuseur a accepté votre montée — caméra et micro activés.",
+          body: promoted.hasFloor
+            ? "Le diffuseur a accepté votre montée — caméra et micro activés."
+            : "Sur scène — levez la main pour demander la parole.",
           href: `/live/${id}`,
         });
         return NextResponse.json({ guests: await guestsPayload() });
@@ -1175,6 +1404,8 @@ export async function POST(
               decidedAt: new Date(),
               cameraOn: false,
               micOn: false,
+              handRaised: false,
+              hasFloor: false,
             },
           }),
         );
@@ -1196,9 +1427,12 @@ export async function POST(
             leftAt: new Date(),
             cameraOn: false,
             micOn: false,
+            handRaised: false,
+            hasFloor: false,
           },
         }),
       );
+      await reconcileSoloFloor(id);
       return NextResponse.json({ guests: await guestsPayload() });
     } catch (error) {
       console.error("[api/growth/lives] guest_host", error);
@@ -1296,6 +1530,7 @@ export async function POST(
         kind: (parsed.data.kind as GiftKind | "CUSTOM" | undefined) ?? "CUSTOM",
         amountCents: parsed.data.amountCents,
         liveId: id,
+        idempotencyKey: idempotencyFrom(req, parsed.data.idempotencyKey),
       });
       return NextResponse.json(result);
     } catch (error) {

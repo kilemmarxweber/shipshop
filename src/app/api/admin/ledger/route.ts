@@ -52,6 +52,9 @@ export async function GET(req: Request) {
       ...(q
         ? {
             OR: [
+              { id: q },
+              { providerReference: q },
+              { clientIdempotencyKey: q },
               { providerReference: { contains: q, mode: "insensitive" } },
               { clientIdempotencyKey: { contains: q, mode: "insensitive" } },
               { payer: { name: { contains: q, mode: "insensitive" } } },

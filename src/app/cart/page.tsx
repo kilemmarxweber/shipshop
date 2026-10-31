@@ -7,6 +7,11 @@ import { Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import {
+  clearPaymentIdempotencyKey,
+  fetchPaymentJson,
+  paymentIdempotencyKey,
+} from "@/lib/payments/idempotency-client";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney } from "@/lib/utils";
 import { notifyCartUpdated } from "@/lib/cart-events";
@@ -184,28 +189,50 @@ export default function CartPage() {
       return;
     }
     setBusy(true);
-    const { res, data } = await fetchJson<
-      CartPayload & {
-        orders?: { id: string }[];
-        tickets?: { id: string }[];
-      }
-    >("/api/cart/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fulfillmentType: fulfillment.fulfillmentType,
-        deliveryCity: fulfillment.deliveryCity || null,
-        deliveryAddress: fulfillment.deliveryAddress || null,
-        deliveryCommune: fulfillment.deliveryCommune || null,
-        deliveryQuartier: fulfillment.deliveryQuartier || null,
-        deliveryAvenue: fulfillment.deliveryAvenue || null,
-        deliveryParcelle: fulfillment.deliveryParcelle || null,
-        deliveryLat: fulfillment.deliveryLat,
-        deliveryLng: fulfillment.deliveryLng,
-        contactPhone,
-        attributedCreatorId: readCreatorAttribution(),
-      }),
-    });
+    const intent = "checkout";
+    const idempotencyKey = paymentIdempotencyKey(intent);
+    let res: Response;
+    let data: CartPayload & {
+      error?: string;
+      needed?: number;
+      balance?: number;
+      orders?: { id: string }[];
+      tickets?: { id: string }[];
+    };
+    try {
+      const paid = await fetchPaymentJson<typeof data>(
+        "/api/cart/checkout",
+        {
+          method: "POST",
+          idempotencyKey,
+          replayScope: "CHECKOUT",
+          body: JSON.stringify({
+            fulfillmentType: fulfillment.fulfillmentType,
+            deliveryCity: fulfillment.deliveryCity || null,
+            deliveryAddress: fulfillment.deliveryAddress || null,
+            deliveryCommune: fulfillment.deliveryCommune || null,
+            deliveryQuartier: fulfillment.deliveryQuartier || null,
+            deliveryAvenue: fulfillment.deliveryAvenue || null,
+            deliveryParcelle: fulfillment.deliveryParcelle || null,
+            deliveryLat: fulfillment.deliveryLat,
+            deliveryLng: fulfillment.deliveryLng,
+            contactPhone,
+            attributedCreatorId: readCreatorAttribution(),
+            idempotencyKey,
+          }),
+        },
+      );
+      res = paid.res;
+      data = paid.data;
+    } catch (error) {
+      setBusy(false);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Connexion interrompue — vérifiez vos commandes",
+      );
+      return;
+    }
     setBusy(false);
 
     if (res.status === 402) {
@@ -220,6 +247,7 @@ export default function CartPage() {
       await loadCart();
       return;
     }
+    clearPaymentIdempotencyKey(intent);
     notifyWalletUpdated();
     notifyCartUpdated(0);
     const ticket = data?.tickets?.[0]?.id;

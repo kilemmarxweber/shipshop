@@ -5,5 +5,8 @@
   "css.validate": false,
   "css.lint.unknownAtRules": "ignore",
   "scss.lint.unknownAtRules": "ignore",
-  "css.customData": [".vscode/tailwind.css-data.json"]
+  "css.customData": [
+    ".vscode/tailwind.css-data.json"
+  ],
+  "kilemIA.provider": "grok"
 }

@@ -90,10 +90,9 @@ export function useLiveRtc(opts: {
   );
 
   const upsertRemote = useCallback((fromId: string, stream: MediaStream) => {
-    setRemoteStreams((prev) => {
-      if (prev[fromId] === stream) return prev;
-      return { ...prev, [fromId]: stream };
-    });
+    // Toujours un nouvel objet : une 2e piste (audio après vidéo) arrive
+    // sur le même MediaStream — il faut re-rendre le viewer.
+    setRemoteStreams((prev) => ({ ...prev, [fromId]: stream }));
   }, []);
 
   const dropRemote = useCallback((fromId: string) => {
@@ -309,6 +308,13 @@ export function useLiveRtc(opts: {
             return s;
           })();
         upsertRemote(remotePeerId, stream);
+        const onAdd = () => upsertRemote(remotePeerId, stream);
+        stream.addEventListener("addtrack", onAdd);
+        ev.track.addEventListener(
+          "unmute",
+          () => upsertRemote(remotePeerId, stream),
+          { once: true },
+        );
         const m = metaFor(remotePeerId);
         m.mediaUp = true;
         clearEscalate(remotePeerId);

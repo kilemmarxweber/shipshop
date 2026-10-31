@@ -5,6 +5,11 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import {
+  clearPaymentIdempotencyKey,
+  fetchPaymentJson,
+  paymentIdempotencyKey,
+} from "@/lib/payments/idempotency-client";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { colorHex } from "@/lib/product-options";
 import { formatMoney, cn } from "@/lib/utils";
@@ -206,7 +211,10 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
       return;
     }
     setLoading(true);
-    const { res, data } = await fetchJson<{
+    const intent = `order:${product.id}`;
+    const idempotencyKey = paymentIdempotencyKey(intent);
+    let res: Response;
+    let data: {
       error?: string;
       needed?: number;
       balance?: number;
@@ -216,25 +224,40 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
         pickupReceipt?: { qrPayload?: string } | null;
         handover?: { id: string; qrPayload: string } | null;
       };
-    }>("/api/orders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        productId: product.id,
-        fulfillmentType: fulfillment.fulfillmentType,
-        deliveryCity: fulfillment.deliveryCity || null,
-        deliveryAddress: fulfillment.deliveryAddress || null,
-        deliveryCommune: fulfillment.deliveryCommune || null,
-        deliveryQuartier: fulfillment.deliveryQuartier || null,
-        deliveryAvenue: fulfillment.deliveryAvenue || null,
-        deliveryParcelle: fulfillment.deliveryParcelle || null,
-        deliveryLat: fulfillment.deliveryLat,
-        deliveryLng: fulfillment.deliveryLng,
-        contactPhone,
-        optionColor: color,
-        optionSize: size,
-      }),
-    });
+    };
+    try {
+      const paid = await fetchPaymentJson<typeof data>("/api/orders", {
+        method: "POST",
+        idempotencyKey,
+        replayScope: "ORDER",
+        body: JSON.stringify({
+          productId: product.id,
+          fulfillmentType: fulfillment.fulfillmentType,
+          deliveryCity: fulfillment.deliveryCity || null,
+          deliveryAddress: fulfillment.deliveryAddress || null,
+          deliveryCommune: fulfillment.deliveryCommune || null,
+          deliveryQuartier: fulfillment.deliveryQuartier || null,
+          deliveryAvenue: fulfillment.deliveryAvenue || null,
+          deliveryParcelle: fulfillment.deliveryParcelle || null,
+          deliveryLat: fulfillment.deliveryLat,
+          deliveryLng: fulfillment.deliveryLng,
+          contactPhone,
+          optionColor: color,
+          optionSize: size,
+          idempotencyKey,
+        }),
+      });
+      res = paid.res;
+      data = paid.data;
+    } catch (error) {
+      setLoading(false);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("buy.payFailed"),
+      );
+      return;
+    }
     setLoading(false);
     if (res.status === 402) {
       toast.error(data?.error ?? t("product.insufficientTitle"));
@@ -248,6 +271,7 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
       toast.error(data?.error ?? t("buy.payFailed"));
       return;
     }
+    clearPaymentIdempotencyKey(intent);
     notifyWalletUpdated();
     const order = data?.order;
     paidAfterFox.current = order?.id

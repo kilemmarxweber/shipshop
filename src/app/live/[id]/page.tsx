@@ -24,6 +24,9 @@ import {
   Share2,
   ShoppingBag,
   Aperture,
+  LayoutGrid,
+  Lock,
+  LockOpen,
   Sparkles,
   Type,
   UserPlus,
@@ -33,6 +36,11 @@ import {
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import {
+  clearPaymentIdempotencyKey,
+  fetchPaymentJson,
+  paymentIdempotencyKey,
+} from "@/lib/payments/idempotency-client";
 import { iosInlineVideo } from "@/lib/ios-inline-video";
 import { cn, formatMoney } from "@/lib/utils";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
@@ -63,9 +71,15 @@ import {
 } from "@/components/live/live-product-picker";
 import {
   LiveGuestRequestQueue,
-  LiveGuestStageGrid,
+  useRemoteLiveAudio,
   type LiveGuestCard,
 } from "@/components/live/live-guest-stage";
+import { LiveStageComposer } from "@/components/live/live-stage-composer";
+import {
+  LIVE_STAGE_LAYOUTS,
+  normalizeStageLayout,
+  type LiveStageLayoutId,
+} from "@/lib/growth/live-stage-layout";
 import { LiveBackdropLayer } from "@/components/live/live-backdrop-layer";
 import { LiveBackdropPicker } from "@/components/live/live-backdrop-picker";
 import {
@@ -99,6 +113,10 @@ type LiveDetail = {
   backdropUrl?: string | null;
   /** Filtre vidéo (null / natural = aucun) */
   videoFilter?: string | null;
+  /** rail | split | board */
+  stageLayout?: LiveStageLayoutId | string | null;
+  /** true = montées invités fermées */
+  guestJoinLocked?: boolean;
   overlays?: LiveOverlay[];
   guests?: LiveGuestCard[];
   myGuest?: LiveGuestCard | null;
@@ -157,6 +175,7 @@ export default function LiveRoomPage({
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [backdropPickerOpen, setBackdropPickerOpen] = useState(false);
   const [filterPickerOpen, setFilterPickerOpen] = useState(false);
+  const [layoutPickerOpen, setLayoutPickerOpen] = useState(false);
   const [railMenuOpen, setRailMenuOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
   const [giftCustomOpen, setGiftCustomOpen] = useState(false);
@@ -172,6 +191,7 @@ export default function LiveRoomPage({
   const [mediaNonce, setMediaNonce] = useState(0);
   const [liveRefreshing, setLiveRefreshing] = useState(false);
   const autoRefreshDoneRef = useRef<string | null>(null);
+  const viewerMediaRetryRef = useRef(0);
   const [heartBursts, setHeartBursts] = useState<
     { id: string; x: number; y: number }[]
   >([]);
@@ -259,6 +279,8 @@ export default function LiveRoomPage({
         prev.backdropPreset === next.backdropPreset &&
         prev.backdropUrl === next.backdropUrl &&
         prev.videoFilter === next.videoFilter &&
+        prev.stageLayout === next.stageLayout &&
+        prev.guestJoinLocked === next.guestJoinLocked &&
         prev.engagement?.warn === next.engagement?.warn &&
         prev.plannedMinutes === next.plannedMinutes &&
         prev.pausedAt === next.pausedAt &&
@@ -310,7 +332,9 @@ export default function LiveRoomPage({
         prev?.id === g?.id &&
         prev?.status === g?.status &&
         prev?.cameraOn === g?.cameraOn &&
-        prev?.micOn === g?.micOn
+        prev?.micOn === g?.micOn &&
+        prev?.handRaised === g?.handRaised &&
+        prev?.hasFloor === g?.hasFloor
           ? prev
           : g,
       );
@@ -578,31 +602,78 @@ export default function LiveRoomPage({
     if (!isHost || !live || live.status === "ENDED") return;
 
     let timer: number | null = null;
+    let retryTimer: number | null = null;
+    let retryCount = 0;
     const roomId = id;
 
-    const beat = (opts?: { autoResume?: boolean; keepalive?: boolean }) => {
+    /**
+     * Envoie un heartbeat avec 3 stratégies en cascade :
+     *  1. sendBeacon (fonctionne même si l'onglet est en train de se fermer)
+     *  2. fetch keepalive (résiste aux navigations)
+     *  3. hostAction classique (avec retry exponentiel si ça échoue)
+     *
+     * Le retry exponentiel (1 s → 2 s → 4 s, max 3 tentatives) absorbe les
+     * micro-coupures mobiles sans déclencher de pause côté serveur.
+     */
+    const sendBeat = async (body: string): Promise<boolean> => {
+      const url = `/api/growth/lives/${roomId}`;
+      // 1. sendBeacon : fire-and-forget, survit à la fermeture de l'onglet
+      if (typeof navigator?.sendBeacon === "function") {
+        try {
+          const blob = new Blob([body], { type: "application/json" });
+          if (navigator.sendBeacon(url, blob)) return true;
+        } catch {
+          /* navigateur ne supporte pas Blob dans sendBeacon → fallback */
+        }
+      }
+      // 2. fetch keepalive
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: true,
+          credentials: "include",
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    const beat = (opts?: { autoResume?: boolean }) => {
       const body = JSON.stringify({
         action: "heartbeat",
         ...(opts?.autoResume ? { reason: "auto_resume" } : {}),
       });
-      if (opts?.keepalive && typeof navigator !== "undefined") {
-        try {
-          void fetch(`/api/growth/lives/${roomId}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
-            keepalive: true,
-            credentials: "include",
-          });
-          return;
-        } catch {
-          /* fallback hostAction */
-        }
+
+      // Annule un éventuel retry en cours
+      if (retryTimer != null) {
+        window.clearTimeout(retryTimer);
+        retryTimer = null;
       }
-      void hostAction(
-        "heartbeat",
-        opts?.autoResume ? { reason: "auto_resume" } : undefined,
-      );
+      retryCount = 0;
+
+      const tryBeat = async (attempt: number) => {
+        const ok = await sendBeat(body);
+        if (ok) {
+          retryCount = 0;
+          return;
+        }
+        // Retry exponentiel : 1 s, 2 s, 4 s (3 essais max)
+        if (attempt < 3) {
+          const delay = Math.min(1_000 * 2 ** attempt, 8_000);
+          retryTimer = window.setTimeout(
+            () => void tryBeat(attempt + 1),
+            delay,
+          );
+          retryCount = attempt + 1;
+        }
+        // Après 3 échecs : le serveur finira par passer en PAUSED via reconcileLive
+        // (seuil 3 min) ; on laisse la reconnexion réseau déclencher auto_resume.
+      };
+
+      void tryBeat(0);
     };
 
     const scheduleBeat = () => {
@@ -610,39 +681,42 @@ export default function LiveRoomPage({
       const hidden = document.visibilityState === "hidden";
       const ms = hidden ? LIVE_HEARTBEAT_HIDDEN_MS : LIVE_HEARTBEAT_MS;
       beat({ autoResume: !hidden && live.status === "PAUSED" });
-      timer = window.setInterval(
-        () => beat({ keepalive: document.visibilityState === "hidden" }),
-        ms,
-      );
+      timer = window.setInterval(() => beat(), ms);
     };
 
     scheduleBeat();
+
     const onVis = () => {
       if (document.visibilityState === "visible") {
         // Retour onglet : reprendre si pause « connexion »
         beat({ autoResume: true });
       } else {
-        beat({ keepalive: true });
+        // Passage en arrière-plan : beat de sécurité immédiat via sendBeacon
+        beat();
       }
       scheduleBeat();
     };
 
-    const onPageHide = () => beat({ keepalive: true });
+    // pagehide : dernier beat avant fermeture / navigation (sendBeacon prioritaire)
+    const onPageHide = () => beat();
 
     const onOffline = () => {
-      void hostAction("pause", { reason: "connection" });
-      toast.error("Connexion perdue — live en pause");
+      // Réseau coupé : on ne fait rien (les beats vont échouer, le retry
+      // s'arrête proprement ; onOnline reprend dès que la connexion revient).
+      toast.error("Connexion perdue — le live reprendra automatiquement");
     };
     const onOnline = () => {
       beat({ autoResume: true });
       toast.message("Connexion rétablie — reprise du live");
     };
+
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("pagehide", onPageHide);
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
     return () => {
       if (timer != null) window.clearInterval(timer);
+      if (retryTimer != null) window.clearTimeout(retryTimer);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("offline", onOffline);
@@ -729,26 +803,50 @@ export default function LiveRoomPage({
     reconnectKey: rtcNonce,
   });
   const remoteStreams = sfuEnabled ? sfu.remoteStreams : mesh.remoteStreams;
+  const hostRemoteStream = live?.user?.id
+    ? remoteStreams[live.user.id] ?? null
+    : null;
+  const hostRemoteTrackKey = hostRemoteStream
+    ? hostRemoteStream
+        .getTracks()
+        .map((t) => `${t.kind}:${t.id}:${t.readyState}:${t.enabled}`)
+        .join("|")
+    : "";
+  const hostRemoteAudioRef = useRemoteLiveAudio(
+    hostRemoteStream,
+    Boolean(!isHost && hostRemoteStream),
+  );
 
-  // Sync host remote video for viewers / invités
+  // Sync host remote video (toujours muted — le son passe par <audio>)
   useEffect(() => {
     if (isHost) return;
-    const hostId = live?.user?.id;
     const el = remoteHostVideoRef.current;
-    if (!el || !hostId) return;
-    const stream = remoteStreams[hostId];
-    if (!stream) return;
-    if (el.srcObject !== stream) el.srcObject = stream;
-    void (async () => {
-      try {
-        el.muted = true;
-        await el.play();
-        el.muted = false;
-      } catch {
-        /* geste utilisateur requis */
-      }
-    })();
-  }, [remoteStreams, live?.user?.id, isHost]);
+    if (!el) return;
+    if (!hostRemoteStream) {
+      el.srcObject = null;
+      return;
+    }
+    el.muted = true;
+    if (el.srcObject !== hostRemoteStream) el.srcObject = hostRemoteStream;
+    void el.play().catch(() => undefined);
+  }, [hostRemoteStream, hostRemoteTrackKey, isHost]);
+
+  useEffect(() => {
+    if (isHost || !live || live.status !== "LIVE") {
+      viewerMediaRetryRef.current = 0;
+      return;
+    }
+    if (hostRemoteStream) {
+      viewerMediaRetryRef.current = 0;
+      return;
+    }
+    if (viewerMediaRetryRef.current >= 2) return;
+    const t = window.setTimeout(() => {
+      viewerMediaRetryRef.current += 1;
+      void softRefreshLive({ silent: true });
+    }, 6_500);
+    return () => window.clearTimeout(t);
+  }, [isHost, live?.status, hostRemoteStream]);
 
   // Host preview : rattacher le stream dès que la <video> est montée
   useEffect(() => {
@@ -852,13 +950,45 @@ export default function LiveRoomPage({
     }
   }, [myGuestStatus, isHost, session?.user?.id]);
 
-  // Invité déjà sur scène (refresh / accept) → aligner toggles une fois
+  // Toast quand la parole est accordée / retirée (multi-invités)
+  const prevHasFloorRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!onStageAsGuest) {
+      prevHasFloorRef.current = null;
+      return;
+    }
+    const now = Boolean(myGuestRow?.hasFloor);
+    const prev = prevHasFloorRef.current;
+    prevHasFloorRef.current = now;
+    if (prev === null) return;
+    if (!prev && now) toast.success("Parole accordée — vous pouvez parler");
+    if (prev && !now && stageGuests.length >= 2) {
+      toast.message("Parole retirée — levez la main pour redemander");
+    }
+  }, [onStageAsGuest, myGuestRow?.hasFloor, stageGuests.length]);
+
+  // Invité déjà sur scène → aligner cam/mic (+ parole accordée / retirée)
   useEffect(() => {
     if (!onStageAsGuest || !myGuestRow) return;
     setGuestCameraOn(myGuestRow.cameraOn !== false);
-    setGuestMicOn(myGuestRow.micOn !== false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- entrée scène seulement
-  }, [onStageAsGuest, myGuestRow?.id]);
+    const micAllowed =
+      myGuestRow.micOn !== false &&
+      (stageGuests.length < 2 || Boolean(myGuestRow.hasFloor));
+    setGuestMicOn(micAllowed);
+    if (guestStreamRef.current?.active) {
+      setAvTracksEnabled(guestStreamRef.current, {
+        video: myGuestRow.cameraOn !== false,
+        audio: micAllowed,
+      });
+    }
+  }, [
+    onStageAsGuest,
+    myGuestRow?.id,
+    myGuestRow?.cameraOn,
+    myGuestRow?.micOn,
+    myGuestRow?.hasFloor,
+    stageGuests.length,
+  ]);
 
   // Invité : cam + mic locaux (gardés en PAUSED pour reprise rapide)
   useEffect(() => {
@@ -1001,8 +1131,27 @@ export default function LiveRoomPage({
     );
   }
 
+  function kickHostRemotePlayback() {
+    const video = remoteHostVideoRef.current;
+    if (video?.srcObject) {
+      video.muted = true;
+      void video.play().catch(() => undefined);
+    }
+    const audio = hostRemoteAudioRef.current;
+    if (audio?.srcObject) {
+      audio.muted = true;
+      void audio
+        .play()
+        .then(() => {
+          audio.muted = false;
+        })
+        .catch(() => undefined);
+    }
+  }
+
   function onStagePointer(e: React.PointerEvent) {
     if (isHost || endedRef.current) return;
+    kickHostRemotePlayback();
     // Ne pas liker si on clique un contrôle (menu, overlays…)
     const t = e.target as HTMLElement;
     if (t.closest("button, a, input, [data-no-like]")) return;
@@ -1017,28 +1166,47 @@ export default function LiveRoomPage({
 
   async function send(action: "chat" | "gift" | "end", extra?: object) {
     setBusy(true);
-    const { res, data } = await fetchJson<{ error?: string }>(
-      `/api/growth/lives/${id}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...extra }),
-      },
-    );
-    setBusy(false);
-    if (!res.ok) {
-      toast.error(data?.error ?? "Action impossible");
-      return;
+    const giftIntent = `gift:${id}`;
+    const idempotencyKey =
+      action === "gift" ? paymentIdempotencyKey(giftIntent) : undefined;
+    try {
+      const { res, data } =
+        action === "gift" && idempotencyKey
+          ? await fetchPaymentJson<{ error?: string }>(
+              `/api/growth/lives/${id}`,
+              {
+                method: "POST",
+                idempotencyKey,
+                replayScope: "GIFT",
+                body: JSON.stringify({ action, ...extra, idempotencyKey }),
+              },
+            )
+          : await fetchJson<{ error?: string }>(`/api/growth/lives/${id}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action, ...extra }),
+            });
+      if (!res.ok) {
+        toast.error(data?.error ?? "Action impossible");
+        return;
+      }
+      if (action === "gift") {
+        clearPaymentIdempotencyKey(giftIntent);
+        notifyWalletUpdated();
+        toast.success("Cadeau envoyé");
+        setGiftOpen(false);
+        setGiftCustomOpen(false);
+      }
+      if (action === "chat") setChat("");
+      if (action === "end") toast.success("Live terminé");
+      await load();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Connexion interrompue",
+      );
+    } finally {
+      setBusy(false);
     }
-    if (action === "gift") {
-      notifyWalletUpdated();
-      toast.success("Cadeau envoyé");
-      setGiftOpen(false);
-      setGiftCustomOpen(false);
-    }
-    if (action === "chat") setChat("");
-    if (action === "end") toast.success("Live terminé");
-    await load();
   }
 
   async function toggleCamera() {
@@ -1083,14 +1251,22 @@ export default function LiveRoomPage({
   async function toggleGuestMic() {
     if (!onStageAsGuest || busy) return;
     const next = !guestMicOn;
+    if (next && stageGuests.length >= 2 && !myGuestRow?.hasFloor) {
+      toast.message("Levez la main — attendez la parole du diffuseur");
+      return;
+    }
     setGuestMicOn(next);
     setAvTracksEnabled(guestStreamRef.current, {
       audio: next,
       pageVisible: pageVisibleRef.current,
     });
     setBusy(true);
-    await guestAction("guest_mic", { micOn: next });
+    const ok = await guestAction("guest_mic", { micOn: next });
     setBusy(false);
+    if (!ok && next) {
+      setGuestMicOn(false);
+      setAvTracksEnabled(guestStreamRef.current, { audio: false });
+    }
   }
 
   function addTextOverlay() {
@@ -1192,13 +1368,25 @@ export default function LiveRoomPage({
   );
   const showHostLocalVideo =
     isHost && localCameraOn && !ended && Boolean(hostStream);
-  const hostRemote = live.user?.id ? remoteStreams[live.user.id] : null;
+  const hostRemote = hostRemoteStream;
   // Viewer : plein écran dès qu’un flux distant existe et cam host ON
   const showHostRemoteVideo =
     !isHost && !ended && Boolean(hostRemote) && live.cameraOn !== false;
+  const viewerWaitingForMedia =
+    !isHost && !ended && !paused && !hostRemote;
   const selected = overlays.find((o) => o.id === selectedOverlayId);
   const chats = live.chats ?? [];
   const videoFilterStyle = liveVideoFilterStyle(live.videoFilter);
+  const stageLayout = normalizeStageLayout(live.stageLayout);
+  const guestJoinLocked = Boolean(live.guestJoinLocked);
+  const showStageChrome =
+    !ended &&
+    (isHost ||
+      stageGuests.length > 0 ||
+      pendingAsGuest ||
+      invitedAsGuest);
+  const hostMediaFill =
+    "absolute inset-0 size-full object-cover";
 
   return (
     <div className="relative mx-auto flex h-full min-h-0 w-full max-w-lg flex-col overflow-hidden bg-[#050508] text-white sm:max-w-xl md:max-w-2xl">
@@ -1212,66 +1400,180 @@ export default function LiveRoomPage({
           url={live.backdropUrl}
         />
 
-        {showHostLocalVideo ? (
-          <video
-            ref={videoRef}
-            muted
-            autoPlay
-            {...iosInlineVideo}
-            disablePictureInPicture
-            style={videoFilterStyle}
-            className="absolute inset-0 z-[1] size-full object-cover [-webkit-transform:scaleX(-1)] [transform:scaleX(-1)]"
-          />
-        ) : cover &&
-          !hasBackdrop &&
-          (live.cameraOn !== false || isHost) &&
-          !showHostRemoteVideo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={cover}
-            alt=""
-            style={videoFilterStyle}
-            className="absolute inset-0 z-[1] size-full object-cover opacity-80"
-          />
-        ) : null}
+        <LiveStageComposer
+          layout={stageLayout}
+          hostName={live.user?.name}
+          showStageChrome={showStageChrome}
+          guests={guests}
+          selfUserId={session?.user?.id}
+          selfStream={onStageAsGuest ? guestStream : null}
+          remoteStreams={remoteStreams}
+          isHost={isHost}
+          joinLocked={guestJoinLocked}
+          canRequestJoin={Boolean(
+            session?.user &&
+              !isHost &&
+              !onStageAsGuest &&
+              !pendingAsGuest &&
+              !invitedAsGuest &&
+              !guestJoinLocked,
+          )}
+          pendingSelf={pendingAsGuest}
+          onRequestJoin={() => {
+            void (async () => {
+              setBusy(true);
+              const ok = await guestAction("guest_request");
+              setBusy(false);
+              if (ok) toast.message("Demande envoyée");
+            })();
+          }}
+          videoFilter={live.videoFilter}
+          hostMicOn={isHost ? localMicOn : undefined}
+          onToggleHostMic={
+            isHost
+              ? () => {
+                  void toggleMic();
+                }
+              : undefined
+          }
+          onToggleSelfCam={
+            onStageAsGuest
+              ? () => {
+                  void toggleGuestCamera();
+                }
+              : undefined
+          }
+          onToggleSelfMic={
+            onStageAsGuest
+              ? () => {
+                  void toggleGuestMic();
+                }
+              : undefined
+          }
+          onRaiseHand={
+            onStageAsGuest
+              ? () => {
+                  void (async () => {
+                    setBusy(true);
+                    const ok = await guestAction("guest_raise_hand");
+                    setBusy(false);
+                    if (ok) toast.message("Main levée — en attente");
+                  })();
+                }
+              : undefined
+          }
+          onLowerHand={
+            onStageAsGuest
+              ? () => {
+                  void (async () => {
+                    setBusy(true);
+                    await guestAction("guest_lower_hand");
+                    setBusy(false);
+                  })();
+                }
+              : undefined
+          }
+          onGrantFloor={
+            isHost
+              ? (guestId) => {
+                  void (async () => {
+                    setBusy(true);
+                    const ok = await hostAction("guest_grant_floor", {
+                      guestId,
+                    });
+                    setBusy(false);
+                    if (ok) toast.success("Parole accordée");
+                  })();
+                }
+              : undefined
+          }
+          onRevokeFloor={
+            isHost
+              ? (guestId) => {
+                  void (async () => {
+                    setBusy(true);
+                    await hostAction("guest_revoke_floor", { guestId });
+                    setBusy(false);
+                    toast.message("Parole retirée");
+                  })();
+                }
+              : undefined
+          }
+          onKick={
+            isHost
+              ? (guestId) => {
+                  void (async () => {
+                    setBusy(true);
+                    await hostAction("guest_kick", { guestId });
+                    setBusy(false);
+                    toast.message("Invité retiré");
+                  })();
+                }
+              : undefined
+          }
+          hostNode={
+            <>
+              {showHostLocalVideo ? (
+                <video
+                  ref={videoRef}
+                  muted
+                  autoPlay
+                  {...iosInlineVideo}
+                  disablePictureInPicture
+                  style={videoFilterStyle}
+                  className={cn(
+                    hostMediaFill,
+                    "[-webkit-transform:scaleX(-1)] [transform:scaleX(-1)]",
+                  )}
+                />
+              ) : cover &&
+                !hasBackdrop &&
+                isHost &&
+                !showHostLocalVideo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={cover}
+                  alt=""
+                  style={videoFilterStyle}
+                  className={cn(hostMediaFill, "opacity-80")}
+                />
+              ) : null}
 
-        {/* Toujours monté pour les non-hosts : recevoir le live sans cam locale */}
-        {!isHost && !ended ? (
-          <video
-            ref={remoteHostVideoRef}
-            autoPlay
-            {...iosInlineVideo}
-            disablePictureInPicture
-            style={showHostRemoteVideo ? videoFilterStyle : undefined}
-            className={
-              showHostRemoteVideo
-                ? "absolute inset-0 z-[1] size-full object-cover"
-                : "pointer-events-none absolute h-px w-px opacity-0"
-            }
-          />
-        ) : null}
+              {!isHost && !ended ? (
+                <video
+                  ref={remoteHostVideoRef}
+                  muted
+                  autoPlay
+                  {...iosInlineVideo}
+                  disablePictureInPicture
+                  style={showHostRemoteVideo ? videoFilterStyle : undefined}
+                  className={
+                    showHostRemoteVideo
+                      ? hostMediaFill
+                      : "pointer-events-none absolute h-px w-px opacity-0"
+                  }
+                />
+              ) : null}
 
-        <LiveVideoStudioGrade
-          filterId={
-            showHostLocalVideo || showHostRemoteVideo
-              ? live.videoFilter
-              : null
+              {!isHost && !ended ? (
+                <audio
+                  ref={hostRemoteAudioRef}
+                  autoPlay
+                  playsInline
+                  className="hidden"
+                />
+              ) : null}
+
+              <LiveVideoStudioGrade
+                filterId={
+                  showHostLocalVideo || showHostRemoteVideo
+                    ? live.videoFilter
+                    : null
+                }
+              />
+            </>
           }
         />
-
-        {/* Son host si cam coupée mais micro ON (viewers) */}
-        {!isHost && hostRemote && !showHostRemoteVideo ? (
-          <audio
-            autoPlay
-            ref={(el) => {
-              if (!el) return;
-              if (el.srcObject !== hostRemote) {
-                el.srcObject = hostRemote;
-                void el.play().catch(() => undefined);
-              }
-            }}
-          />
-        ) : null}
 
         <LiveStageOverlays
           overlays={overlays}
@@ -1359,34 +1661,29 @@ export default function LiveRoomPage({
           </div>
         ) : null}
 
-        {!ended && stageGuests.length > 0 ? (
-          <LiveGuestStageGrid
-            guests={stageGuests}
-            selfUserId={session?.user?.id}
-            selfStream={onStageAsGuest ? guestStream : null}
-            remoteStreams={remoteStreams}
-            isHost={isHost}
-            videoFilter={live.videoFilter}
-            onKick={
-              isHost
-                ? (guestId) => {
-                    void (async () => {
-                      setBusy(true);
-                      await hostAction("guest_kick", { guestId });
-                      setBusy(false);
-                      toast.message("Invité retiré");
-                    })();
-                  }
-                : undefined
-            }
-          />
+        {viewerWaitingForMedia ? (
+          <button
+            type="button"
+            data-no-like
+            className="absolute inset-0 z-[12] flex flex-col items-center justify-center gap-2 bg-black/55 px-6 text-center backdrop-blur-sm"
+            onClick={() => {
+              kickHostRemotePlayback();
+              void softRefreshLive({ silent: true });
+            }}
+          >
+            <Radio className="size-9 animate-pulse text-white/80" />
+            <p className="text-sm font-semibold">Connexion au live…</p>
+            <p className="text-xs text-white/60">
+              Touchez pour afficher la vidéo et le son
+            </p>
+          </button>
         ) : null}
 
-        {!isHost && live.cameraOn === false && !ended ? (
+        {!isHost && live.cameraOn === false && !ended && hostRemote ? (
           <div className="absolute inset-0 z-[12] flex flex-col items-center justify-center gap-2 bg-black/55 backdrop-blur-sm">
             <CameraOff className="size-10 text-white/80" />
             <p className="text-sm font-semibold">Caméra du diffuseur coupée</p>
-            <p className="text-xs text-white/60">Le live continue</p>
+            <p className="text-xs text-white/60">Le live continue — le son est actif</p>
           </div>
         ) : null}
 
@@ -1618,6 +1915,42 @@ export default function LiveRoomPage({
                         <Aperture className="size-5" />
                       </MenuAction>
                       <MenuAction
+                        label="Scène"
+                        onClick={() => {
+                          setRailMenuOpen(false);
+                          setLayoutPickerOpen(true);
+                        }}
+                      >
+                        <LayoutGrid className="size-5" />
+                      </MenuAction>
+                      <MenuAction
+                        label={guestJoinLocked ? "Ouvert" : "Verrou"}
+                        tone={guestJoinLocked ? "warn" : undefined}
+                        onClick={() => {
+                          setRailMenuOpen(false);
+                          void (async () => {
+                            setBusy(true);
+                            const ok = await hostAction("guest_join_lock", {
+                              locked: !guestJoinLocked,
+                            });
+                            setBusy(false);
+                            if (ok) {
+                              toast.message(
+                                guestJoinLocked
+                                  ? "Montées ouvertes"
+                                  : "Montées fermées",
+                              );
+                            }
+                          })();
+                        }}
+                      >
+                        {guestJoinLocked ? (
+                          <Lock className="size-5" />
+                        ) : (
+                          <LockOpen className="size-5" />
+                        )}
+                      </MenuAction>
+                      <MenuAction
                         label={localCameraOn ? "Cam" : "Cam off"}
                         tone={!localCameraOn ? "warn" : undefined}
                         onClick={() => {
@@ -1844,13 +2177,16 @@ export default function LiveRoomPage({
           </div>
         ) : null}
 
-        {/* Commentaires flottants — toggle bas-gauche */}
+        {/* Commentaires bas — toggle pour tout le monde */}
         {!ended ? (
           <>
             {chatVisible ? (
-              <div className="pointer-events-none absolute inset-x-0 bottom-12 z-[16] flex flex-col justify-end gap-1.5 px-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="min-w-0 truncate text-[13px] font-bold drop-shadow">
+              <div
+                data-no-like
+                className="pointer-events-none absolute inset-x-0 bottom-11 z-[16] flex max-h-[38%] flex-col justify-end gap-1 px-3"
+              >
+                <div className="flex items-center justify-between gap-2 pl-11">
+                  <p className="min-w-0 truncate text-[12px] font-bold drop-shadow">
                     {live.title}
                   </p>
                   {isHost ? (
@@ -1902,19 +2238,20 @@ export default function LiveRoomPage({
                 />
               </div>
             ) : (
-              <p className="pointer-events-none absolute inset-x-0 bottom-12 z-[16] truncate px-3 pl-14 text-[13px] font-bold drop-shadow">
+              <p className="pointer-events-none absolute inset-x-0 bottom-11 z-[16] truncate px-3 pl-14 text-[12px] font-bold drop-shadow">
                 {live.title}
               </p>
             )}
             <button
               type="button"
+              data-no-like
               aria-label={
                 chatVisible
                   ? "Masquer les commentaires"
                   : "Afficher les commentaires"
               }
               aria-pressed={chatVisible}
-              className="absolute bottom-2 left-3 z-[28] flex size-9 items-center justify-center rounded-full border border-white/15 bg-black/50 text-white shadow-lg backdrop-blur-md transition hover:bg-black/70"
+              className="absolute bottom-2 left-3 z-[28] flex size-9 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/75 active:scale-95"
               onClick={() => {
                 setChatVisible((v) => {
                   if (v) {
@@ -2146,6 +2483,92 @@ export default function LiveRoomPage({
             return ok;
           }}
         />
+
+        {layoutPickerOpen && isHost && !ended ? (
+          <>
+            <button
+              type="button"
+              aria-label="Fermer"
+              className="absolute inset-0 z-[40] bg-black/55"
+              onClick={() => setLayoutPickerOpen(false)}
+            />
+            <div className="absolute inset-x-3 bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+5rem))] z-[41] overflow-hidden rounded-3xl border border-white/15 bg-[#121218]/96 p-3 shadow-2xl backdrop-blur-xl sm:bottom-28">
+              <p className="px-1 text-sm font-bold text-white">
+                Disposition scène
+              </p>
+              <p className="mt-0.5 px-1 text-[11px] text-white/50">
+                Placement des invités — visible pour tout le monde.
+              </p>
+              <div className="mt-3 space-y-2">
+                {LIVE_STAGE_LAYOUTS.map((l) => {
+                  const active = stageLayout === l.id;
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        void (async () => {
+                          setBusy(true);
+                          const ok = await hostAction("stage_layout", {
+                            layout: l.id,
+                          });
+                          setBusy(false);
+                          if (ok) {
+                            setLayoutPickerOpen(false);
+                            toast.success(`Disposition « ${l.label} »`);
+                          }
+                        })();
+                      }}
+                      className={cn(
+                        "flex w-full flex-col items-start rounded-2xl border px-3 py-2.5 text-left transition active:scale-[0.99]",
+                        active
+                          ? "border-[#7dffb3]/50 bg-[#7dffb3]/15"
+                          : "border-white/10 bg-white/5 hover:bg-white/10",
+                      )}
+                    >
+                      <span className="text-[13px] font-bold text-white">
+                        {l.label}
+                        {active ? " · actif" : ""}
+                      </span>
+                      <span className="text-[11px] text-white/55">{l.hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 py-2.5 text-[12px] font-bold text-white/85"
+                disabled={busy}
+                onClick={() => {
+                  void (async () => {
+                    setBusy(true);
+                    const ok = await hostAction("guest_join_lock", {
+                      locked: !guestJoinLocked,
+                    });
+                    setBusy(false);
+                    if (ok) {
+                      toast.message(
+                        guestJoinLocked
+                          ? "Tout le monde peut demander à monter"
+                          : "Montées verrouillées",
+                      );
+                    }
+                  })();
+                }}
+              >
+                {guestJoinLocked ? (
+                  <LockOpen className="size-4" />
+                ) : (
+                  <Lock className="size-4" />
+                )}
+                {guestJoinLocked
+                  ? "Rouvrir les demandes"
+                  : "Fermer les montées"}
+              </button>
+            </div>
+          </>
+        ) : null}
 
         <LiveProductPicker
           liveId={id}

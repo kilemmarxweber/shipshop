@@ -3,6 +3,13 @@ import {
   creditWalletLocked,
   debitWalletLocked,
 } from "@/lib/payments/ledger";
+import {
+  beginIdempotentInTx,
+  completeIdempotentInTx,
+  findIdempotentOp,
+  fingerprintPayload,
+  isUniqueConflict,
+} from "@/lib/payments/idempotent-op";
 import { parseCurrency } from "@/lib/money";
 import {
   CREATOR_GIFT_SHARE_BPS,
@@ -24,9 +31,23 @@ export async function sendCreatorGift(input: {
   /** Montant libre (centimes) — prioritaire sur le catalogue. */
   amountCents?: number;
   liveId?: string | null;
+  idempotencyKey: string;
 }) {
   if (input.fromUserId === input.toUserId) {
     throw new Error("Impossible de s’offrir un cadeau");
+  }
+  const priorGift = await findIdempotentOp({
+    userId: input.fromUserId,
+    scope: "GIFT",
+    key: input.idempotencyKey,
+  });
+  if (priorGift?.status === "COMPLETED" && priorGift.response) {
+    return priorGift.response as {
+      gift: { id: string; amountCents: number };
+      chargedCents: number;
+      creatorCents: number;
+      replayed?: boolean;
+    };
   }
   const influencer = await hasActiveBadge(input.toUserId, "INFLUENCER");
   const liveOpen = input.liveId
@@ -82,8 +103,45 @@ export async function sendCreatorGift(input: {
     (amountCents * CREATOR_GIFT_SHARE_BPS) / 10_000,
   );
   const currency = parseCurrency("USD");
+  const requestHash = fingerprintPayload({
+    toUserId: input.toUserId,
+    kind,
+    amountCents,
+    liveId: input.liveId ?? null,
+  });
 
-  return prisma.$transaction(async (tx) => {
+  try {
+  return await prisma.$transaction(async (tx) => {
+    const began = await beginIdempotentInTx(tx, {
+      userId: input.fromUserId,
+      scope: "GIFT",
+      key: input.idempotencyKey,
+      requestHash,
+    });
+    if (began.replayed) return began.replay.response as never;
+
+    const existing = await tx.creatorGift.findUnique({
+      where: { clientIdempotencyKey: input.idempotencyKey },
+    });
+    if (existing) {
+      const payload = {
+        gift: existing,
+        chargedCents: existing.amountCents,
+        creatorCents: Math.round(
+          (existing.amountCents * CREATOR_GIFT_SHARE_BPS) / 10_000,
+        ),
+        replayed: true,
+      };
+      await completeIdempotentInTx(tx, {
+        userId: input.fromUserId,
+        scope: "GIFT",
+        key: input.idempotencyKey,
+        httpStatus: 200,
+        response: payload,
+      });
+      return payload;
+    }
+
     const debit = await debitWalletLocked(
       tx,
       input.fromUserId,
@@ -104,6 +162,7 @@ export async function sendCreatorGift(input: {
         kind,
         amountCents,
         currency: "USD",
+        clientIdempotencyKey: input.idempotencyKey,
       },
     });
     if (input.liveId) {
@@ -136,10 +195,37 @@ export async function sendCreatorGift(input: {
         metadata: { kind, fromUserId: input.fromUserId },
       },
     });
-    return {
+    const payload = {
       gift: row,
       chargedCents: amountCents,
       creatorCents: creatorShare,
+      replayed: false,
     };
+    await completeIdempotentInTx(tx, {
+      userId: input.fromUserId,
+      scope: "GIFT",
+      key: input.idempotencyKey,
+      httpStatus: 200,
+      response: payload,
+    });
+    return payload;
   });
+  } catch (error) {
+    if (isUniqueConflict(error)) {
+      const again = await prisma.creatorGift.findUnique({
+        where: { clientIdempotencyKey: input.idempotencyKey },
+      });
+      if (again && again.fromUserId === input.fromUserId) {
+        return {
+          gift: again,
+          chargedCents: again.amountCents,
+          creatorCents: Math.round(
+            (again.amountCents * CREATOR_GIFT_SHARE_BPS) / 10_000,
+          ),
+          replayed: true,
+        };
+      }
+    }
+    throw error;
+  }
 }

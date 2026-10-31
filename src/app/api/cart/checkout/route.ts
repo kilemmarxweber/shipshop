@@ -14,6 +14,14 @@ import {
   walletEquivalentCents,
   walletUsdCents,
 } from "@/lib/money";
+import { idempotencyFrom } from "@/lib/payments/ledger";
+import {
+  beginIdempotentInTx,
+  completeIdempotentInTx,
+  findIdempotentOp,
+  fingerprintPayload,
+  isUniqueConflict,
+} from "@/lib/payments/idempotent-op";
 
 const schema = z.object({
   fulfillmentType: z.enum(["DELIVERY", "PICKUP"]),
@@ -27,6 +35,7 @@ const schema = z.object({
   deliveryLng: z.number().optional().nullable(),
   contactPhone: z.string().min(10).max(24),
   attributedCreatorId: z.string().min(1).optional().nullable(),
+  idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
 export async function POST(req: Request) {
@@ -35,8 +44,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
+  let key = "";
   try {
     const fulfillment = schema.parse(await req.json());
+    key = idempotencyFrom(req, fulfillment.idempotencyKey);
+
+    const prior = await findIdempotentOp({
+      userId: session.user.id,
+      scope: "CHECKOUT",
+      key,
+    });
+    if (prior?.status === "COMPLETED" && prior.response) {
+      return NextResponse.json(prior.response, {
+        status: prior.httpStatus || 201,
+        headers: { "x-idempotent-replay": "1" },
+      });
+    }
 
     const cartItems = await withDbRetry(() =>
       prisma.cartItem.findMany({
@@ -138,6 +161,7 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+
     const usdBalance = walletUsdCents(wallet, checkFx);
     const hasPricedItems = cartItems.some((item) => item.product.priceCents > 0);
     if (usdBalance < neededUsd || (usdBalance <= 0 && hasPricedItems)) {
@@ -157,8 +181,34 @@ export async function POST(req: Request) {
       );
     }
 
+    const requestHash = fingerprintPayload({
+      fulfillmentType: fulfillment.fulfillmentType,
+      deliveryCity: fulfillment.deliveryCity,
+      deliveryAddress: fulfillment.deliveryAddress,
+      deliveryCommune: fulfillment.deliveryCommune,
+      deliveryQuartier: fulfillment.deliveryQuartier,
+      deliveryAvenue: fulfillment.deliveryAvenue,
+      deliveryParcelle: fulfillment.deliveryParcelle,
+      deliveryLat: fulfillment.deliveryLat,
+      deliveryLng: fulfillment.deliveryLng,
+      contactPhone: fulfillment.contactPhone,
+      attributedCreatorId: fulfillment.attributedCreatorId,
+      cart: cartItems.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+      })),
+    });
+
     const result = await withDbRetry(() =>
       prisma.$transaction(async (tx) => {
+        const began = await beginIdempotentInTx(tx, {
+          userId: session.user.id,
+          scope: "CHECKOUT",
+          key,
+          requestHash,
+        });
+        if (began.replayed) return began.replay.response;
+
         const orders = [];
         const tickets = [];
         let balanceCents = wallet.balanceCents;
@@ -197,22 +247,57 @@ export async function POST(req: Request) {
             itemCount: items.length,
           });
         }
-        return { orders, tickets, balanceCents, count: orders.length };
+        const fresh = {
+          orders,
+          tickets,
+          balanceCents,
+          count: orders.length,
+          replayed: false,
+        };
+        await completeIdempotentInTx(tx, {
+          userId: session.user.id,
+          scope: "CHECKOUT",
+          key,
+          httpStatus: 201,
+          response: fresh,
+        });
+        return fresh;
       }),
     );
 
-    for (const order of result.orders) {
-      const key =
+    const payload = result as {
+      orders: { id: string; fulfillmentType: string; courierId?: string | null }[];
+      tickets: unknown[];
+      balanceCents: number;
+      count: number;
+      replayed?: boolean;
+    };
+
+    for (const order of payload.orders ?? []) {
+      const eventKey =
         order.fulfillmentType === "PICKUP"
           ? "PICKUP_READY"
           : order.courierId
             ? "COURIER_ASSIGNED"
             : null;
-      if (key) void notifyOrderEvent(order.id, key).catch(console.error);
+      if (eventKey)
+        void notifyOrderEvent(order.id, eventKey).catch(console.error);
     }
 
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(payload, { status: 201 });
   } catch (error) {
+    if (isUniqueConflict(error) && key) {
+      const row = await findIdempotentOp({
+        userId: session.user.id,
+        scope: "CHECKOUT",
+        key,
+      });
+      if (row?.status === "COMPLETED" && row.response) {
+        return NextResponse.json(row.response, {
+          status: row.httpStatus || 201,
+        });
+      }
+    }
     if (isInsufficientFunds(error)) {
       return NextResponse.json(
         {

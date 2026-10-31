@@ -559,30 +559,43 @@ export default function WalletPage() {
             const feePct = withdrawBucket === "VENDOR" ? 0 : 5;
             const gross = pots[withdrawBucket];
             const fee = Math.floor((gross * feePct) / 100);
-            const { res, data } = await fetchJson<{ error?: string }>(
-              "/api/wallet/withdraw",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  bucket: withdrawBucket,
-                  amountCents: gross,
-                  currency: displayCurrency,
-                  provider,
-                  phone,
-                }),
-              },
-            );
-            setWithdrawing(false);
-            if (!res.ok) {
-              toast.error(data?.error ?? "Retrait impossible");
-              return;
+            const intent = `withdraw:${withdrawBucket}:${gross}:${displayCurrency}`;
+            const idempotencyKey = paymentIdempotencyKey(intent);
+            try {
+              const { res, data } = await fetchPaymentJson<{ error?: string }>(
+                "/api/wallet/withdraw",
+                {
+                  method: "POST",
+                  idempotencyKey,
+                  replayScope: "WITHDRAW",
+                  body: JSON.stringify({
+                    bucket: withdrawBucket,
+                    amountCents: gross,
+                    currency: displayCurrency,
+                    provider,
+                    phone,
+                    idempotencyKey,
+                  }),
+                },
+              );
+              if (!res.ok) {
+                toast.error(data?.error ?? "Retrait impossible");
+                return;
+              }
+              clearPaymentIdempotencyKey(intent);
+              toast.success(
+                `Retrait ${formatMoney(gross - fee, displayCurrency)} (frais ${formatMoney(fee, displayCurrency)})`,
+              );
+              notifyWalletUpdated();
+              await refresh();
+            } catch (error) {
+              toast.message(t("wallet.connectionLost"));
+              toast.error(
+                error instanceof Error ? error.message : "Retrait interrompu",
+              );
+            } finally {
+              setWithdrawing(false);
             }
-            toast.success(
-              `Retrait ${formatMoney(gross - fee, displayCurrency)} (frais ${formatMoney(fee, displayCurrency)})`,
-            );
-            notifyWalletUpdated();
-            await refresh();
           }}
         >
           Retirer le pot {withdrawBucket === "BUYER" ? "à dépenser" : withdrawBucket === "VENDOR" ? "ventes" : "courses"}

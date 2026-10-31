@@ -4,7 +4,6 @@ import { getOrCreateWallet } from "@/lib/session";
 import {
   parseCurrency,
   type AppCurrency,
-  toUsdCents,
   walletCents,
 } from "@/lib/money";
 import {
@@ -26,9 +25,6 @@ import {
   scheduleOutboxFlush,
   writeAudit,
 } from "@/lib/payments/ledger";
-
-/** Plafond Mobile Money par jour, en centimes $US (pas en CDF bruts). */
-const DAILY_CAP_USD_CENTS = 200_000;
 
 export type DepositInput = {
   userId: string;
@@ -60,33 +56,6 @@ function asMeta(value: unknown): TxnMeta {
     return value as TxnMeta;
   }
   return {};
-}
-
-async function assertDailyCap(
-  userId: string,
-  currency: AppCurrency,
-  amountCents: number,
-) {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const usedToday = await prisma.walletTransaction.findMany({
-    where: {
-      wallet: { userId },
-      type: { in: ["DEPOSIT", "TRANSFER_OUT"] },
-      status: { in: ["PENDING", "SUCCESS"] },
-      createdAt: { gte: startOfDay },
-    },
-    select: { amountCents: true, currency: true },
-  });
-  const usedUsd = usedToday.reduce(
-    (sum, row) =>
-      sum + toUsdCents(Math.abs(row.amountCents), parseCurrency(row.currency)),
-    0,
-  );
-  const nextUsd = toUsdCents(amountCents, currency);
-  if (usedUsd + nextUsd > DAILY_CAP_USD_CENTS) {
-    throw new Error("Plafond journalier atteint");
-  }
 }
 
 const movementInclude = {
@@ -161,8 +130,6 @@ export async function initiateDeposit(input: DepositInput) {
       replayed: true,
     };
   }
-
-  await assertDailyCap(input.userId, currency, input.amountCents);
 
   const wallet = await getOrCreateWallet(input.userId);
 
@@ -527,8 +494,6 @@ export async function transferFromBalance(input: {
   if (!beneficiary) {
     throw new Error("Bénéficiaire introuvable — il doit avoir un compte ShipShop");
   }
-
-  await assertDailyCap(input.payerUserId, currency, input.amountCents);
 
   try {
     const result = await prisma.$transaction(async (tx) => {

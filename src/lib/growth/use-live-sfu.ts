@@ -271,6 +271,20 @@ export function useLiveSfu(opts: {
       ingestExisting();
       // Un seul syncPublish ici (pas aussi sur RoomEvent.Connected)
       await syncPublish(room);
+
+      // Viewer : SFU connecté mais aucune piste → bascule mesh (pas d’attente infinie)
+      if (!isPublisherRef.current) {
+        window.setTimeout(() => {
+          if (cancelled) return;
+          if (isPublisherRef.current) return;
+          const hasRemote = [...room.remoteParticipants.values()].some((p) =>
+            [...p.trackPublications.values()].some(
+              (pub) => pub.isSubscribed && pub.track,
+            ),
+          );
+          if (!hasRemote) markFailed("viewer-empty");
+        }, 8_000);
+      }
     }
 
     void connect();

@@ -4,6 +4,14 @@ import { isInsufficientFunds, purchaseProduct } from "@/lib/checkout";
 import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { idempotencyFrom } from "@/lib/payments/ledger";
+import {
+  beginIdempotentInTx,
+  completeIdempotentInTx,
+  findIdempotentOp,
+  fingerprintPayload,
+  isUniqueConflict,
+} from "@/lib/payments/idempotent-op";
 import { SHOP_HOURS_SELECT } from "@/lib/shop-hours";
 import { assertCanManageShop } from "@/lib/shop-access";
 
@@ -22,6 +30,7 @@ const createSchema = z.object({
   optionColor: z.string().max(40).optional().nullable(),
   optionSize: z.string().max(20).optional().nullable(),
   attributedCreatorId: z.string().min(1).optional().nullable(),
+  idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
 const ACTIVE = [
@@ -141,12 +150,49 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
+  let key = "";
   try {
     const body = createSchema.parse(await req.json());
+    key = idempotencyFrom(req, body.idempotencyKey);
+    const requestHash = fingerprintPayload({
+      productId: body.productId,
+      fulfillmentType: body.fulfillmentType,
+      deliveryCity: body.deliveryCity,
+      deliveryAddress: body.deliveryAddress,
+      deliveryCommune: body.deliveryCommune,
+      deliveryQuartier: body.deliveryQuartier,
+      deliveryAvenue: body.deliveryAvenue,
+      deliveryParcelle: body.deliveryParcelle,
+      deliveryLat: body.deliveryLat,
+      deliveryLng: body.deliveryLng,
+      contactPhone: body.contactPhone,
+      optionColor: body.optionColor,
+      optionSize: body.optionSize,
+      attributedCreatorId: body.attributedCreatorId,
+    });
+
+    const prior = await findIdempotentOp({
+      userId: session.user.id,
+      scope: "ORDER",
+      key,
+    });
+    if (prior?.status === "COMPLETED" && prior.response) {
+      return NextResponse.json(prior.response, {
+        status: prior.httpStatus || 201,
+        headers: { "x-idempotent-replay": "1" },
+      });
+    }
 
     const result = await withDbRetry(() =>
-      prisma.$transaction((tx) =>
-        purchaseProduct(
+      prisma.$transaction(async (tx) => {
+        const began = await beginIdempotentInTx(tx, {
+          userId: session.user.id,
+          scope: "ORDER",
+          key,
+          requestHash,
+        });
+        if (began.replayed) return began.replay.response;
+        const purchased = await purchaseProduct(
           tx,
           session.user.id,
           body.productId,
@@ -165,22 +211,58 @@ export async function POST(req: Request) {
             optionSize: body.optionSize,
           },
           { attributedCreatorId: body.attributedCreatorId },
-        ),
-      ),
+        );
+        const payload = { ...purchased, replayed: false };
+        await completeIdempotentInTx(tx, {
+          userId: session.user.id,
+          scope: "ORDER",
+          key,
+          httpStatus: 201,
+          response: payload,
+        });
+        return payload;
+      }),
     );
 
-    if (result.order) {
-      const key =
-        result.order.fulfillmentType === "PICKUP"
+    const order =
+      result &&
+      typeof result === "object" &&
+      "order" in result
+        ? (
+            result as {
+              order?: {
+                id: string;
+                fulfillmentType: string;
+                courierId?: string | null;
+              };
+            }
+          ).order
+        : undefined;
+    if (order) {
+      const eventKey =
+        order.fulfillmentType === "PICKUP"
           ? "PICKUP_READY"
-          : result.order.courierId
+          : order.courierId
             ? "COURIER_ASSIGNED"
             : null;
-      if (key) void notifyOrderEvent(result.order.id, key).catch(console.error);
+      if (eventKey)
+        void notifyOrderEvent(order.id, eventKey).catch(console.error);
     }
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    if (isUniqueConflict(error) && key) {
+      const row = await findIdempotentOp({
+        userId: session.user.id,
+        scope: "ORDER",
+        key,
+      });
+      if (row?.status === "COMPLETED" && row.response) {
+        return NextResponse.json(row.response, {
+          status: row.httpStatus || 201,
+        });
+      }
+    }
     if (isInsufficientFunds(error)) {
       return NextResponse.json(
         {

@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 51;
+const PRISMA_SCHEMA_REV = 52;
 const CHALLENGE_HAS_PRODUCT =
   Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
 
@@ -87,6 +87,7 @@ function getPrismaClient() {
     typeof existing.creatorLive?.findMany === "function" &&
     typeof existing.liveGuest?.findMany === "function" &&
     typeof existing.liveRtcSignal?.findMany === "function" &&
+    typeof existing.idempotentOperation?.findMany === "function" &&
     CART_ITEM_HAS_QUANTITY &&
     SHOP_HAS_HOURS &&
     COURIER_HAS_ARCHIVE &&

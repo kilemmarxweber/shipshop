@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { AlertTriangle, Bell, MessageCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, Bell, MessageCircle, Radio } from "lucide-react";
+import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { notifyInboxSeen } from "@/lib/inbox-events";
@@ -49,6 +50,8 @@ export function NotificationsBell({
   comments,
   userId,
 }: Props) {
+  const router = useRouter();
+  const { t, locale } = useI18n();
   const seenStorageKey = userId ? `ss:notices:seen:${userId}` : null;
   const [notices, setNotices] = useState<
     { id: string; title: string; body: string; href: string | null; readAt: string | null }[]
@@ -91,11 +94,13 @@ export function NotificationsBell({
     const refreshNotices = () => {
       fetch("/api/notices")
         .then((r) => r.json())
-        .then((json) => setNotices(json.notices ?? []))
+        .then((json) => {
+          setNotices(json.notices ?? []);
+        })
         .catch(() => undefined);
     };
     refreshNotices();
-    const timer = setInterval(refreshNotices, 8000);
+    const timer = setInterval(refreshNotices, 4000);
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         refreshNotices();
@@ -110,8 +115,6 @@ export function NotificationsBell({
       window.removeEventListener("focus", onFocus);
     };
   }, [userId]);
-  const { t, locale } = useI18n();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"messages" | "comments">("messages");
   const messagesTabUnread = unreadMessages + unreadNotices;
