@@ -113,6 +113,15 @@ function postedResult(
   };
 }
 
+/** Simulated deposits keep the previous 9–15 digit check. CinetPay has its own. */
+function simulatedPayerPhone(raw: string) {
+  const phone = raw.trim();
+  if (!/^\+?\d{9,15}$/.test(phone)) {
+    throw new Error("Numéro Mobile Money invalide");
+  }
+  return phone;
+}
+
 export async function initiateDeposit(input: DepositInput) {
   await expireStaleMovements();
   const key = parseIdempotencyKey(input.idempotencyKey);
@@ -122,7 +131,9 @@ export async function initiateDeposit(input: DepositInput) {
   const amountMajor = live
     ? assertCinetPayAmount(input.amountCents, currency)
     : input.amountCents / 100;
-  const payerPhone = cinetPayPhone(input.phone);
+  const payerPhone = live
+    ? cinetPayPhone(input.phone)
+    : simulatedPayerPhone(input.phone);
 
   const beneficiaryId = input.beneficiaryUserId?.trim() || null;
   if (beneficiaryId && beneficiaryId === input.userId) {
@@ -282,8 +293,8 @@ async function openCinetPay(
     select: { name: true, email: true },
   });
   const parts = (payer?.name ?? getAppName()).trim().split(/\s+/).filter(Boolean);
-  const surname = parts[0] ?? "Client";
-  const given = parts.slice(1).join(" ") || surname;
+  const given = parts[0] ?? "Client";
+  const surname = parts.slice(1).join(" ") || given;
   if (currency !== "CDF" && currency !== "USD") {
     throw new Error("CinetPay accepte CDF et USD. Le KW reste dans ShipShop.");
   }

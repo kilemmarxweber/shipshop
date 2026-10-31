@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import { writeFileSync } from "node:fs";
 import sharp from "sharp";
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
@@ -48,9 +48,9 @@ const { data, info } = await sharp(png32).ensureAlpha().raw().toBuffer({
 if (info.channels !== 4) throw new Error(`expected rgba, got ${info.channels}`);
 const ico = rgbaToIco(data, 32);
 
-fs.writeFileSync("public/icon-32.png", png32);
-fs.writeFileSync("public/icon-192.png", png192);
-fs.writeFileSync("public/apple-touch-icon.png", png180);
-fs.writeFileSync("public/favicon.ico", ico);
-fs.writeFileSync("src/app/icon.png", png32);
+writeFileSync("public/icon-32.png", png32);
+writeFileSync("public/icon-192.png", png192);
+writeFileSync("public/apple-touch-icon.png", png180);
+writeFileSync("public/favicon.ico", ico);
+writeFileSync("src/app/icon.png", png32);
 console.log("ok", { ico: ico.length, channels: info.channels });

@@ -27,13 +27,23 @@ export function CinetPayReturnView({ appName }: { appName: string }) {
     }
     let stop = false;
     async function load(current: string) {
-      const res = await fetch(
-        `/api/payments/cinetpay/status?tx=${encodeURIComponent(current)}`,
-      );
-      const json = (await res.json()) as StatusPayload;
-      if (stop) return;
-      setData(json);
-      setLoading(false);
+      try {
+        const res = await fetch(
+          `/api/payments/cinetpay/status?tx=${encodeURIComponent(current)}`,
+        );
+        const json = (await res.json()) as StatusPayload;
+        if (stop) return;
+        setData(
+          !res.ok && !json.error
+            ? { error: "Impossible de vérifier le paiement. Réessayez." }
+            : json,
+        );
+      } catch {
+        if (stop) return;
+        setData({ error: "Impossible de vérifier le paiement. Réessayez." });
+      } finally {
+        if (!stop) setLoading(false);
+      }
     }
     void load(id);
     return () => {
@@ -50,7 +60,7 @@ export function CinetPayReturnView({ appName }: { appName: string }) {
       : failed
         ? "Paiement refusé"
         : data?.error
-          ? "Paiement introuvable"
+          ? "Vérification impossible"
           : "Paiement en attente";
 
   return (

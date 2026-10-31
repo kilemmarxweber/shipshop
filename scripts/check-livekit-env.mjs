@@ -1,7 +1,7 @@
-import fs from "node:fs";
+import { readFileSync } from "node:fs";
 import { AccessToken } from "livekit-server-sdk";
 
-const t = fs.readFileSync(".env", "utf8");
+const t = readFileSync(".env", "utf8");
 const get = (k) => {
   const m = t.match(new RegExp(`^${k}=(.*)$`, "m"));
   return (m?.[1] ?? "").trim().replace(/^['"]|['"]$/g, "");
