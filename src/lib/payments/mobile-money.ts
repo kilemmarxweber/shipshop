@@ -19,6 +19,7 @@ import {
   cinetPayRefused,
   CinetPayApiError,
   initiateCinetPayPayment,
+  isCinetPayConfigured,
   newCinetPayTransactionId,
   verifyCinetPayNotifyToken,
 } from "@/lib/payments/cinetpay";
@@ -117,7 +118,10 @@ export async function initiateDeposit(input: DepositInput) {
   const key = parseIdempotencyKey(input.idempotencyKey);
   if (input.amountCents < 100) throw new Error("Montant minimum: 1");
   const currency = parseCurrency(input.currency);
-  const amountMajor = assertCinetPayAmount(input.amountCents, currency);
+  const live = isCinetPayConfigured();
+  const amountMajor = live
+    ? assertCinetPayAmount(input.amountCents, currency)
+    : input.amountCents / 100;
   const payerPhone = cinetPayPhone(input.phone);
 
   const beneficiaryId = input.beneficiaryUserId?.trim() || null;
@@ -147,7 +151,10 @@ export async function initiateDeposit(input: DepositInput) {
       existing.status === "AWAITING_FUNDS" &&
       !existingMeta.paymentUrl
     ) {
-      return openCinetPay(existing.id, input, amountMajor, currency);
+      if (live && existingMeta.simulated !== true) {
+        return openCinetPay(existing.id, input, amountMajor, currency);
+      }
+      return { ...publicMovement(existing), replayed: true };
     }
     if (existing.status === "FAILED" || existing.status === "REJECTED") {
       throw new Error("Paiement refusé. Relancez une nouvelle demande.");
@@ -161,14 +168,16 @@ export async function initiateDeposit(input: DepositInput) {
   const wallet = await getOrCreateWallet(input.userId);
 
   const clientReference = newCinetPayTransactionId();
-  const session = createCollectionSession({
-    amount: String(amountMajor),
-    currency,
-    mobile: payerPhone,
-    client_reference: clientReference,
-    idempotency_key: key,
-    provider: input.provider,
-  });
+  const session = live
+    ? null
+    : createCollectionSession({
+        amount: String(amountMajor),
+        currency,
+        mobile: payerPhone,
+        client_reference: clientReference,
+        idempotency_key: key,
+        provider: input.provider,
+      });
 
   const beneficiary = beneficiaryId
     ? await prisma.user.findUnique({
@@ -180,8 +189,8 @@ export async function initiateDeposit(input: DepositInput) {
   const expiresAt = new Date(Date.now() + MOVEMENT_TTL_MS);
   const kind = beneficiaryId ? "P2P_MM" : "DEPOSIT";
   const meta: TxnMeta = {
-    simulated: false,
-    ussdHint: session.ussdHint,
+    simulated: !live,
+    ussdHint: session?.ussdHint,
     payerUserId: input.userId,
     beneficiaryUserId: beneficiaryId ?? undefined,
     beneficiaryName: beneficiary?.name,
@@ -236,7 +245,10 @@ export async function initiateDeposit(input: DepositInput) {
         include: movementInclude,
       });
     });
-    return openCinetPay(movement.id, input, amountMajor, currency);
+    if (live) {
+      return openCinetPay(movement.id, input, amountMajor, currency);
+    }
+    return { ...publicMovement(movement), replayed: false };
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -405,8 +417,9 @@ export async function settleCinetPayDeposit(input: {
     if (!amountMatches) {
       throw new Error("Montant CinetPay différent du mouvement");
     }
+    const prevMeta = asMeta(movement.metadata);
     const meta: TxnMeta = {
-      ...asMeta(movement.metadata),
+      ...prevMeta,
       cinetpayStatus: check.status,
       paymentMethod: check.paymentMethod ?? undefined,
       operatorId: check.operatorId ?? undefined,
@@ -437,7 +450,6 @@ export async function settleCinetPayDeposit(input: {
             ...asMeta(current.metadata),
             cinetpayStatus: check.status,
             paymentMethod: check.paymentMethod ?? undefined,
-            simulated: false,
           },
         },
       });
@@ -459,6 +471,36 @@ export async function settleCinetPayDeposit(input: {
   }
 
   return publicMovement(movement);
+}
+
+export async function confirmDeposit(
+  transactionId: string,
+  payerUserId: string,
+  audit: AuditCtx,
+) {
+  const pendingTxn = await prisma.walletTransaction.findFirst({
+    where: {
+      id: transactionId,
+      type: { in: ["DEPOSIT", "TRANSFER_OUT"] },
+    },
+  });
+  const movement =
+    (pendingTxn?.movementId
+      ? await prisma.moneyMovement.findUnique({
+          where: { id: pendingTxn.movementId },
+        })
+      : null) ??
+    (await prisma.moneyMovement.findFirst({
+      where: { providerReference: transactionId },
+    }));
+  if (asMeta(movement?.metadata).simulated === true) {
+    return confirmSimulatedDeposit(transactionId, payerUserId, audit);
+  }
+  return settleCinetPayDeposit({
+    transactionId,
+    payerUserId,
+    audit,
+  });
 }
 
 export async function confirmSimulatedDeposit(

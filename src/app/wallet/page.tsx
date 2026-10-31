@@ -285,7 +285,7 @@ export default function WalletPage() {
       setPendingId(json.transactionId ?? null);
       setPendingMovementId(json.movementId ?? null);
       setUssdHint(json.ussdHint ?? null);
-      toast.message(t("wallet.ussdHint"));
+      toast.message(json.ussdHint?.trim() || t("wallet.ussdHint"));
       return;
     }
     if (json.status === "POSTED" || json.alreadyApplied || json.alreadyConfirmed) {

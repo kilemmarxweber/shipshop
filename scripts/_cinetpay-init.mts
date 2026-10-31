@@ -1,9 +1,9 @@
-import dns from "node:dns";
-import fs from "node:fs";
+import { setDefaultResultOrder } from "node:dns";
+import { readFileSync } from "node:fs";
 
-dns.setDefaultResultOrder("ipv4first");
+setDefaultResultOrder("ipv4first");
 
-const text = fs.readFileSync(".env", "utf8");
+const text = readFileSync(".env", "utf8");
 function val(key: string) {
   const match = text.match(new RegExp(`^${key}=(.*)$`, "m"));
   if (!match) return "";

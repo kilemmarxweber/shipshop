@@ -78,6 +78,16 @@ export class CinetPayApiError extends Error {
 type TokenCache = { token: string; expiresAt: number; key: string };
 let tokenCache: TokenCache | null = null;
 
+export function isCinetPayConfigured() {
+  const apiKey = process.env.CINETPAY_API_KEY?.trim() ?? "";
+  const apiPassword = (
+    process.env.CINETPAY_API_PASSWORD ??
+    process.env.CINETPAY_SECRET_KEY ??
+    ""
+  ).trim();
+  return Boolean(apiKey && apiPassword);
+}
+
 export function cinetpayConfig(): CinetPayConfig {
   const apiKey = process.env.CINETPAY_API_KEY?.trim() ?? "";
   const apiPassword = (
