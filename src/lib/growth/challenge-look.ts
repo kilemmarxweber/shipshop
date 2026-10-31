@@ -97,11 +97,11 @@ export function categoryMood(
 export function compactCount(value: number, _locale?: UserLocale) {
   const n = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
   if (n < 10_000) return String(n);
-  const format = (div: number, suffix: "K" | "M" | "B") =>
-    `${(Math.floor(n / div) / 10).toFixed(1)}${suffix}`;
-  if (n < 1_000_000) return format(100, "K");
-  if (n < 1_000_000_000) return format(100_000, "M");
-  return format(100_000_000, "B");
+  const format = (unit: number, suffix: "K" | "M" | "B") =>
+    `${(Math.floor((n / unit) * 10) / 10).toFixed(1)}${suffix}`;
+  if (n < 1_000_000) return format(1_000, "K");
+  if (n < 1_000_000_000) return format(1_000_000, "M");
+  return format(1_000_000_000, "B");
 }
 
 export function firstVisualUrl(images: string[]) {

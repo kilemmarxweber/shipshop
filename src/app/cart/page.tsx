@@ -14,6 +14,7 @@ import {
 } from "@/lib/payments/idempotency-client";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney } from "@/lib/utils";
+import { ProductPriceTag } from "@/components/product-price-tag";
 import { notifyCartUpdated } from "@/lib/cart-events";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { useI18n } from "@/components/i18n-provider";
@@ -33,6 +34,8 @@ type CartItem = {
     id: string;
     title: string;
     priceCents: number;
+    compareAtCents?: number | null;
+    promoPercent?: number | null;
     currency?: string;
     images: string[];
     status: string;
@@ -347,13 +350,20 @@ export default function CartPage() {
                       <p className="truncate text-sm font-semibold">
                         {item.product.title}
                       </p>
-                      <p className="font-heading text-sm font-bold text-trust">
-                        {formatMoney(
+                      <ProductPriceTag
+                        priceCents={
                           item.product.priceCents *
-                            Math.max(1, item.quantity ?? 1),
-                          item.product.currency,
-                        )}
-                      </p>
+                          Math.max(1, item.quantity ?? 1)
+                        }
+                        currency={item.product.currency}
+                        compareAtCents={
+                          item.product.compareAtCents
+                            ? item.product.compareAtCents *
+                              Math.max(1, item.quantity ?? 1)
+                            : null
+                        }
+                        promoPercent={item.product.promoPercent}
+                      />
                       <p className="text-[11px] text-muted-foreground">
                         {formatMoney(
                           item.product.priceCents,

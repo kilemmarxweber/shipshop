@@ -18,8 +18,13 @@ import {
   KinshasaAddressForm,
   type AddressState,
 } from "@/components/kinshasa-address-form";
-import { cn } from "@/lib/utils";
+import { cn, formatMoney } from "@/lib/utils";
 import { BOOST_PACKS } from "@/lib/shop-boost";
+import {
+  clampPercent,
+  discountedPriceCents,
+  promoTierForPercent,
+} from "@/lib/shiprewards/tiers";
 
 type BoostDays = (typeof BOOST_PACKS)[number]["days"];
 type BoostZone = {
@@ -246,11 +251,19 @@ export function ProductCommerceTools({
   creatorCommissionBps,
   canManage,
   canClaimCreator,
+  priceCents = 0,
+  currency = "USD",
+  compareAtCents,
+  promoPercent,
 }: {
   productId: string;
   creatorCommissionBps: number;
   canManage: boolean;
   canClaimCreator: boolean;
+  priceCents?: number;
+  currency?: string;
+  compareAtCents?: number | null;
+  promoPercent?: number | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [bps, setBps] = useState(creatorCommissionBps);
@@ -278,6 +291,10 @@ export function ProductCommerceTools({
     return { lat: center.lat, lng: center.lng };
   });
   const [locating, setLocating] = useState(false);
+  const [promoPct, setPromoPct] = useState(promoPercent ?? 10);
+  const [promoMode, setPromoMode] = useState<"period" | "permanent">("period");
+  const [promoEnds, setPromoEnds] = useState("");
+  const activePromo = Boolean(compareAtCents && promoPercent);
 
   useEffect(() => {
     void fetchJson<GeoCatalogResponse>("/api/geo/kinshasa").then(({ data }) => {
@@ -600,10 +617,112 @@ export function ProductCommerceTools({
     toast.success("Produit ajouté à ShipCreator — partage le lien de la fiche");
   }
 
+  async function savePromo() {
+    setBusy(true);
+    const percent = clampPercent(promoPct);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      `/api/products/${productId}/promo`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          percent,
+          mode: promoMode,
+          endsAt:
+            promoMode === "period" && promoEnds
+              ? new Date(promoEnds).toISOString()
+              : undefined,
+        }),
+      },
+    );
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Promo impossible");
+      return;
+    }
+    toast.success("Réduction activée");
+    window.location.reload();
+  }
+
+  async function stopPromo() {
+    setBusy(true);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      `/api/products/${productId}/promo`,
+      { method: "DELETE" },
+    );
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Arrêt impossible");
+      return;
+    }
+    toast.success("Promo arrêtée");
+    window.location.reload();
+  }
+
   return (
     <div className="mt-3 space-y-2 border-t border-border pt-3">
       {canManage ? (
         <>
+          <p className="text-[11px] font-semibold">Réduction ShipRewards</p>
+          {activePromo ? (
+            <div className="space-y-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-2">
+              <p className="text-[11px] text-muted-foreground">
+                −{promoPercent} % · palier {promoTierForPercent(promoPercent ?? 0) ?? "—"}
+              </p>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => void stopPromo()}>
+                Arrêter la promo
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={promoPct}
+                  onChange={(e) => setPromoPct(Number(e.target.value) || 1)}
+                  className="h-8 w-20 rounded-lg border border-border bg-surface-2 px-2 text-xs"
+                />
+                <span className="text-[11px] text-muted-foreground">%</span>
+                <Button
+                  size="sm"
+                  variant={promoMode === "period" ? "default" : "outline"}
+                  disabled={busy}
+                  onClick={() => setPromoMode("period")}
+                >
+                  Période
+                </Button>
+                <Button
+                  size="sm"
+                  variant={promoMode === "permanent" ? "default" : "outline"}
+                  disabled={busy}
+                  onClick={() => setPromoMode("permanent")}
+                >
+                  Définitif
+                </Button>
+              </div>
+              {promoMode === "period" ? (
+                <input
+                  type="datetime-local"
+                  value={promoEnds}
+                  onChange={(e) => setPromoEnds(e.target.value)}
+                  className="h-8 rounded-lg border border-border bg-surface-2 px-2 text-xs"
+                />
+              ) : null}
+              <p className="text-[11px] text-muted-foreground">
+                {formatMoney(priceCents, currency)} →{" "}
+                {formatMoney(
+                  discountedPriceCents(priceCents, promoPct),
+                  currency,
+                )}{" "}
+                · {promoTierForPercent(promoPct) ?? "< 5 % = pas de récompense"}
+              </p>
+              <Button size="sm" disabled={busy} onClick={() => void savePromo()}>
+                Activer la réduction
+              </Button>
+            </div>
+          )}
           <p className="text-[11px] font-semibold">ShipBoost</p>
           <p className="text-[11px] text-muted-foreground">
             Ciblage local: commence par le pays, puis ville, commune, quartier.

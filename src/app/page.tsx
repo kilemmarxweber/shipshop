@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatMoney, cn } from "@/lib/utils";
+import { ProductPriceTag } from "@/components/product-price-tag";
 import { compactCount } from "@/lib/growth/challenge-look";
 import { Button } from "@/components/ui/button";
 import { useAppConfig } from "@/lib/use-app-config";
@@ -78,6 +79,8 @@ type Product = {
   title: string;
   description: string | null;
   priceCents: number;
+  compareAtCents?: number | null;
+  promoPercent?: number | null;
   currency?: string;
   quantity?: number;
   soldCount?: number;
@@ -935,9 +938,12 @@ export default function FeedPage() {
                   <p className="truncate text-xs font-semibold text-white">
                     {p.title}
                   </p>
-                  <p className="font-heading text-sm font-bold text-trust">
-                    {formatMoney(p.priceCents, p.currency)}
-                  </p>
+                  <ProductPriceTag
+                    priceCents={p.priceCents}
+                    currency={p.currency}
+                    compareAtCents={p.compareAtCents}
+                    promoPercent={p.promoPercent}
+                  />
                 </div>
                 <Button
                   type="button"

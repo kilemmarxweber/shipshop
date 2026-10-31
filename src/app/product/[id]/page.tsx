@@ -28,6 +28,7 @@ import { parseCurrency } from "@/lib/money";
 import { CART_UPDATED_EVENT, notifyCartUpdated } from "@/lib/cart-events";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { formatMoney, cn } from "@/lib/utils";
+import { ProductPriceTag } from "@/components/product-price-tag";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { colorHex } from "@/lib/product-options";
 import { usePageBack } from "@/components/back-nav-context";
@@ -61,6 +62,9 @@ import { Textarea } from "@/components/ui/textarea";
 
 type Product = {
   id: string;
+  compareAtCents?: number | null;
+  promoPercent?: number | null;
+  promoTier?: string | null;
   title: string;
   description: string | null;
   priceCents: number;
@@ -489,9 +493,14 @@ function ProductInner() {
               <h1 className="truncate font-heading text-lg font-extrabold sm:text-xl">
                 {product.title}
               </h1>
-              <p className="mt-1 font-heading text-2xl font-black text-trust sm:text-3xl">
-                {formatMoney(product.priceCents, product.currency)}
-              </p>
+              <ProductPriceTag
+                className="mt-1"
+                size="lg"
+                priceCents={product.priceCents}
+                currency={product.currency}
+                compareAtCents={product.compareAtCents}
+                promoPercent={product.promoPercent}
+              />
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <MapPin className="size-3.5 shrink-0" />
@@ -667,6 +676,10 @@ function ProductInner() {
               creatorCommissionBps={product.creatorCommissionBps ?? 0}
               canManage
               canClaimCreator={false}
+              priceCents={product.priceCents}
+              currency={product.currency}
+              compareAtCents={product.compareAtCents}
+              promoPercent={product.promoPercent}
             />
           </div>
         )}

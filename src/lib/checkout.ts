@@ -40,6 +40,11 @@ import {
 } from "@/lib/platform-fees";
 import { recordFunnelEvent } from "@/lib/commerce-funnel";
 import { shopMonthGmvUsdCents } from "@/lib/shop-volume";
+import {
+  clawbackShipRewards,
+  grantShipCashOnEscrow,
+  rewardFeeBps,
+} from "@/lib/shiprewards/grant";
 import { creditTreasury, reverseSaleFee } from "@/lib/platform-ledger";
 import {
   applyBucketDelta,
@@ -108,6 +113,9 @@ export async function purchaseProduct(
 
   if (product.quantity < 1 || product.status !== "ACTIVE") {
     throw new Error("Produit indisponible");
+  }
+  if (product.shop.ownerUserId && product.shop.ownerUserId === buyerId) {
+    throw new Error("Auto-achat interdit");
   }
 
   let shippingCents = 0;
@@ -408,6 +416,10 @@ export async function purchaseProduct(
       status: initialStatus,
       paidAt: new Date(),
       attributedCreatorId: opts?.attributedCreatorId || null,
+      promoId: product.activePromoId,
+      promoPercent: product.promoPercent ?? 0,
+      promoTier: product.promoTier,
+      compareAtCents: product.compareAtCents,
     },
     include: {
       product: true,
@@ -573,6 +585,21 @@ async function refundOrderInternal(
       }
     }
     await reverseSaleFee(tx, order.id);
+    if (sellerId) {
+      await clawbackShipRewards(
+        tx,
+        {
+          id: order.id,
+          shopId: order.shopId,
+          productCents: order.productCents,
+          compareAtCents: order.compareAtCents,
+          promoPercent: order.promoPercent,
+          promoId: order.promoId,
+        },
+        sellerId,
+        currency,
+      );
+    }
   }
 
   const wallet = await tx.wallet.findUnique({
@@ -874,8 +901,22 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
   const currency = parseCurrency(order.product.currency);
   const fx = shopFxRates(order.shop);
   const monthlyGmvUsd = await shopMonthGmvUsdCents(tx, order.shopId);
-  const feeBps = saleFeeBpsForMonthlyGmvUsd(monthlyGmvUsd);
-  const fee = saleFeeCents(order.productCents, currency, fx, monthlyGmvUsd);
+  const volumeBps = saleFeeBpsForMonthlyGmvUsd(monthlyGmvUsd);
+  const rewardState = await tx.shopRewardState.findUnique({
+    where: { shopId: order.shopId },
+  });
+  const { feeBps, consumeGrant } = rewardFeeBps(
+    volumeBps,
+    rewardState,
+    order.promoTier,
+  );
+  const fee = saleFeeCents(
+    order.productCents,
+    currency,
+    fx,
+    monthlyGmvUsd,
+    feeBps,
+  );
   const creatorBps =
     order.attributedCreatorId && order.product.creatorCommissionBps > 0
       ? order.product.creatorCommissionBps
@@ -887,6 +928,7 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
     fx,
     monthlyGmvUsd,
     creatorBps,
+    feeBps,
   );
 
   if (order.productCents <= 0) {
@@ -989,6 +1031,30 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
       creatorFeeCents: creatorFee,
     },
   });
+  if (consumeGrant && rewardState && rewardState.commissionGrantRemaining > 0) {
+    await tx.shopRewardState.update({
+      where: { shopId: order.shopId },
+      data: {
+        commissionGrantRemaining: rewardState.commissionGrantRemaining - 1,
+      },
+    });
+  }
+  if (sellerId) {
+    await grantShipCashOnEscrow(
+      tx,
+      {
+        id: order.id,
+        shopId: order.shopId,
+        buyerId: order.buyerId,
+        productCents: order.productCents,
+        compareAtCents: order.compareAtCents,
+        promoPercent: order.promoPercent,
+        promoId: order.promoId,
+        promoTier: order.promoTier,
+      },
+      { userId: sellerId, currency },
+    );
+  }
   await releaseShippingToCourier(tx, order.id);
   await maybeCompleteShopHandover(tx, order.handoverId);
   return { credited: creditCents, sellerBalance: newBalance, currency, fee };

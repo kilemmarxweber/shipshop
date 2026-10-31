@@ -13,6 +13,7 @@ import {
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { colorHex } from "@/lib/product-options";
 import { formatMoney, cn } from "@/lib/utils";
+import { ProductPriceTag } from "@/components/product-price-tag";
 import { CART_UPDATED_EVENT, notifyCartUpdated } from "@/lib/cart-events";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import { qrImageUrl } from "@/lib/handover";
@@ -42,6 +43,8 @@ export type BuyProductTarget = {
   id: string;
   title: string;
   priceCents: number;
+  compareAtCents?: number | null;
+  promoPercent?: number | null;
   currency?: string;
   images: string[];
   quantity?: number;
@@ -352,9 +355,12 @@ export function BuyProductSheet({ product, open, onOpenChange }: Props) {
                   <SheetTitle className="truncate font-heading text-sm font-bold leading-tight">
                     {product.title}
                   </SheetTitle>
-                  <p className="font-heading text-sm font-bold text-trust">
-                    {formatMoney(product.priceCents, product.currency)}
-                  </p>
+                  <ProductPriceTag
+                    priceCents={product.priceCents}
+                    currency={product.currency}
+                    compareAtCents={product.compareAtCents}
+                    promoPercent={product.promoPercent}
+                  />
                   <VendorNetLine
                     priceCents={product.priceCents}
                     currency={product.currency}

@@ -10,6 +10,7 @@ import { normalizeMotions, SOUNDTRACK_START_MAX_MS } from "@/lib/montage";
 import { SOLD_ORDER_STATUS_FILTER } from "@/lib/sold-orders";
 import { SHOP_HOURS_SELECT } from "@/lib/shop-hours";
 import { relativeUploadPathFromUrl } from "@/lib/upload-file.server";
+import { endProductPromo } from "@/lib/shiprewards/grant";
 
 const updateSchema = z.object({
   title: z.string().min(2).max(120).optional(),
@@ -197,6 +198,15 @@ export async function PATCH(
             cfg.maxImages,
           )
         : undefined;
+    if (
+      body.priceCents !== undefined &&
+      body.priceCents !== existing.priceCents &&
+      existing.activePromoId
+    ) {
+      await withDbRetry(() =>
+        prisma.$transaction((tx) => endProductPromo(tx, existing.id, false)),
+      );
+    }
     const product = await withDbRetry(() =>
       prisma.product.update({
         where: { id },
@@ -234,6 +244,20 @@ export async function PATCH(
       }),
     );
 
+    if (
+      body.priceCents !== undefined &&
+      body.priceCents !== existing.priceCents
+    ) {
+      await withDbRetry(() =>
+        prisma.productPriceHistory.create({
+          data: {
+            productId: product.id,
+            shopId: product.shopId,
+            priceCents: product.priceCents,
+          },
+        }),
+      ).catch(() => undefined);
+    }
     const { _count, ...rest } = product;
     revalidatePath(`/product/${id}`);
     revalidatePath("/");

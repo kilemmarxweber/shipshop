@@ -22,6 +22,7 @@ import { CATEGORIES, type CategoryId } from "@/lib/categories";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { useAppConfig } from "@/lib/use-app-config";
 import { formatMoney, cn } from "@/lib/utils";
+import { ProductPriceTag } from "@/components/product-price-tag";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
@@ -65,6 +66,9 @@ type Product = {
   id: string;
   title: string;
   priceCents: number;
+  compareAtCents?: number | null;
+  promoPercent?: number | null;
+  promoTier?: string | null;
   currency?: string;
   quantity?: number;
   soldCount?: number;
@@ -165,6 +169,26 @@ export default function DiscoverPage() {
     },
   });
 
+  const dealsFeed = usePaginatedList<Product>({
+    prefetchRemaining: 2,
+    resetGroup: "discover:deals",
+    cacheKey: "discover:deals",
+    deps: [],
+    buildUrl: (cursor) => {
+      const params = new URLSearchParams({
+        status: "ACTIVE",
+        deals: "1",
+        limit: String(PUBLIC_PAGE_SIZE),
+      });
+      if (cursor) params.set("cursor", cursor);
+      return `/api/products?${params}`;
+    },
+    extract: (json) => {
+      const data = json as { products?: Product[]; nextCursor?: string | null };
+      return { items: data.products ?? [], nextCursor: data.nextCursor ?? null };
+    },
+  });
+
   const products = feed.items;
   const popularCats = useMemo(() => {
     const rows: { id: CategoryId; image: string }[] = [];
@@ -188,6 +212,9 @@ export default function DiscoverPage() {
     .sort((a, b) => a.priceCents - b.priceCents)
     .slice(0, 12)
     .map((product, index) => ({ key: `budget:${product.id}:${index}`, product }));
+  const dealsEntries: CardEntry[] = dealsFeed.items
+    .slice(0, 12)
+    .map((product, index) => ({ key: `deals:${product.id}:${index}`, product }));
   const resultEntries: CardEntry[] = products.map((product, index) => ({
     key: `results:${product.id}:${index}`,
     product,
@@ -208,6 +235,7 @@ export default function DiscoverPage() {
     ...featuredEntries,
     ...videoEntries,
     ...budgetEntries,
+    ...dealsEntries,
     ...resultEntries,
   ]
     .filter((entry) =>
@@ -458,7 +486,8 @@ export default function DiscoverPage() {
       </div>
       {(featuredEntries.length > 0 ||
         videoEntries.length > 0 ||
-        budgetEntries.length > 0) && (
+        budgetEntries.length > 0 ||
+        dealsEntries.length > 0) && (
         <div className="mb-7 space-y-6">
           {featuredEntries.length > 0 ? (
             <section>
@@ -558,6 +587,51 @@ export default function DiscoverPage() {
               </p>
               <HScroll className="gap-3 pb-1">
                 {budgetEntries.map((entry) => (
+                  <DiscoverStripCard
+                    key={entry.key}
+                    cardKey={entry.key}
+                    product={entry.product}
+                    onBuy={() => setBuyProduct(entry.product)}
+                    onVisible={onTileVisible}
+                    appClipMs={appConfig.clipMs}
+                    sound={soundFor(entry.key)}
+                    focused={audioFocusId === entry.key && !audioOff}
+                    onActivateSound={() => onTileActivate(entry.key)}
+                    onPlaybackEnded={
+                      entry.product.soundtrack?.audioUrl
+                        ? undefined
+                        : () => playNext(entry.key)
+                    }
+                    onSoundChange={(next) => {
+                      setAudioOff(next.muted);
+                      if (next.muted) {
+                        disableFeedSound();
+                        if (userPinned === entry.key) {
+                          setUserPinned(null);
+                          unpinFeedAudio();
+                        }
+                      } else {
+                        enableFeedSound(false);
+                        setUserPinned(entry.key);
+                        requestFeedAudioFocus(entry.key);
+                      }
+                      setSoundById((prev) =>
+                        applyExclusiveVideoSound(prev, entry.key, next),
+                      );
+                    }}
+                    buyLabel={t("buy.cta")}
+                  />
+                ))}
+              </HScroll>
+            </section>
+          ) : null}
+          {dealsEntries.length > 0 ? (
+            <section>
+              <p className="mb-3 text-[11px] font-bold tracking-[0.18em] text-muted-foreground uppercase">
+                {t("discover.dealsHeading")}
+              </p>
+              <HScroll className="gap-3 pb-1">
+                {dealsEntries.map((entry) => (
                   <DiscoverStripCard
                     key={entry.key}
                     cardKey={entry.key}
@@ -760,9 +834,14 @@ export default function DiscoverPage() {
                 </Link>
                 {p.shop ? (
                   <div className="pointer-events-auto mt-2.5 flex items-center justify-between gap-2 sm:mt-2">
-                    <p className="text-[13px] font-bold text-[#7dffb3] sm:text-[11px]">
-                      {formatMoney(p.priceCents, p.currency)}
-                    </p>
+                    <div className="text-[13px] sm:text-[11px]">
+                      <ProductPriceTag
+                        priceCents={p.priceCents}
+                        currency={p.currency}
+                        compareAtCents={p.compareAtCents}
+                        promoPercent={p.promoPercent}
+                      />
+                    </div>
                     <Button
                       type="button"
                       size="sm"
@@ -944,9 +1023,15 @@ function DiscoverStripCard({
           </Link>
           {product.shop ? (
             <div className="pointer-events-auto mt-2 flex items-center justify-between gap-2">
-              <p className="truncate text-[11px] font-semibold text-[#7dffb3]">
-                {formatMoney(product.priceCents, product.currency)}
-              </p>
+              <div className="min-w-0 truncate">
+                <ProductPriceTag
+                  size="sm"
+                  priceCents={product.priceCents}
+                  currency={product.currency}
+                  compareAtCents={product.compareAtCents}
+                  promoPercent={product.promoPercent}
+                />
+              </div>
               <Button
                 type="button"
                 size="sm"

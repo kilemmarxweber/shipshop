@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 52;
+const PRISMA_SCHEMA_REV = 53;
 const CHALLENGE_HAS_PRODUCT =
   Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
 
@@ -27,6 +27,10 @@ const CREATOR_LIVE_HAS_BACKDROP =
   Prisma.CreatorLiveScalarFieldEnum.backdropPreset === "backdropPreset";
 const LIVE_HAS_RTC_SIGNAL =
   Prisma.ModelName.LiveRtcSignal === "LiveRtcSignal";
+const PRODUCT_HAS_COMPARE_AT =
+  Prisma.ProductScalarFieldEnum.compareAtCents === "compareAtCents";
+const HAS_SHOP_REWARD_STATE =
+  Prisma.ModelName.ShopRewardState === "ShopRewardState";
 
 export const PRISMA_FEATURES = {
   shopBoostZoneTargeting: SHOP_BOOST_HAS_TARGET_CITY,
@@ -88,6 +92,8 @@ function getPrismaClient() {
     typeof existing.liveGuest?.findMany === "function" &&
     typeof existing.liveRtcSignal?.findMany === "function" &&
     typeof existing.idempotentOperation?.findMany === "function" &&
+    typeof existing.shopRewardState?.findUnique === "function" &&
+    typeof existing.productPromo?.findMany === "function" &&
     CART_ITEM_HAS_QUANTITY &&
     SHOP_HAS_HOURS &&
     COURIER_HAS_ARCHIVE &&
@@ -100,7 +106,9 @@ function getPrismaClient() {
     CREATOR_LIVE_HAS_MIC &&
     CREATOR_LIVE_HAS_LIKE &&
     CREATOR_LIVE_HAS_BACKDROP &&
-    LIVE_HAS_RTC_SIGNAL
+    LIVE_HAS_RTC_SIGNAL &&
+    PRODUCT_HAS_COMPARE_AT &&
+    HAS_SHOP_REWARD_STATE
   ) {
     return existing;
   }

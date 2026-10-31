@@ -823,6 +823,25 @@ export default function ProfilePage() {
       <ShopHoursSettings />
 
       <AppearanceSettings />
+
+      <div className="mt-6 flex flex-col gap-2">
+        {(
+          [
+            ["/legal/confidentialite", t("settings.privacy")],
+            ["/help/vendeur", t("settings.helpVendor")],
+            ["/help/vendeur/shiprewards", t("settings.shiprewards")],
+            ["/legal/cgu", t("settings.terms")],
+          ] as const
+        ).map(([href, label]) => (
+          <Link
+            key={href}
+            href={href}
+            className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-colors duration-150 hover:border-primary/40 hover:bg-muted/60"
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

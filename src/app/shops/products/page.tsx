@@ -26,6 +26,7 @@ import {
 import { PageLoader } from "@/components/page-loader";
 import { ShopPicker } from "@/components/shop-picker";
 import { useConfirmDialog } from "@/components/use-confirm-dialog";
+import { ShipRewardsDashboard } from "@/components/shiprewards-dashboard";
 
 type Product = {
   id: string;
@@ -303,6 +304,7 @@ function SellerProductsInner() {
           router.replace(url);
         }}
       />
+      {shopId ? <ShipRewardsDashboard shopId={shopId} /> : null}
 
       <div className="mb-4 flex flex-wrap gap-1.5">
         {(

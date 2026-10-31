@@ -26,6 +26,7 @@ import { uploadCompressedMedia } from "@/lib/compress-media";
 import { colorHex } from "@/lib/product-options";
 import { compactCount } from "@/lib/growth/challenge-look";
 import { formatMoney, cn } from "@/lib/utils";
+import { ProductPriceTag } from "@/components/product-price-tag";
 import { usePageBack } from "@/components/back-nav-context";
 import { useFeedOrientation } from "@/hooks/use-feed-orientation";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
@@ -87,6 +88,8 @@ type Product = {
   title: string;
   description: string | null;
   priceCents: number;
+  compareAtCents?: number | null;
+  promoPercent?: number | null;
   currency?: string;
   quantity?: number;
   category: string;
@@ -882,9 +885,12 @@ function ShopInner() {
                     <p className="truncate text-xs font-semibold text-white">
                       {p.title}
                     </p>
-                    <p className="font-heading text-sm font-bold text-trust">
-                      {formatMoney(p.priceCents, p.currency)}
-                    </p>
+                    <ProductPriceTag
+                      priceCents={p.priceCents}
+                      currency={p.currency}
+                      compareAtCents={p.compareAtCents}
+                      promoPercent={p.promoPercent}
+                    />
                   </div>
                   <button
                     type="button"

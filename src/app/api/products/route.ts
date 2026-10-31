@@ -26,6 +26,7 @@ import {
   soldOrdersCount,
 } from "@/lib/sold-orders";
 import { relativeUploadPathFromUrl } from "@/lib/upload-file.server";
+import { expireDuePromos } from "@/lib/shiprewards/grant";
 
 type ZoneBoostRow = {
   productId: string;
@@ -165,6 +166,9 @@ function isAllowedProductMediaUrl(url: string) {
 
 export async function GET(req: Request) {
   try {
+    void withDbRetry(() =>
+      prisma.$transaction((tx) => expireDuePromos(tx)),
+    ).catch(() => undefined);
     const session = await getSession();
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
@@ -172,6 +176,7 @@ export async function GET(req: Request) {
     const shopId = searchParams.get("shopId");
     const mine = searchParams.get("mine") === "1";
     const following = searchParams.get("following") === "1";
+    const deals = searchParams.get("deals") === "1";
     const status = searchParams.get("status");
     const cursorRaw = searchParams.get("cursor");
     const nearLat = Number.parseFloat(searchParams.get("nearLat") ?? "");
@@ -331,6 +336,9 @@ export async function GET(req: Request) {
         wantedRequestId: null,
       });
     }
+    if (deals) {
+      and.push({ promoTier: { in: ["FORTE", "FLASH"] } });
+    }
     if (category) and.push({ category });
     if (shopId && !following) and.push({ shopId });
     if (q) {
@@ -414,6 +422,8 @@ export async function GET(req: Request) {
           likesCount: p._count.likes,
           commentsCount: p._count.comments,
           boosted: boostedIds.has(p.id),
+          promoBoost:
+            p.promoTier === "FLASH" || p.promoTier === "FORTE",
         })),
         near,
         followedShopIds,
@@ -615,6 +625,14 @@ export async function POST(req: Request) {
       },
       include: { shop: true },
     });
+
+    await prisma.productPriceHistory.create({
+      data: {
+        productId: product.id,
+        shopId: product.shopId,
+        priceCents: product.priceCents,
+      },
+    }).catch(() => undefined);
 
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {

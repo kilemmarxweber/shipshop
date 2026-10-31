@@ -227,6 +227,10 @@ model Shop {
   wantedOffers  WantedOffer[]
   handovers     ShopHandover[]
   boosts        ShopBoost[]
+  promotions    ProductPromo[]
+  shipPointLedger ShipPointLedger[]
+  rewardState   ShopRewardState?
+  priceHistory  ProductPriceHistory[]
 
   @@unique([organizationId, slug])
   /// Deux boutiques ne peuvent pas porter le même nom (plateforme)
@@ -339,6 +343,10 @@ model Product {
   soundtrackStartMs Int         @default(0)
   /// Commission créateur (bps) si le produit est ouvert à ShipCreator. 0 = fermé.
   creatorCommissionBps Int      @default(0)
+  compareAtCents Int?
+  promoPercent   Int?
+  promoTier      String?
+  activePromoId  String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -355,11 +363,14 @@ model Product {
   funnelEvents  CommerceFunnelEvent[]
   lives         CreatorLive[]
   challenges    DailyChallenge[]
+  promotions    ProductPromo[]
+  priceHistory  ProductPriceHistory[]
 
   @@index([category, status])
   @@index([shopId, status])
   @@index([status, createdAt])
   @@index([status, category, createdAt])
+  @@index([promoTier, status])
   @@map("product")
 }
 
@@ -792,6 +803,8 @@ enum WalletTxnType {
   WITHDRAWAL
   PLATFORM_FEE
   COURIER_PAYOUT
+  SHIPCASH_REWARD
+  SHIPCASH_CLAWBACK
 }
 
 enum MobileMoneyProvider {
@@ -1056,6 +1069,10 @@ model Order {
   attributedCreatorId String?
   attributedCreator  User?           @relation("CreatorSales", fields: [attributedCreatorId], references: [id], onDelete: SetNull)
   creatorFeeCents    Int             @default(0)
+  promoId            String?
+  promoPercent       Int             @default(0)
+  promoTier          String?
+  compareAtCents     Int?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -1108,6 +1125,7 @@ model ShopBoost {
   endsAt      DateTime
   impressions Int      @default(0)
   clicks      Int      @default(0)
+  source      String   @default("PAID")
   createdAt   DateTime @default(now())
 
   @@index([productId, endsAt])
@@ -1629,4 +1647,79 @@ model AppNotice {
 
   @@index([userId, readAt, createdAt])
   @@map("app_notice")
+}
+
+enum PromoStatus {
+  ACTIVE
+  ENDED
+  CANCELLED
+  FLAGGED
+}
+
+model ProductPromo {
+  id                   String      @id @default(cuid())
+  shopId               String
+  shop                 Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productId            String
+  product              Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  percent              Int
+  tier                 String
+  startsAt             DateTime
+  endsAt               DateTime?
+  status               PromoStatus @default(ACTIVE)
+  compareAtSnapshot    Int
+  flagged              Boolean     @default(false)
+  clientIdempotencyKey String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  ledgers              ShipPointLedger[]
+
+  @@unique([shopId, clientIdempotencyKey])
+  @@index([productId, status])
+  @@index([shopId, status, startsAt])
+  @@map("product_promo")
+}
+
+model ProductPriceHistory {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  priceCents Int
+  recordedAt DateTime @default(now())
+
+  @@index([productId, recordedAt])
+  @@map("product_price_history")
+}
+
+model ShipPointLedger {
+  id        String        @id @default(cuid())
+  shopId    String
+  shop      Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  delta     Int
+  reason    String
+  promoId   String?
+  promo     ProductPromo? @relation(fields: [promoId], references: [id], onDelete: SetNull)
+  orderId   String?
+  createdAt DateTime      @default(now())
+
+  @@unique([orderId, reason])
+  @@index([shopId, createdAt])
+  @@index([promoId])
+  @@map("ship_point_ledger")
+}
+
+model ShopRewardState {
+  shopId                    String   @id
+  shop                      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  pointsBalance             Int      @default(0)
+  sellerTier                String   @default("BRONZE")
+  commissionGrantRemaining  Int      @default(0)
+  commissionBpsOff          Int      @default(0)
+  shipCashMonthCents        Int      @default(0)
+  shipCashMonthKey          String   @default("")
+  updatedAt                 DateTime @updatedAt
+
+  @@map("shop_reward_state")
 }

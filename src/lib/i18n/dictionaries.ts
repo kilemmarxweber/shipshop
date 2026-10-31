@@ -80,6 +80,10 @@ export type Messages = {
     languageUpdated: string;
     themeUpdated: string;
     logout: string;
+    privacy: string;
+    terms: string;
+    helpVendor: string;
+    shiprewards: string;
   };
   hours: {
     title: string;
@@ -164,6 +168,7 @@ export type Messages = {
     videoOfMoment: string;
     views: string;
     popularHeading: string;
+    dealsHeading: string;
   };
   shop: {
     notFound: string;
@@ -560,6 +565,10 @@ const fr: Messages = {
     languageUpdated: "Langue : français",
     themeUpdated: "Thème enregistré",
     logout: "Se déconnecter",
+    privacy: "Confidentialité",
+    terms: "CGU",
+    helpVendor: "Aide vendeur",
+    shiprewards: "Programme ShipRewards",
   },
   hours: {
     title: "Horaires boutique",
@@ -646,6 +655,7 @@ const fr: Messages = {
     videoOfMoment: "Vidéo du moment",
     views: "vues",
     popularHeading: "Catégories populaires",
+    dealsHeading: "Meilleures offres",
   },
   shop: {
     notFound: "Boutique introuvable",
@@ -1049,6 +1059,10 @@ const en: Messages = {
     languageUpdated: "Language: English",
     themeUpdated: "Theme saved",
     logout: "Sign out",
+    privacy: "Privacy",
+    terms: "Terms",
+    helpVendor: "Seller help",
+    shiprewards: "ShipRewards program",
   },
   hours: {
     title: "Shop hours",
@@ -1135,6 +1149,7 @@ const en: Messages = {
     videoOfMoment: "Video of the moment",
     views: "views",
     popularHeading: "Popular categories",
+    dealsHeading: "Best deals",
   },
   shop: {
     notFound: "Shop not found",
@@ -1538,6 +1553,10 @@ const pt: Messages = {
     languageUpdated: "Idioma: português",
     themeUpdated: "Tema guardado",
     logout: "Terminar sessão",
+    privacy: "Privacidade",
+    terms: "Termos",
+    helpVendor: "Ajuda do vendedor",
+    shiprewards: "Programa ShipRewards",
   },
   hours: {
     title: "Horário da loja",
@@ -1624,6 +1643,7 @@ const pt: Messages = {
     videoOfMoment: "Vídeo do momento",
     views: "visualizações",
     popularHeading: "Categorias populares",
+    dealsHeading: "Melhores ofertas",
   },
   shop: {
     notFound: "Loja não encontrada",

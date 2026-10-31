@@ -31,9 +31,11 @@ export function saleFeeCents(
   currency?: string | null,
   fx?: FxRates,
   monthlyGmvUsdCents = 0,
+  feeBpsOverride?: number,
 ) {
   const cap = Math.max(0, priceCents);
-  const bps = saleFeeBpsForMonthlyGmvUsd(monthlyGmvUsdCents);
+  const bps =
+    feeBpsOverride ?? saleFeeBpsForMonthlyGmvUsd(monthlyGmvUsdCents);
   return Math.min(cap, Math.floor((cap * bps) / 10_000));
 }
 
@@ -62,8 +64,15 @@ export function vendorNetCents(
   fx?: FxRates,
   monthlyGmvUsdCents = 0,
   creatorBps = 0,
+  feeBpsOverride?: number,
 ) {
-  const sale = saleFeeCents(priceCents, currency, fx, monthlyGmvUsdCents);
+  const sale = saleFeeCents(
+    priceCents,
+    currency,
+    fx,
+    monthlyGmvUsdCents,
+    feeBpsOverride,
+  );
   const creator = creatorFeeCents(priceCents, creatorBps);
   return Math.max(0, priceCents - sale - creator);
 }
