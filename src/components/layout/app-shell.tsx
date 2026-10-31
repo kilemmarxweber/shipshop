@@ -19,7 +19,6 @@ import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { BackButton } from "@/components/back-button";
 import { BackNavProvider } from "@/components/back-nav-context";
-import { LocaleToggle } from "@/components/locale-toggle";
 import { NewListingFlash } from "@/components/new-listing-flash";
 import { FoxScrollAdOverlay } from "@/components/fox-scroll-ad-overlay";
 import { NotificationsBell } from "@/components/notifications-bell";
@@ -222,7 +221,6 @@ export function AppShell({
                   </span>
                 </Link>
                 <div className="flex items-center justify-end gap-2">
-                  <LocaleToggle />
                   {session ? (
                     <NotificationsBell
                       userId={userId}

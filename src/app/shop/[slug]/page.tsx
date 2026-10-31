@@ -24,6 +24,7 @@ import { fetchJson } from "@/lib/fetch-json";
 import { useAppConfig } from "@/lib/use-app-config";
 import { uploadCompressedMedia } from "@/lib/compress-media";
 import { colorHex } from "@/lib/product-options";
+import { compactCount } from "@/lib/growth/challenge-look";
 import { formatMoney, cn } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
 import { useFeedOrientation } from "@/hooks/use-feed-orientation";
@@ -111,7 +112,7 @@ type Product = {
 function ShopInner() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   usePageBack({ fallbackHref: "/" });
@@ -481,7 +482,7 @@ function ShopInner() {
                 ? t("shop.productOther")
                 : t("shop.productOne")}
               {typeof shop.followersCount === "number"
-                ? ` · ${shop.followersCount} ${
+                ? ` · ${compactCount(shop.followersCount, locale)} ${
                     shop.followersCount > 1
                       ? t("shopExtra.followerOther")
                       : t("shopExtra.followerOne")
@@ -789,7 +790,7 @@ function ShopInner() {
                     />
                   </span>
                   <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
-                    {p.likesCount || 0}
+                    {compactCount(p.likesCount || 0, locale)}
                   </span>
                 </button>
                 <button
@@ -802,7 +803,7 @@ function ShopInner() {
                     <MessageCircle className="size-5 text-white" />
                   </span>
                   <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
-                    {p.commentsCount || 0}
+                    {compactCount(p.commentsCount || 0, locale)}
                   </span>
                 </button>
                 <ShareMenu

@@ -93,16 +93,15 @@ export function categoryMood(
   return categoryLook(category).mood[locale];
 }
 
-export function compactCount(value: number, locale: UserLocale) {
-  const intl = locale === "en" ? "en" : locale === "pt" ? "pt-PT" : "fr";
-  return new Intl.NumberFormat(intl, {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  })
-    .format(value)
-    .replace(/\s/g, "")
-    .replace("k", "K")
-    .replace("mil", "K");
+/** Compteurs type TikTok : 9999 → 9999, 10000 → 10.0K, 1e6 → 1.0M, 1e9 → 1.0B. */
+export function compactCount(value: number, _locale?: UserLocale) {
+  const n = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+  if (n < 10_000) return String(n);
+  const format = (div: number, suffix: "K" | "M" | "B") =>
+    `${(Math.floor(n / div) / 10).toFixed(1)}${suffix}`;
+  if (n < 1_000_000) return format(100, "K");
+  if (n < 1_000_000_000) return format(100_000, "M");
+  return format(100_000_000, "B");
 }
 
 export function firstVisualUrl(images: string[]) {
