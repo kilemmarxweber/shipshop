@@ -114,17 +114,14 @@ export default function ProfilePage() {
     setPhoneDraft(user.phone ?? "");
   }
 
-  async function refresh() {
-    const [ordersRes, walletRes, cartRes, profileRes, kycRes] =
-      await Promise.all([
-        fetchJson<{ orders?: Order[]; error?: string }>(
-          `/api/orders?period=${period}&status=${tab}`,
-        ),
-        fetchJson<{ wallet?: WalletBalances }>("/api/wallet"),
-        fetchJson<{ count?: number }>("/api/cart"),
-        fetchJson<{ user?: ProfileUser }>("/api/profile"),
-        fetchJson<{ kyc?: KycSummary | null; isOwner?: boolean }>("/api/kyc"),
-      ]);
+  async function refreshCommerce() {
+    const [ordersRes, walletRes, cartRes] = await Promise.all([
+      fetchJson<{ orders?: Order[]; error?: string }>(
+        `/api/orders?period=${period}&status=${tab}`,
+      ),
+      fetchJson<{ wallet?: WalletBalances }>("/api/wallet"),
+      fetchJson<{ count?: number }>("/api/cart"),
+    ]);
     if (!ordersRes.res.ok) {
       toast.error(ordersRes.data?.error ?? "Impossible de charger tes commandes");
     }
@@ -142,24 +139,44 @@ export default function ProfilePage() {
     setWalletCurrency(code);
     setBalance(w ? walletCents(w, code) : 0);
     setCartCount(cartRes.data?.count ?? 0);
-    if (profileRes.data?.user) {
-      applyProfile(profileRes.data.user);
+  }
+
+  async function refreshAccount() {
+    setKycReady(false);
+    try {
+      const [profileRes, kycRes, growth] = await Promise.all([
+        fetchJson<{ user?: ProfileUser }>("/api/profile"),
+        fetchJson<{ kyc?: KycSummary | null; isOwner?: boolean }>("/api/kyc"),
+        fetchJson<{ badges?: BadgeRow[] }>("/api/growth/me"),
+      ]);
+      if (profileRes.data?.user) {
+        applyProfile(profileRes.data.user);
+      }
+      setKyc(kycRes.data?.kyc ?? null);
+      setIsOwner(Boolean(kycRes.data?.isOwner));
+      setBadges(growth.data?.badges ?? []);
+    } finally {
+      setKycReady(true);
     }
-    setKyc(kycRes.data?.kyc ?? null);
-    setKycReady(true);
-    setIsOwner(Boolean(kycRes.data?.isOwner));
-    const growth = await fetchJson<{ badges?: BadgeRow[] }>("/api/growth/me");
-    setBadges(growth.data?.badges ?? []);
   }
 
   useEffect(() => {
+    if (!userId) {
+      setKycReady(false);
+      setKyc(null);
+      return;
+    }
+    void refreshAccount().catch(() => undefined);
+  }, [userId]);
+
+  useEffect(() => {
     if (!userId) return;
-    refresh().catch(() => undefined);
+    void refreshCommerce().catch(() => undefined);
   }, [userId, period, tab]);
 
   useEffect(() => {
     const onWallet = () => {
-      void refresh().catch(() => undefined);
+      void refreshCommerce().catch(() => undefined);
     };
     window.addEventListener(WALLET_UPDATED_EVENT, onWallet);
     return () => window.removeEventListener(WALLET_UPDATED_EVENT, onWallet);
@@ -268,7 +285,7 @@ export default function ProfilePage() {
     }
     toast.success("Commande annulée — remboursement effectué");
     notifyWalletUpdated();
-    await refresh();
+    await refreshCommerce();
   }
 
   if (isPending) {

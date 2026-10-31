@@ -237,6 +237,9 @@ export function publicMovement(row: {
     expiresAt: row.expiresAt,
     postedAt: row.postedAt,
     ussdHint: typeof meta.ussdHint === "string" ? meta.ussdHint : null,
+    paymentUrl: typeof meta.paymentUrl === "string" ? meta.paymentUrl : null,
+    paymentMethod:
+      typeof meta.paymentMethod === "string" ? meta.paymentMethod : null,
     merchantMsisdn:
       typeof meta.merchantMsisdn === "string" ? meta.merchantMsisdn : null,
     alreadyApplied: row.status === "POSTED",

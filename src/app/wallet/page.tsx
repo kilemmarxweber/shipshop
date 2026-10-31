@@ -105,6 +105,7 @@ export default function WalletPage() {
     null,
   );
   const [ussdHint, setUssdHint] = useState<string | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [savingContacts, setSavingContacts] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -245,6 +246,7 @@ export default function WalletPage() {
     movementId?: string;
     status?: string;
     ussdHint?: string | null;
+    paymentUrl?: string | null;
     alreadyApplied?: boolean;
     alreadyConfirmed?: boolean;
     beneficiaryUserId?: string | null;
@@ -272,11 +274,18 @@ export default function WalletPage() {
       await resetAfterSend();
       return;
     }
+    if (mode === "initiate" && json.paymentUrl) {
+      setPaymentUrl(json.paymentUrl);
+      setPendingId(json.transactionId ?? null);
+      setPendingMovementId(json.movementId ?? null);
+      window.location.assign(json.paymentUrl);
+      return;
+    }
     if (mode === "initiate" && json.status && json.status !== "POSTED") {
       setPendingId(json.transactionId ?? null);
       setPendingMovementId(json.movementId ?? null);
       setUssdHint(json.ussdHint ?? null);
-      toast.message(json.ussdHint ?? t("wallet.ussdHint"));
+      toast.message(t("wallet.ussdHint"));
       return;
     }
     if (json.status === "POSTED" || json.alreadyApplied || json.alreadyConfirmed) {
@@ -380,11 +389,12 @@ export default function WalletPage() {
         },
       );
       setLoading(false);
-      if (!res.ok) {
-        toast.error(data.error ?? "Demande impossible");
-        return;
-      }
-      await applyPayResult(data, "initiate");
+    if (!res.ok) {
+          clearPaymentIdempotencyKey(payIntent);
+          toast.error(data.error ?? "Demande impossible");
+          return;
+        }
+        await applyPayResult(data, "initiate");
     } catch (error) {
       setLoading(false);
       toast.message(t("wallet.connectionLost"));
@@ -770,6 +780,15 @@ export default function WalletPage() {
         ) : (
           <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/10 p-4">
             <p className="text-sm">{ussdHint ?? t("wallet.ussdHint")}</p>
+            {paymentUrl ? (
+              <Button
+                type="button"
+                onClick={() => window.location.assign(paymentUrl)}
+                className="h-12 w-full bg-gradient-to-r from-[#ff5722] to-[#ff7a45] font-bold"
+              >
+                {t("wallet.sendPay")}
+              </Button>
+            ) : null}
             <Button
               onClick={confirm}
               disabled={loading}

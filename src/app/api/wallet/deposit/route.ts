@@ -3,8 +3,8 @@ import { z } from "zod";
 import { getSession } from "@/lib/session";
 import { APP_CURRENCIES } from "@/lib/money";
 import {
-  confirmSimulatedDeposit,
   initiateDeposit,
+  settleCinetPayDeposit,
 } from "@/lib/payments/mobile-money";
 import { auditFromRequest, idempotencyFrom } from "@/lib/payments/ledger";
 
@@ -34,11 +34,11 @@ export async function POST(req: Request) {
   try {
     if (action === "confirm") {
       const parsed = confirmSchema.parse(body);
-      const result = await confirmSimulatedDeposit(
-        parsed.transactionId,
-        session.user.id,
+      const result = await settleCinetPayDeposit({
+        transactionId: parsed.transactionId,
+        payerUserId: session.user.id,
         audit,
-      );
+      });
       return NextResponse.json(result);
     }
 

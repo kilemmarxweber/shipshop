@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Radio, Sparkles } from "lucide-react";
+import { Radio } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
@@ -27,7 +27,6 @@ type LiveRow = {
 
 type Props = {
   className?: string;
-  /** Compact = profil ; full = studio */
   variant?: "profile" | "studio";
 };
 
@@ -91,128 +90,154 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
     window.location.href = `/live/${data.live.id}`;
   }
 
-  return (
-    <section
+  const liveDot = (
+    <span className="relative flex size-2 shrink-0">
+      <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#ff3b4d] opacity-60" />
+      <span className="relative inline-flex size-2 rounded-full bg-[#ff3b4d]" />
+    </span>
+  );
+
+  const goLiveBtn = (
+    <button
+      type="button"
+      disabled={busy || title.trim().length < 2}
+      onClick={() => void startLive()}
       className={cn(
-        "relative overflow-hidden rounded-[1.35rem] border border-[#3a1520] bg-[#14080e]",
-        className,
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5",
+        "bg-[#ff2d45] text-[12px] font-extrabold text-white",
+        "shadow-[0_8px_18px_rgba(255,45,69,0.32)]",
+        "transition hover:bg-[#ff4056] active:scale-[0.98]",
+        "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
       )}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_70%_at_10%_0%,rgba(255,60,80,0.28),transparent_55%),radial-gradient(ellipse_60%_50%_at_100%_100%,rgba(255,120,40,0.12),transparent_50%)]"
-      />
-      <div className="relative p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-[0.16em] text-[#ff6b7a] uppercase">
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#ff3b4d] opacity-60" />
-                <span className="relative inline-flex size-2 rounded-full bg-[#ff3b4d]" />
-              </span>
-              Live
-            </p>
-            <h2 className="mt-1.5 font-heading text-[1.15rem] font-bold tracking-tight text-white">
+      <Radio className="size-3.5" />
+      {busy ? "…" : "Go live"}
+    </button>
+  );
+
+  const resumeBtn = activeLive ? (
+    <Link
+      href={`/live/${activeLive.id}`}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5",
+        "bg-[#ff2d45] text-[12px] font-extrabold text-white",
+        "shadow-[0_8px_18px_rgba(255,45,69,0.32)]",
+        "transition hover:bg-[#ff4056] active:scale-[0.98]",
+      )}
+    >
+      <Radio className="size-3.5" />
+      {activeLive.status === "PAUSED" ? "Reprendre" : "Ouvrir"}
+    </Link>
+  ) : null;
+
+  if (!studio) {
+    return (
+      <section
+        className={cn(
+          "relative overflow-hidden rounded-2xl border border-[#3a1520] bg-[#14080e]",
+          className,
+        )}
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_120%_at_0%_50%,rgba(255,60,80,0.22),transparent_60%)]"
+        />
+        <div className="relative flex items-center gap-2 px-3 py-2.5">
+          {liveDot}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-bold leading-tight text-white">
               {activeLive
                 ? activeLive.status === "PAUSED"
-                  ? "Votre live est en pause"
+                  ? "Live en pause"
                   : "Vous êtes en direct"
-                : "Lancer mon live"}
-            </h2>
-            <p className="mt-1 text-[12px] leading-snug text-white/55">
-              {activeLive
-                ? "Revenez sur scène pour reprendre caméra et chat."
-                : !ready
-                  ? "\u00a0"
+                : "Lancer un live"}
+            </p>
+            <p className="truncate text-[10px] text-white/50">
+              {!ready
+                ? "\u00a0"
+                : activeLive
+                  ? "Revenir sur scène"
                   : canGoLive
-                    ? "Shopping en direct · cadeaux · produits en vitrine"
-                    : me?.isPlatformOwner
-                      ? "Accès owner plateforme"
-                      : `Badge Influenceur · ${subscribers.toLocaleString("fr-FR")} / ${INFLUENCER_FOLLOWERS.toLocaleString("fr-FR")} abonnés`}
+                    ? "Shopping · cadeaux · produits"
+                    : need > 0
+                      ? `${need} abonnés + KYC`
+                      : "KYC Influenceur requis"}
             </p>
           </div>
-          {!studio ? (
+          {!ready ? (
+            <div className="h-9 w-[5.5rem] animate-pulse rounded-full bg-white/10" />
+          ) : activeLive ? (
+            resumeBtn
+          ) : canGoLive ? (
+            goLiveBtn
+          ) : (
             <Link
-              href="/creator"
-              className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-white/70 transition hover:bg-white/10 hover:text-white"
+              href="/kyc"
+              className="inline-flex h-9 shrink-0 items-center rounded-full bg-white px-3 text-[12px] font-bold text-[#1a0a10]"
             >
-              Studio
+              KYC
             </Link>
-          ) : null}
+          )}
         </div>
-
-        {!ready ? (
-          <div className="mt-4 space-y-2.5" aria-hidden>
-            <div className="h-11 animate-pulse rounded-xl bg-white/10" />
-            <div className="h-12 animate-pulse rounded-2xl bg-white/10" />
-          </div>
-        ) : activeLive ? (
-          <Link
-            href={`/live/${activeLive.id}`}
-            className={cn(
-              "mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl",
-              "bg-[#ff2d45] text-[15px] font-extrabold text-white shadow-[0_12px_28px_rgba(255,45,69,0.35)]",
-              "transition hover:bg-[#ff4056] active:scale-[0.98]",
-            )}
-          >
-            <Radio className="size-4" />
-            {activeLive.status === "PAUSED"
-              ? "Reprendre mon live"
-              : "Ouvrir mon live"}
-          </Link>
-        ) : canGoLive ? (
-          <div className="mt-4 space-y-2.5">
+        {ready && canGoLive && !activeLive ? (
+          <div className="relative border-t border-white/8 px-3 py-2">
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={80}
               placeholder="Titre du live"
-              className="h-11 rounded-xl border-white/10 bg-black/35 text-sm text-white placeholder:text-white/35 focus-visible:ring-[#ff2d45]/40"
+              aria-label="Titre du live"
+              className="h-8 rounded-lg border-white/10 bg-black/30 px-2.5 text-[12px] text-white placeholder:text-white/35 focus-visible:ring-[#ff2d45]/40"
             />
-            <button
-              type="button"
-              disabled={busy || title.trim().length < 2}
-              onClick={() => void startLive()}
-              className={cn(
-                "flex h-12 w-full items-center justify-center gap-2 rounded-2xl",
-                "bg-[#ff2d45] text-[15px] font-extrabold tracking-wide text-white",
-                "shadow-[0_12px_28px_rgba(255,45,69,0.35)]",
-                "transition hover:bg-[#ff4056] active:scale-[0.98]",
-                "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
-              )}
-            >
-              <Radio className="size-4" />
-              {busy ? "Démarrage…" : "Go live"}
-            </button>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-[#3a1520] bg-[#14080e]",
+        className,
+      )}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_70%_at_10%_0%,rgba(255,60,80,0.28),transparent_55%)]"
+      />
+      <div className="relative space-y-3 p-4">
+        <div className="flex items-center gap-2">
+          {liveDot}
+          <h2 className="min-w-0 flex-1 font-heading text-base font-bold text-white">
+            {activeLive
+              ? activeLive.status === "PAUSED"
+                ? "Live en pause"
+                : "Vous êtes en direct"
+              : "Lancer un live"}
+          </h2>
+        </div>
+        {!ready ? (
+          <div className="h-10 animate-pulse rounded-xl bg-white/10" />
+        ) : activeLive ? (
+          resumeBtn
+        ) : canGoLive ? (
+          <div className="flex gap-2">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={80}
+              placeholder="Titre du live"
+              className="h-10 flex-1 rounded-xl border-white/10 bg-black/35 text-sm text-white placeholder:text-white/35 focus-visible:ring-[#ff2d45]/40"
+            />
+            {goLiveBtn}
           </div>
         ) : (
-          <div className="mt-4 space-y-2.5">
-            <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2.5">
-              <p className="flex items-center gap-1.5 text-[12px] font-semibold text-white/85">
-                <Sparkles className="size-3.5 text-[#ff8a5b]" />
-                {need > 0
-                  ? `Encore ${need.toLocaleString("fr-FR")} abonné${need > 1 ? "s" : ""} + KYC`
-                  : "Finalisez le KYC pour le badge Influenceur"}
-              </p>
-              <p className="mt-1 text-[11px] text-white/45">
-                Le live shopping est réservé aux créateurs vérifiés.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Link
-                href="/community"
-                className="flex h-11 flex-1 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-[13px] font-bold text-white/90 transition hover:bg-white/10"
-              >
-                Communauté
-              </Link>
-              <Link
-                href="/kyc"
-                className="flex h-11 flex-1 items-center justify-center rounded-xl bg-white text-[13px] font-bold text-[#1a0a10] transition hover:bg-white/90"
-              >
-                Vérifier KYC
-              </Link>
-            </div>
-          </div>
+          <p className="text-[12px] text-white/55">
+            {need > 0
+              ? `Encore ${need.toLocaleString("fr-FR")} abonnés + KYC`
+              : "Finalisez le KYC Influenceur pour passer en live."}
+          </p>
         )}
       </div>
     </section>
