@@ -2,17 +2,14 @@ import type { UserLocale } from "@/lib/user-locale";
 
 type MoodCopy = Record<UserLocale, string>;
 
-export const CATEGORY_LOOK: Record<
-  string,
-  { mood: MoodCopy; wash: string }
-> = {
+export const CATEGORY_LOOK: Record<string, { mood: MoodCopy; wash: string }> = {
   Beauté: {
     mood: {
       fr: "Beauté & Bien-être",
       en: "Beauty & Wellness",
       pt: "Beleza & Bem-estar",
     },
-    wash: "from-[#f6d7c8] via-[#f3c8b6] to-[#efb8a4]",
+    wash: "from-zinc-800 to-zinc-800",
   },
   Mode: {
     mood: {
@@ -20,7 +17,7 @@ export const CATEGORY_LOOK: Record<
       en: "Fashion & Style",
       pt: "Moda & Estilo",
     },
-    wash: "from-[#1d4ed8] via-[#2563eb] to-[#93c5fd]",
+    wash: "from-zinc-800 to-zinc-800",
   },
   Tech: {
     mood: {
@@ -28,7 +25,7 @@ export const CATEGORY_LOOK: Record<
       en: "Tech & Gadgets",
       pt: "Tech & Gadgets",
     },
-    wash: "from-[#312e81] via-[#6d28d9] to-[#a78bfa]",
+    wash: "from-zinc-800 to-zinc-800",
   },
   Maison: {
     mood: {
@@ -36,7 +33,7 @@ export const CATEGORY_LOOK: Record<
       en: "Home & Decor",
       pt: "Casa & Decoração",
     },
-    wash: "from-[#065f46] via-[#0d9488] to-[#5eead4]",
+    wash: "from-zinc-800 to-zinc-800",
   },
   Sport: {
     mood: {
@@ -44,7 +41,7 @@ export const CATEGORY_LOOK: Record<
       en: "Sport & Motion",
       pt: "Desporto & Movimento",
     },
-    wash: "from-[#14532d] via-[#16a34a] to-[#bef264]",
+    wash: "from-zinc-800 to-zinc-800",
   },
   Gaming: {
     mood: {
@@ -52,7 +49,7 @@ export const CATEGORY_LOOK: Record<
       en: "Gaming & Play",
       pt: "Gaming & Play",
     },
-    wash: "from-[#7f1d1d] via-[#7c3aed] to-[#c084fc]",
+    wash: "from-zinc-800 to-zinc-800",
   },
   Auto: {
     mood: {
@@ -60,7 +57,7 @@ export const CATEGORY_LOOK: Record<
       en: "Auto & Mobility",
       pt: "Auto & Mobilidade",
     },
-    wash: "from-[#334155] via-[#64748b] to-[#cbd5e1]",
+    wash: "from-zinc-800 to-zinc-800",
   },
   Livres: {
     mood: {
@@ -68,7 +65,7 @@ export const CATEGORY_LOOK: Record<
       en: "Books & Culture",
       pt: "Livros & Cultura",
     },
-    wash: "from-[#92400e] via-[#f59e0b] to-[#fde68a]",
+    wash: "from-zinc-800 to-zinc-800",
   },
 };
 
@@ -78,7 +75,7 @@ const FALLBACK_LOOK = {
     en: "Lifestyle",
     pt: "Lifestyle",
   } satisfies MoodCopy,
-  wash: "from-[#2a1830] via-[#5b2a4a] to-[#f3c6b5]",
+  wash: "from-zinc-800 to-zinc-800",
 };
 
 export function categoryLook(category?: string | null) {
@@ -108,7 +105,9 @@ export function firstVisualUrl(images: string[]) {
   const still = images.find((url) => !isProbablyVideo(url));
   if (still) return still;
   const video = images.find(isProbablyVideo);
-  return video ? video.replace(/\.(mp4|webm|mov|m4v|mkv)(\?|$)/i, ".jpg$2") : null;
+  return video
+    ? video.replace(/\.(mp4|webm|mov|m4v|mkv)(\?|$)/i, ".jpg$2")
+    : null;
 }
 
 export function isProbablyVideo(url: string) {

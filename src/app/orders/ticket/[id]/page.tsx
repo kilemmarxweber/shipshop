@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QrCode } from "lucide-react";
 import { fetchJson } from "@/lib/fetch-json";
 import { qrImageUrl } from "@/lib/handover";
@@ -53,19 +53,40 @@ export default function ShopTicketPage() {
   const { t } = useI18n();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const hasTicket = useRef(false);
 
   usePageBack({ fallbackHref: "/profile" });
 
   useEffect(() => {
-    fetchJson<{ handover?: Ticket; error?: string }>(`/api/handovers/${id}`)
-      .then(({ res, data }) => {
+    let stop = false;
+    async function pull() {
+      try {
+        const { res, data } = await fetchJson<{
+          handover?: Ticket;
+          error?: string;
+        }>(`/api/handovers/${id}`);
+        if (stop) return;
         if (!res.ok) {
-          setError(data?.error ?? "QR introuvable");
+          if (!hasTicket.current) {
+            setError(data?.error ?? "QR introuvable");
+          }
           return;
         }
+        hasTicket.current = Boolean(data?.handover);
+        setError(null);
         setTicket(data?.handover ?? null);
-      })
-      .catch(() => setError("QR introuvable"));
+      } catch {
+        if (!stop && !hasTicket.current) setError("QR introuvable");
+      }
+    }
+    void pull();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void pull();
+    }, 4000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
   }, [id]);
 
   if (!ticket && !error) return <PageLoader />;

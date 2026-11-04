@@ -65,6 +65,14 @@ export const CGU_SECTIONS: LegalSection[] = [
       "Faux rabais, auto-achat et fraudes entraînent clawback, suspension de promo ou du compte, selon gravité.",
     ],
   },
+  {
+    title: "Billets sur demande",
+    body: [
+      "ShipShop peut vendre des billets pour un artiste ou une organisation, à la demande, opéré uniquement par l’owner ou l’admin plateforme.",
+      "Une commission (pourcentage ou montant fixe) est prélevée à l’achat et créditée au compte de revenu ShipShop. Le solde revient à l’organisateur après le début de l’événement.",
+      "Le billet est non remboursable, sauf demande examinée par ShipShop ou annulation de l’événement. Un QR donne un accès unique. Après scan, aucun remboursement individuel.",
+    ],
+  },
 ];
 
 export const HELP_VENDOR_INDEX: LegalSection[] = [

@@ -1,23 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Plus, X, Film, ImageIcon, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import {
-  exceedsRecommendedVideoSize,
-  mediaUploadToastMessage,
-  uploadCompressedMedia,
-} from "@/lib/compress-media";
 import { useI18n } from "@/components/i18n-provider";
 import {
-  isVideoUrl,
-  looksLikeImageFile,
-  looksLikeVideoFile,
-  PRODUCT_VIDEO_MAX_SECONDS,
-} from "@/lib/media";
+    exceedsRecommendedVideoSize,
+    mediaUploadToastMessage,
+    uploadCompressedMedia,
+} from "@/lib/compress-media";
 import { iosInlineVideo } from "@/lib/ios-inline-video";
-import { cn } from "@/lib/utils";
+import {
+    isVideoUrl,
+    looksLikeImageFile,
+    looksLikeVideoFile,
+    PRODUCT_VIDEO_MAX_SECONDS,
+} from "@/lib/media";
 import { useAppConfig } from "@/lib/use-app-config";
+import { cn } from "@/lib/utils";
+import { Film, ImageIcon, Loader2, Plus, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 
 const ACCEPT = "image/*,video/*";
 
@@ -50,6 +50,7 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
     const list = Array.from(files).slice(0, remaining);
     setUploading(true);
     onBusyChange?.(true);
+    toast.message("Média en cours d’envoi — patiente un instant.");
     const next = [...urls];
     let succeededFiles = 0;
     let warnedRecommendedSize = false;
@@ -61,10 +62,7 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
           continue;
         }
 
-        if (
-          !warnedRecommendedSize &&
-          exceedsRecommendedVideoSize(file)
-        ) {
+        if (!warnedRecommendedSize && exceedsRecommendedVideoSize(file)) {
           warnedRecommendedSize = true;
           toast.warning(
             `Vidéo > 10 Mo : recommandé pour la fluidité. Import autorisé, découpe max ${PRODUCT_VIDEO_MAX_SECONDS}s.`,
@@ -97,7 +95,16 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="relative space-y-2">
+      {uploading ? (
+        <div
+          role="status"
+          className="flex items-center gap-3 rounded-xl border border-trust/40 bg-trust/10 px-3 py-2.5 text-sm font-semibold text-foreground"
+        >
+          <Loader2 className="size-4 shrink-0 animate-spin text-trust" />
+          <span>Envoi du média — patiente, ne clique pas encore.</span>
+        </div>
+      ) : null}
       <input
         ref={inputRef}
         type="file"
@@ -110,7 +117,10 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
       <button
         type="button"
         disabled={uploading || urls.length >= cap}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          if (inputRef.current) inputRef.current.value = "";
+          inputRef.current?.click();
+        }}
         className={cn(
           "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-surface-2 text-sm font-semibold transition hover:border-primary/40 hover:bg-muted/40",
           (uploading || urls.length >= cap) && "opacity-50",
@@ -121,7 +131,7 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
         ) : (
           <Plus className="size-4" />
         )}
-        {uploading ? "Compression…" : "Ajouter images / vidéos"}
+        {uploading ? "Chargement…" : "Ajouter images / vidéos"}
       </button>
 
       <p className="text-[11px] text-muted-foreground">
@@ -171,12 +181,13 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
                 ) : null}
                 <button
                   type="button"
+                  disabled={uploading}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     removeAt(index);
                   }}
-                  className="absolute top-0 right-0 z-20 grid size-11 place-items-center text-white"
+                  className="absolute top-0 right-0 z-20 grid size-11 place-items-center text-white disabled:opacity-40"
                   aria-label={`Retirer le média ${index + 1}`}
                 >
                   <span className="grid size-8 place-items-center rounded-full bg-black/80 shadow-md ring-1 ring-white/25 transition hover:bg-destructive">

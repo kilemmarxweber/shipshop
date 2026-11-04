@@ -1,7 +1,9 @@
 export const APP_CURRENCIES = ["CDF", "USD", "KW"] as const;
 export type AppCurrency = (typeof APP_CURRENCIES)[number];
 
-export function isAppCurrency(value: string | null | undefined): value is AppCurrency {
+export function isAppCurrency(
+  value: string | null | undefined,
+): value is AppCurrency {
   return APP_CURRENCIES.includes((value ?? "") as AppCurrency);
 }
 
@@ -39,9 +41,11 @@ export type WalletBalances = {
 
 export function walletCents(wallet: WalletBalances, currency?: string | null) {
   const code = parseCurrency(currency ?? wallet.currency);
-  if (code === "CDF") return wallet.cdfCents ?? 0;
-  if (code === "KW") return wallet.kwCents ?? 0;
-  return wallet.usdCents ?? wallet.balanceCents ?? 0;
+  if (code === "CDF") return Math.max(0, wallet.cdfCents ?? 0);
+  if (code === "KW") return Math.max(0, wallet.kwCents ?? 0);
+  const usd = Math.max(0, wallet.usdCents ?? 0);
+  const display = Math.max(0, wallet.balanceCents ?? 0);
+  return usd > 0 ? usd : display;
 }
 
 export function walletCreditData(
@@ -83,10 +87,12 @@ export function parseFxRate(value: unknown, fallback: number) {
   return Math.min(100_000, Math.round(n));
 }
 
-export function shopFxRates(shop?: {
-  fxCdfPerUsd?: number | null;
-  fxKwPerUsd?: number | null;
-} | null): FxRates {
+export function shopFxRates(
+  shop?: {
+    fxCdfPerUsd?: number | null;
+    fxKwPerUsd?: number | null;
+  } | null,
+): FxRates {
   return {
     cdfPerUsd: parseFxRate(shop?.fxCdfPerUsd, DEFAULT_FX.cdfPerUsd),
     kwPerUsd: parseFxRate(shop?.fxKwPerUsd, DEFAULT_FX.kwPerUsd),

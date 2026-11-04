@@ -58,13 +58,25 @@ function storedBucket(
   );
 }
 
-export function materializedBuckets(wallet: BucketWallet, currency?: string | null) {
+export function materializedBuckets(
+  wallet: BucketWallet,
+  currency?: string | null,
+) {
   const code = parseCurrency(currency);
+  const total = walletCents(asBalances(wallet), code);
   const buyer = storedBucket(wallet, "BUYER", code);
   const vendor = storedBucket(wallet, "VENDOR", code);
   const courier = storedBucket(wallet, "COURIER", code);
-  if (buyer + vendor + courier === 0) {
-    return { BUYER: walletCents(asBalances(wallet), code), VENDOR: 0, COURIER: 0 };
+  const allocated = buyer + vendor + courier;
+  if (allocated === 0) {
+    return { BUYER: total, VENDOR: 0, COURIER: 0 };
+  }
+  if (allocated < total) {
+    return {
+      BUYER: buyer + (total - allocated),
+      VENDOR: vendor,
+      COURIER: courier,
+    };
   }
   return { BUYER: buyer, VENDOR: vendor, COURIER: courier };
 }

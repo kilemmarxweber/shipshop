@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { ChevronRight, Heart, Play, Radio, Sparkles } from "lucide-react";
+import { ChevronRight, Heart, Play, Sparkles } from "lucide-react";
 import { fetchJson } from "@/lib/fetch-json";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n-provider";
@@ -93,7 +93,6 @@ export function GrowthFeedFormats({
   const { surface, challenges, busyId, joinChallenge } = useGrowthSurface();
   const discover = variant === "discover";
   const stories = surface?.stories ?? [];
-  const lives = surface?.lives ?? [];
   const highlights = surface?.highlights ?? [];
   const lead = challenges.find((row) => !row.done) ?? null;
   const storyIds = stories.map((story) => story.id).join(",");
@@ -111,7 +110,6 @@ export function GrowthFeedFormats({
   if (
     (!pinChallenges || !lead) &&
     stories.length === 0 &&
-    lives.length === 0 &&
     highlights.length === 0
   ) {
     return null;
@@ -123,49 +121,6 @@ export function GrowthFeedFormats({
         discover ? "mb-6 space-y-5" : "px-4 pb-1 pt-0 empty:hidden"
       }
     >
-      {lives.length > 0 ? (
-        <div className="mb-1 flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
-          {lives.slice(0, 6).map((live) => (
-            <Link
-              key={live.id}
-              href={`/live/${live.id}`}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold",
-                live.followedByMe
-                  ? "border-destructive/50 bg-destructive/15 text-foreground"
-                  : "border-destructive/30 bg-destructive/10 text-foreground",
-              )}
-            >
-              <span className="relative grid size-6 place-items-center overflow-hidden rounded-full bg-black/20">
-                {live.user?.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={live.user.image}
-                    alt=""
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <Radio className="size-3 text-destructive" />
-                )}
-                <span className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-destructive ring-1 ring-background" />
-              </span>
-              <span className="max-w-[7.5rem] truncate">
-                {live.followedByMe ? "Abonné · " : ""}
-                {live.user?.name ?? "Live"}
-              </span>
-            </Link>
-          ))}
-          {lives.length > 6 ? (
-            <Link
-              href="/live"
-              className="inline-flex shrink-0 items-center rounded-full border border-border px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground"
-            >
-              +{lives.length - 6}
-            </Link>
-          ) : null}
-        </div>
-      ) : null}
-
       {pinChallenges && lead ? (
         <ChallengeCard
           key={lead.id}

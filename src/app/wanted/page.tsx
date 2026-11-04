@@ -15,9 +15,23 @@ export default function WantedListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchJson<{ requests?: WantedListItem[] }>("/api/wanted")
-      .then(({ data }) => setItems(data?.requests ?? []))
-      .finally(() => setLoading(false));
+    let stop = false;
+    async function pull() {
+      const { data } = await fetchJson<{ requests?: WantedListItem[] }>(
+        "/api/wanted",
+      );
+      if (stop) return;
+      setItems(data?.requests ?? []);
+      setLoading(false);
+    }
+    void pull();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void pull();
+    }, 6000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   return (

@@ -120,6 +120,7 @@ export async function GET() {
           title: true,
           status: true,
           startedAt: true,
+          viewerPeak: true,
           giftCents: true,
           user: { select: { id: true, name: true, image: true } },
           product: {
@@ -132,6 +133,7 @@ export async function GET() {
       prisma.product.findMany({
         where: {
           status: "ACTIVE",
+          quantity: { gt: 0 },
           wantedRequestId: null,
         },
         orderBy: { createdAt: "desc" },

@@ -1,14 +1,39 @@
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { organization } from "better-auth/plugins";
+import { bearer, organization } from "better-auth/plugins";
 import { isPlatformRole, orgAccessControl, orgRoles } from "@/lib/org-access";
 import { emailFromPhone, isPhoneBackedEmail } from "@/lib/auth-register";
 import { looksLikeEmail, normalizeAccountPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { ensureMembership } from "@/lib/system-org";
 
+function trustedOrigins() {
+  const base = (process.env.BETTER_AUTH_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
+  const app = (process.env.NEXT_PUBLIC_APP_URL ?? base).replace(/\/$/, "");
+  const extra = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return Array.from(
+    new Set([
+      base,
+      app,
+      "http://localhost:3000",
+      "http://localhost:8081",
+      "shipshop://",
+      "exp://",
+      "exp://**",
+      ...extra,
+    ]),
+  );
+}
+
 export const auth = betterAuth({
+  trustedOrigins: trustedOrigins(),
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
@@ -103,6 +128,7 @@ export const auth = betterAuth({
     }),
   },
   plugins: [
+    bearer(),
     organization({
       // Une seule org système (Chip Shop) — les vendeurs s'y rattachent
       allowUserToCreateOrganization: false,

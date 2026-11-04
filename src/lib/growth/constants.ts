@@ -3,7 +3,6 @@ export const ACTIVE_DAYS_REQUIRED = 12;
 export const ACTIVE_INTERACTIONS_REQUIRED = 20;
 export const ACTIVITY_WINDOW_DAYS = 30;
 export const INFLUENCER_ENGAGEMENT_MIN = 0.03;
-export const GIFT_DAILY_CAP_CENTS = 2_000;
 export const CREATOR_GIFT_SHARE_BPS = 7_000;
 export const PLATFORM_GIFT_SHARE_BPS = 2_000;
 export const COMMUNITY_GIFT_SHARE_BPS = 1_000;
@@ -57,7 +56,9 @@ export const KPI_GUARDS = {
 } as const;
 
 export function utcDay(date = new Date()) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 }
 
 export function daysAgo(n: number, from = new Date()) {
@@ -67,11 +68,15 @@ export function daysAgo(n: number, from = new Date()) {
 }
 
 export function weekPeriodKey(date = new Date()) {
-  const tmp = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const tmp = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
   const day = tmp.getUTCDay() || 7;
   tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  const week = Math.ceil(
+    ((tmp.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7,
+  );
   return `${tmp.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 

@@ -89,7 +89,7 @@ function JoinButton({
       disabled={busy || done}
       onClick={onJoin}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#ff4f8b] via-[#ff7d86] to-[#ffb48c] font-semibold tracking-wide whitespace-nowrap text-white shadow-[0_10px_26px_rgba(255,79,139,0.4)]",
+        "inline-flex shrink-0 items-center justify-center rounded-full bg-trust font-semibold tracking-wide whitespace-nowrap text-white",
         compact
           ? "h-8 px-3 text-[11px] sm:h-9 sm:px-4 sm:text-[12px]"
           : "h-9 px-3.5 text-[12px] sm:h-11 sm:px-5 sm:text-[14px]",

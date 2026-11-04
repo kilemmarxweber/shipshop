@@ -1,78 +1,79 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Heart, MessageCircle, Share2 } from "lucide-react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
-import { formatMoney, cn } from "@/lib/utils";
-import { ProductPriceTag } from "@/components/product-price-tag";
-import { compactCount } from "@/lib/growth/challenge-look";
-import { Button } from "@/components/ui/button";
-import { useAppConfig } from "@/lib/use-app-config";
-import { useI18n } from "@/components/i18n-provider";
-import { PageLoader } from "@/components/page-loader";
-import { FollowShopButton } from "@/components/follow-shop-button";
-import { ProductCommentsSheet } from "@/components/product-comments-sheet";
+import { AuthInline } from "@/components/auth-inline";
+import { BuyProductSheet } from "@/components/buy-product-sheet";
+import { DwellArticle } from "@/components/dwell-article";
+import { FeedBuyCard } from "@/components/feed-buy-card";
+import { matchOpenLive } from "@/components/feed-live-badge";
+import {
+    FeedLoadSentinel,
+    FeedLoadTrigger,
+} from "@/components/feed-load-trigger";
 import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
+import { FollowShopButton } from "@/components/follow-shop-button";
+import { ChallengeCard } from "@/components/growth/challenge-card";
+import { GrowthFeedFormats } from "@/components/growth/feed-formats";
+import type { MessagePath } from "@/components/i18n-provider";
+import { useI18n } from "@/components/i18n-provider";
+import { LiveScrollTeaser } from "@/components/live/live-scroll-teaser";
+import { PageLoader } from "@/components/page-loader";
+import { ProductCommentsSheet } from "@/components/product-comments-sheet";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
-import { ShopBrand } from "@/components/shop-brand";
 import { ShareMenu } from "@/components/share-menu";
+import { ShopBrand } from "@/components/shop-brand";
 import {
-  DEFAULT_VIDEO_SOUND,
-  productHasVideo,
-  type VideoSoundState,
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
+import {
+    DEFAULT_VIDEO_SOUND,
+    productHasVideo,
+    type VideoSoundState,
 } from "@/components/video-sound-button";
-import {
-  getPinnedFeedAudioId,
-  requestFeedAudioFocus,
-  resetFeedAudioFocus,
-  setFeedSnapAudioFocus,
-  unpinFeedAudio,
-  useFeedAudioFocus,
-  useResumeFeedSoundWhenVisible,
-} from "@/lib/feed-audio-focus";
-import {
-  enableFeedSound,
-  playFirstVisibleFeedSound,
-} from "@/lib/try-play-media";
-import { resetAllPageMedia } from "@/lib/page-media-session";
-import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+import { WantedCard, type WantedListItem } from "@/components/wanted-card";
 import { useFeedOrientation } from "@/hooks/use-feed-orientation";
 import { useFeedPageSnap } from "@/hooks/use-feed-page-snap";
 import {
-  FEED_WARM_RADIUS,
-  isFeedIndexWarm,
-  useSnapActiveIndex,
+    FEED_WARM_RADIUS,
+    isFeedIndexWarm,
+    useSnapActiveIndex,
 } from "@/hooks/use-snap-active-index";
-import { warmFeedMediaBatch } from "@/lib/feed-media-pool";
-import { isVideoUrl } from "@/lib/media";
-import { colorHex } from "@/lib/product-options";
-import { AuthInline } from "@/components/auth-inline";
-import { BuyProductSheet } from "@/components/buy-product-sheet";
-import { MediaThumb } from "@/components/media-thumb";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { authClient } from "@/lib/auth-client";
 import { getCurrentGeoCoords, reverseGeocode } from "@/lib/browser-geolocation";
-import type { MessagePath } from "@/components/i18n-provider";
-import { WantedCard, type WantedListItem } from "@/components/wanted-card";
 import {
-  FeedLoadSentinel,
-  FeedLoadTrigger,
-} from "@/components/feed-load-trigger";
-import { usePaginatedList } from "@/lib/use-paginated-list";
-import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
-import { DwellArticle } from "@/components/dwell-article";
-import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
-import { GrowthFeedFormats } from "@/components/growth/feed-formats";
-import { LiveScrollTeaser } from "@/components/live/live-scroll-teaser";
-import { ChallengeCard } from "@/components/growth/challenge-card";
+    getPinnedFeedAudioId,
+    requestFeedAudioFocus,
+    resetFeedAudioFocus,
+    setFeedSnapAudioFocus,
+    unpinFeedAudio,
+    useFeedAudioFocus,
+    useResumeFeedSoundWhenVisible,
+} from "@/lib/feed-audio-focus";
+import { warmFeedMediaBatch } from "@/lib/feed-media-pool";
+import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+import { fetchJson } from "@/lib/fetch-json";
+import { compactCount } from "@/lib/growth/challenge-look";
 import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
+import { useOpenLives } from "@/lib/growth/use-open-lives";
+import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
+import { isVideoUrl } from "@/lib/media";
+import { resetAllPageMedia } from "@/lib/page-media-session";
+import { colorHex } from "@/lib/product-options";
+import {
+    enableFeedSound,
+    playFirstVisibleFeedSound,
+} from "@/lib/try-play-media";
+import { useAppConfig } from "@/lib/use-app-config";
+import { usePaginatedList } from "@/lib/use-paginated-list";
+import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
+import { cn, formatMoney } from "@/lib/utils";
+import { Heart, MessageCircle, Share2 } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { peekWantedNavigation } from "@/lib/wanted-list-events";
+import { toast } from "sonner";
 
 type Product = {
   id: string;
@@ -120,15 +121,11 @@ function resetHomeFeedScroll(snapEl?: HTMLElement | null) {
       node.scrollTop = 0;
       node.scrollLeft = 0;
     });
-  const snap =
-    snapEl ?? document.querySelector(".feed-snap.feed-product-list");
+  const snap = snapEl ?? document.querySelector(".feed-snap.feed-product-list");
   if (snap instanceof HTMLElement) snap.scrollTop = 0;
 }
 
-function categoryLabel(
-  t: (path: MessagePath) => string,
-  id: string,
-): string {
+function categoryLabel(t: (path: MessagePath) => string, id: string): string {
   const key = `categories.${id}` as MessagePath;
   const label = t(key);
   return label === key ? id : label;
@@ -139,6 +136,7 @@ export default function FeedPage() {
   const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
   const [tab, setTab] = useState<FeedTab>("foryou");
+  const [wantedFlashId, setWantedFlashId] = useState<string | null>(null);
   const [audioEpoch, setAudioEpoch] = useState(0);
   useFeedOrientation();
   useResumeFeedSoundWhenVisible();
@@ -216,7 +214,10 @@ export default function FeedPage() {
     },
     extract: (json) => {
       const data = json as { products?: Product[]; nextCursor?: string | null };
-      return { items: data.products ?? [], nextCursor: data.nextCursor ?? null };
+      return {
+        items: data.products ?? [],
+        nextCursor: data.nextCursor ?? null,
+      };
     },
   });
   const wantedFeed = usePaginatedList<WantedListItem>({
@@ -233,7 +234,10 @@ export default function FeedPage() {
         requests?: WantedListItem[];
         nextCursor?: string | null;
       };
-      return { items: data.requests ?? [], nextCursor: data.nextCursor ?? null };
+      return {
+        items: data.requests ?? [],
+        nextCursor: data.nextCursor ?? null,
+      };
     },
   });
   const products = productFeed.items;
@@ -243,7 +247,9 @@ export default function FeedPage() {
     joinChallenge,
     placeChallenges,
     ready: growthReady,
+    surface,
   } = useGrowthSurface();
+  const openLives = useOpenLives();
   const feedRows = useMemo(
     () =>
       tab === "foryou"
@@ -256,8 +262,7 @@ export default function FeedPage() {
     [tab, products, placeChallenges],
   );
   const wanted = wantedFeed.items;
-  const loading =
-    tab === "wanted" ? wantedFeed.loading : productFeed.loading;
+  const loading = tab === "wanted" ? wantedFeed.loading : productFeed.loading;
   // Pour toi : attendre surface + 1ʳᵉ page pour peindre challenge/produit d’un coup (pas de flash)
   const holdFirstPaint =
     tab === "foryou"
@@ -305,6 +310,30 @@ export default function FeedPage() {
     setAudioEpoch((n) => n + 1);
     setTab(next);
   }
+
+  useLayoutEffect(() => {
+    const nav = peekWantedNavigation();
+    if (!nav) return;
+    setTab("wanted");
+    setWantedFlashId(nav.requestId);
+  }, []);
+
+  useEffect(() => {
+    if (!wantedFlashId) return;
+    const timer = window.setTimeout(() => setWantedFlashId(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [wantedFlashId]);
+
+  const reloadWanted = wantedFeed.reload;
+  useEffect(() => {
+    if (tab !== "wanted") return;
+    reloadWanted();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      reloadWanted();
+    }, 6000);
+    return () => window.clearInterval(timer);
+  }, [tab, reloadWanted]);
 
   useEffect(() => {
     const goHome = () => {
@@ -390,10 +419,7 @@ export default function FeedPage() {
     feedRows.length,
     `${tab}:${audioEpoch}`,
   );
-  useFeedPageSnap(
-    snapRef,
-    tab === "foryou" || tab === "following",
-  );
+  useFeedPageSnap(snapRef, tab === "foryou" || tab === "following");
 
   // Son TikTok : index snap → une card, ferme la précédente / ouvre la suivante
   useEffect(() => {
@@ -417,7 +443,8 @@ export default function FeedPage() {
     const urls: string[] = [];
     for (
       let i = Math.max(0, activeSnapIndex - FEED_WARM_RADIUS);
-      i <= Math.min(feedRows.length - 1, activeSnapIndex + FEED_WARM_RADIUS + 1);
+      i <=
+      Math.min(feedRows.length - 1, activeSnapIndex + FEED_WARM_RADIUS + 1);
       i += 1
     ) {
       const row = feedRows[i];
@@ -637,7 +664,11 @@ export default function FeedPage() {
           ) : (
             <div className="space-y-2">
               {wanted.map((item) => (
-                <WantedCard key={item.id} item={item} />
+                <WantedCard
+                  key={item.id}
+                  item={item}
+                  highlighted={item.id === wantedFlashId}
+                />
               ))}
               {wantedFeed.hasMore ? (
                 <FeedLoadSentinel
@@ -705,9 +736,7 @@ export default function FeedPage() {
           </div>
         ) : null}
       </div>
-      {tab === "foryou" || tab === "following" ? (
-        <LiveScrollTeaser />
-      ) : null}
+      {tab === "foryou" || tab === "following" ? <LiveScrollTeaser /> : null}
 
       <div
         key={tab}
@@ -738,227 +767,191 @@ export default function FeedPage() {
             );
           }
           const p = row.item;
+          const live = matchOpenLive(openLives, {
+            productId: p.id,
+            ownerUserId: p.shop.ownerUserId,
+          });
           return (
-          <DwellArticle
-            key={`${tab}:${p.id}`}
-            productId={p.id}
-            enabled={Boolean(session)}
-            soundOn={!soundFor(p.id).muted}
-            className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden [transform:translateZ(0)] [isolation:isolate]"
-          >
-            <ProductImageCarousel
-              images={p.images}
-              overlay
-              className="absolute inset-0"
-              muted={mediaSound(p.id).muted}
-              volume={mediaSound(p.id).volume}
-              hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
-              clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
-              motions={p.imageMotions}
-              feedWarm={isFeedIndexWarm(index, activeSnapIndex)}
-              audioKey={
-                productHasVideo(p.images) || p.soundtrack?.audioUrl
-                  ? p.id
-                  : undefined
-              }
-              onActivateSound={
-                productHasVideo(p.images) || p.soundtrack?.audioUrl
-                  ? () => activateSound(p.id)
-                  : undefined
-              }
-              onDoubleLike={() => void toggleLike(p, { forceLike: true })}
-            />
-            {p.soundtrack?.audioUrl ? (
-              <FeedSoundtrackPlayer
-                audioUrl={p.soundtrack.audioUrl}
-                startMs={p.soundtrackStartMs}
-                sound={mediaSound(p.id)}
-                active={audioFocusId === p.id}
-              />
-            ) : null}
-            {index === prefetchAt || index === feedRows.length - 1 ? (
-              <FeedLoadTrigger
-                onNearEnd={loadMoreProducts}
-                disabled={!productFeed.hasMore}
-              />
-            ) : null}
-
-            <div className="feed-card-chip absolute left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:left-4">
-              {productHasVideo(p.images) ? (
-                <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
-                  {t("buy.realVideo")}
-                </span>
-              ) : (
-                <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
-                  {categoryLabel(t, p.category)}
-                </span>
-              )}
-            </div>
-
-            <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
-              <FollowShopButton
-                slug={p.shop.slug}
-                followedByMe={Boolean(p.shop.followedByMe)}
-                isOwnShop={
-                  Boolean(session?.user?.id) &&
-                  p.shop.ownerUserId === session?.user?.id
+            <DwellArticle
+              key={`${tab}:${p.id}`}
+              productId={p.id}
+              enabled={Boolean(session)}
+              soundOn={!soundFor(p.id).muted}
+              className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden [transform:translateZ(0)] [isolation:isolate]"
+            >
+              <ProductImageCarousel
+                images={p.images}
+                overlay
+                className="absolute inset-0"
+                muted={mediaSound(p.id).muted}
+                volume={mediaSound(p.id).volume}
+                hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
+                clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
+                motions={p.imageMotions}
+                feedWarm={isFeedIndexWarm(index, activeSnapIndex)}
+                audioKey={
+                  productHasVideo(p.images) || p.soundtrack?.audioUrl
+                    ? p.id
+                    : undefined
                 }
-                icon
-                count={p.shop.followersCount ?? 0}
-                onChange={(followed, followersCount) =>
-                  setShopFollowed(p.shop.id, followed, followersCount)
+                onActivateSound={
+                  productHasVideo(p.images) || p.soundtrack?.audioUrl
+                    ? () => activateSound(p.id)
+                    : undefined
                 }
+                onDoubleLike={() => void toggleLike(p, { forceLike: true })}
               />
-              <button
-                type="button"
-                onClick={() => toggleLike(p)}
-                className="grid cursor-pointer place-items-center"
-                aria-label={
-                  p.likesCount
-                    ? `${t("feed.like")} (${p.likesCount})`
-                    : t("feed.like")
-                }
-              >
-                <span
-                  className={cn(
-                    "grid size-10 place-items-center rounded-full border backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12",
-                    p.likedByMe
-                      ? "border-white/80 bg-white text-[#ff3863]"
-                      : "border-white/45 bg-white/20 text-white",
-                  )}
-                >
-                  <Heart
-                    className={cn(
-                      "size-5",
-                      p.likedByMe && "fill-current",
-                    )}
-                  />
-                </span>
-                <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
-                  {compactCount(p.likesCount || 0, locale)}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCommentProductId(p.id)}
-                className="grid cursor-pointer place-items-center"
-                aria-label={t("feed.comments")}
-              >
-                <span className="grid size-10 place-items-center rounded-full border border-white/45 bg-white/20 text-white backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12">
-                  <MessageCircle className="size-5" />
-                </span>
-                <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
-                  {compactCount(p.commentsCount || 0, locale)}
-                </span>
-              </button>
-              <ShareMenu
-                title={p.title}
-                productId={p.id}
-                text={`${p.title} — ${formatMoney(p.priceCents, p.currency)} ${t("product.onShipShop")}`}
-                url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
-                align="end"
-                side="left"
-                triggerClassName="grid cursor-pointer place-items-center border-0 bg-transparent p-0"
-              >
-                <span
-                  className="grid size-10 place-items-center rounded-full border border-white/45 bg-white/20 text-white backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12"
-                  aria-label={t("feed.share")}
-                >
-                  <Share2 className="size-5" />
-                </span>
-              </ShareMenu>
-            </div>
+              {p.soundtrack?.audioUrl ? (
+                <FeedSoundtrackPlayer
+                  audioUrl={p.soundtrack.audioUrl}
+                  startMs={p.soundtrackStartMs}
+                  sound={mediaSound(p.id)}
+                  active={audioFocusId === p.id}
+                />
+              ) : null}
+              {index === prefetchAt || index === feedRows.length - 1 ? (
+                <FeedLoadTrigger
+                  onNearEnd={loadMoreProducts}
+                  disabled={!productFeed.hasMore}
+                />
+              ) : null}
 
-            <div className="feed-buy-pad relative z-10 mt-auto px-3 pt-3 pr-14 text-white sm:px-4 sm:pr-16">
-              <div className="mb-2 flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <ShopBrand
-                    name={p.shop.name}
-                    slug={p.shop.slug}
-                    logoUrl={p.shop.logoUrl}
-                    showAt={false}
-                    className="min-w-0"
-                    nameClassName="text-sm text-white underline-offset-2 hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <p className="pl-10 text-[11px] text-white/70">
-                    {compactCount(p.viewsCount || p.likesCount || 0, locale)}{" "}
-                    {t("discover.views")}
-                  </p>
-                </div>
+              <div className="feed-card-chip absolute left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:left-4">
+                {productHasVideo(p.images) ? (
+                  <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
+                    {t("buy.realVideo")}
+                  </span>
+                ) : (
+                  <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
+                    {categoryLabel(t, p.category)}
+                  </span>
+                )}
               </div>
-              {(p.colors.length > 0 || p.sizes.length > 0) && (
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  {p.colors.slice(0, 5).map((c) => (
-                    <span
-                      key={c}
-                      title={c}
-                      className="size-4 rounded-full border border-white/30"
-                      style={{ backgroundColor: colorHex(c) }}
-                    />
-                  ))}
-                  {p.sizes.slice(0, 4).map((s) => (
-                    <span
-                      key={s}
-                      className="rounded bg-black/40 px-1.5 py-0.5 text-[9px] font-semibold backdrop-blur"
-                    >
-                      {s}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {p.description && (
-                <p className="mb-2.5 line-clamp-2 text-xs text-white/85 sm:mb-3">
-                  {p.description}
-                </p>
-              )}
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => setBuyProduct(p)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setBuyProduct(p);
+
+              <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
+                <FollowShopButton
+                  slug={p.shop.slug}
+                  followedByMe={Boolean(p.shop.followedByMe)}
+                  isOwnShop={
+                    Boolean(session?.user?.id) &&
+                    p.shop.ownerUserId === session?.user?.id
                   }
-                }}
-                className="flex cursor-pointer items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:gap-3 sm:p-2.5"
-              >
-                <Link
-                  href={`/product/${p.id}`}
-                  className="contents"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MediaThumb
-                    images={p.images}
-                    className="size-11 shrink-0 rounded-xl ring-1 ring-white/10 sm:size-12"
-                  />
-                </Link>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold text-white">
-                    {p.title}
-                  </p>
-                  <ProductPriceTag
-                    priceCents={p.priceCents}
-                    currency={p.currency}
-                    compareAtCents={p.compareAtCents}
-                    promoPercent={p.promoPercent}
-                  />
-                </div>
-                <Button
+                  icon
+                  count={p.shop.followersCount ?? 0}
+                  onChange={(followed, followersCount) =>
+                    setShopFollowed(p.shop.id, followed, followersCount)
+                  }
+                />
+                <button
                   type="button"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setBuyProduct(p);
-                  }}
-                  className="min-h-10 shrink-0 cursor-pointer rounded-full px-4 text-[11px] font-bold"
+                  onClick={() => toggleLike(p)}
+                  className="grid cursor-pointer place-items-center"
+                  aria-label={
+                    p.likesCount
+                      ? `${t("feed.like")} (${p.likesCount})`
+                      : t("feed.like")
+                  }
                 >
-                  {t("buy.cta")}
-                </Button>
+                  <span
+                    className={cn(
+                      "grid size-10 place-items-center rounded-full border backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12",
+                      p.likedByMe
+                        ? "border-white/80 bg-white text-[#ff3863]"
+                        : "border-white/45 bg-white/20 text-white",
+                    )}
+                  >
+                    <Heart
+                      className={cn("size-5", p.likedByMe && "fill-current")}
+                    />
+                  </span>
+                  <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+                    {compactCount(p.likesCount || 0, locale)}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCommentProductId(p.id)}
+                  className="grid cursor-pointer place-items-center"
+                  aria-label={t("feed.comments")}
+                >
+                  <span className="grid size-10 place-items-center rounded-full border border-white/45 bg-white/20 text-white backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12">
+                    <MessageCircle className="size-5" />
+                  </span>
+                  <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+                    {compactCount(p.commentsCount || 0, locale)}
+                  </span>
+                </button>
+                <ShareMenu
+                  title={p.title}
+                  productId={p.id}
+                  text={`${p.title} — ${formatMoney(p.priceCents, p.currency)} ${t("product.onShipShop")}`}
+                  url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
+                  align="end"
+                  side="left"
+                  triggerClassName="grid cursor-pointer place-items-center border-0 bg-transparent p-0"
+                >
+                  <span
+                    className="grid size-10 place-items-center rounded-full border border-white/45 bg-white/20 text-white backdrop-blur-md transition hover:scale-105 active:scale-95 sm:size-12"
+                    aria-label={t("feed.share")}
+                  >
+                    <Share2 className="size-5" />
+                  </span>
+                </ShareMenu>
               </div>
-            </div>
-          </DwellArticle>
+
+              <div className="feed-buy-pad relative z-10 mt-auto px-3 pt-3 pr-14 text-white sm:px-4 sm:pr-16">
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <ShopBrand
+                      name={p.shop.name}
+                      slug={p.shop.slug}
+                      logoUrl={p.shop.logoUrl}
+                      liveId={live?.id}
+                      showAt={false}
+                      className="min-w-0"
+                      nameClassName="text-sm text-white underline-offset-2 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <p className="pl-10 text-[11px] text-white/70">
+                      {compactCount(p.viewsCount || p.likesCount || 0, locale)}{" "}
+                      {t("discover.views")}
+                    </p>
+                  </div>
+                </div>
+                {(p.colors.length > 0 || p.sizes.length > 0) && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    {p.colors.slice(0, 5).map((c) => (
+                      <span
+                        key={c}
+                        title={c}
+                        className="size-4 rounded-full border border-white/30"
+                        style={{ backgroundColor: colorHex(c) }}
+                      />
+                    ))}
+                    {p.sizes.slice(0, 4).map((s) => (
+                      <span
+                        key={s}
+                        className="rounded bg-black/40 px-1.5 py-0.5 text-[9px] font-semibold backdrop-blur"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {p.description && (
+                  <p className="mb-2.5 line-clamp-2 text-xs text-white/85 sm:mb-3">
+                    {p.description}
+                  </p>
+                )}
+                <FeedBuyCard
+                  product={p}
+                  onBuy={() => setBuyProduct(p)}
+                  buyLabel={t("buy.cta")}
+                  reviewsLabel={t("feed.reviews")}
+                  locale={locale}
+                />
+              </div>
+            </DwellArticle>
           );
         })}
         {productFeed.hasMore ? (
@@ -981,9 +974,7 @@ export default function FeedPage() {
         }}
         onCountChange={(id, count) =>
           setProducts((prev) =>
-            prev.map((p) =>
-              p.id === id ? { ...p, commentsCount: count } : p,
-            ),
+            prev.map((p) => (p.id === id ? { ...p, commentsCount: count } : p)),
           )
         }
       />

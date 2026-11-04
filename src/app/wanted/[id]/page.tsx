@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ShopPicker } from "@/components/shop-picker";
+import { notifyWantedUpdated } from "@/lib/wanted-list-events";
 
 type Offer = {
   id: string;
@@ -34,10 +35,13 @@ type Offer = {
   condition: string;
   status: string;
   overBudget: boolean;
+  kycApproved?: boolean;
   sellerCommune: string | null;
   sellerQuartier: string | null;
   sellerAddress: string | null;
   sellerPhone: string | null;
+  sellerLat?: number | null;
+  sellerLng?: number | null;
   mine: boolean;
   seller: { id: string; name: string };
   shop: {
@@ -96,27 +100,84 @@ export default function WantedDetailPage() {
     parcelle: "",
   });
   const [busy, setBusy] = useState(false);
+  const [accepting, setAccepting] = useState<Offer | null>(null);
+  const [intent, setIntent] = useState<"PICKUP" | "DELIVERY" | "SELLER_DROP">(
+    "PICKUP",
+  );
+  const [rail, setRail] = useState<"SHIPSHOP" | "OFF_PLATFORM">("SHIPSHOP");
+  const [waiver, setWaiver] = useState(false);
+  const [contactPhone, setContactPhone] = useState("");
+  const [shipCents, setShipCents] = useState(0);
 
   usePageBack({ fallbackHref: "/wanted" });
 
-  async function load() {
+  async function load(opts?: { quiet?: boolean }) {
     const { res, data } = await fetchJson<{
       request?: RequestDetail;
       catalog?: CatalogHit[];
       error?: string;
     }>(`/api/wanted/${id}`);
     if (!res.ok || !data?.request) {
-      toast.error(data?.error ?? "Demande introuvable");
-      setRequest(null);
+      if (!opts?.quiet) {
+        toast.error(data?.error ?? "Demande introuvable");
+        setRequest(null);
+      }
       return;
     }
     setRequest(data.request);
     setCatalog(data.catalog ?? []);
   }
 
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadRef.current({ quiet: true });
+    };
+    const timer = window.setInterval(tick, 5000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!accepting || intent !== "DELIVERY") {
+      setShipCents(0);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void fetchJson<{ quote?: { shippingCents?: number } }>(
+        "/api/shipping/quote",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shopId: accepting.shop.id,
+            city: address.city || "Kinshasa",
+            commune: address.commune || null,
+            lat: address.lat ?? null,
+            lng: address.lng ?? null,
+          }),
+        },
+      ).then(({ data }) => setShipCents(data?.quote?.shippingCents ?? 0));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [
+    accepting,
+    intent,
+    address.city,
+    address.commune,
+    address.lat,
+    address.lng,
+  ]);
 
   useEffect(() => {
     if (!session) return;
@@ -179,8 +240,19 @@ export default function WantedDetailPage() {
       return;
     }
     toast.success("Offre envoyée");
+    setPrice("");
+    setPhone("");
     setMessage("");
-    await load();
+    setImages([]);
+    setAddress({
+      city: "Kinshasa",
+      commune: "",
+      quartier: "",
+      avenue: "",
+      parcelle: "",
+    });
+    notifyWantedUpdated(id);
+    router.push("/");
   }
 
   async function contact(shopIdTo: string) {
@@ -207,19 +279,61 @@ export default function WantedDetailPage() {
     router.push(`/messages/${data.conversation.id}`);
   }
 
-  async function accept(offerId: string) {
+  async function checkout() {
+    if (!accepting) return;
+    if (rail === "OFF_PLATFORM" && !waiver) {
+      toast.error(
+        "Sans paiement ShipShop, pas de preuve ni de remboursement. Cochez l’avertissement.",
+      );
+      return;
+    }
     setBusy(true);
-    const { res, data } = await fetchJson<{ error?: string }>(
-      `/api/wanted/${id}/offers/${offerId}/accept`,
-      { method: "POST" },
-    );
+    const { res, data } = await fetchJson<{
+      error?: string;
+      paymentRail?: string;
+      handoverId?: string;
+      orderId?: string;
+      needed?: number;
+      balance?: number;
+    }>(`/api/wanted/${id}/offers/${accepting.id}/checkout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        paymentRail: rail,
+        fulfillmentType: intent,
+        waiver: rail === "OFF_PLATFORM" ? true : undefined,
+        deliveryCity: address.city || "Kinshasa",
+        deliveryCommune: address.commune || null,
+        deliveryQuartier: address.quartier || null,
+        deliveryAvenue: address.avenue || null,
+        deliveryParcelle: address.parcelle || null,
+        deliveryLat: address.lat ?? null,
+        deliveryLng: address.lng ?? null,
+        contactPhone: rail === "SHIPSHOP" ? contactPhone : undefined,
+      }),
+    });
     setBusy(false);
     if (!res.ok) {
       toast.error(data?.error ?? "Acceptation impossible");
+      if (res.status === 402) router.push("/wallet");
       return;
     }
-    toast.success(t("wanted.accepted"));
-    router.push("/cart");
+    setAccepting(null);
+    notifyWantedUpdated(id);
+    if (data?.paymentRail === "OFF_PLATFORM") {
+      toast.success("Offre acceptée hors ShipShop — pas de remboursement");
+      void load();
+      return;
+    }
+    toast.success("Payé — présente le QR à la remise");
+    if (data?.handoverId) {
+      router.push(`/orders/ticket/${data.handoverId}`);
+      return;
+    }
+    if (data?.orderId) router.push(`/orders/${data.orderId}`);
   }
 
   if (loading) return <PageLoader />;
@@ -302,8 +416,17 @@ export default function WantedDetailPage() {
                     <p className="text-[11px] text-muted-foreground">
                       {o.shop.name}
                       {o.shop.isOccasionStall ? " · occasion" : ""}
+                      {o.kycApproved ? " · KYC" : ""}
                       {o.sellerCommune ? ` · ${o.sellerCommune}` : ""}
                     </p>
+                    {o.images[0] ? (
+                      <div className="mt-2 size-16 overflow-hidden rounded-lg bg-muted">
+                        <MediaThumb
+                          src={o.images[0]}
+                          className="size-full object-cover"
+                        />
+                      </div>
+                    ) : null}
                     {o.sellerPhone && (
                       <a
                         href={`tel:${o.sellerPhone}`}
@@ -351,7 +474,7 @@ export default function WantedDetailPage() {
                     <Button
                       size="sm"
                       disabled={busy}
-                      onClick={() => accept(o.id)}
+                      onClick={() => setAccepting(o)}
                     >
                       {t("wanted.accept")}
                     </Button>
@@ -366,6 +489,12 @@ export default function WantedDetailPage() {
       {canOffer && (
         <div className="space-y-3 rounded-2xl border border-border p-4">
           <h2 className="font-heading text-sm font-bold">{t("wanted.iHaveIt")}</h2>
+          {request.condition === "USED" && (
+            <p className="text-xs text-muted-foreground">
+              Un compte acheteur suffit pour une occasion. Pas besoin de
+              boutique ni de devenir vendeur.
+            </p>
+          )}
           {request.condition === "NEW_SHOP" && (
             <div className="space-y-1">
               <Label>Boutique</Label>
@@ -419,6 +548,88 @@ export default function WantedDetailPage() {
           </Button>
         </div>
       )}
+
+      {accepting ? (
+        <div className="space-y-3 rounded-2xl border border-primary/40 p-4">
+          <h2 className="font-heading text-sm font-bold">
+            Accepter {accepting.seller.name} ·{" "}
+            {formatMoney(accepting.priceCents)}
+            {intent === "DELIVERY" && shipCents > 0
+              ? ` + transport ${formatMoney(shipCents)}`
+              : ""}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Paiement ShipShop = traces, QR et 5 % à la remise, comme en boutique.
+            Sans paiement ShipShop, pas de preuve ni de remboursement.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["PICKUP", "Je vais le chercher"],
+                ["DELIVERY", "Livreur ShipShop"],
+                ["SELLER_DROP", "Le vendeur apporte"],
+              ] as const
+            ).map(([value, label]) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={intent === value ? "default" : "outline"}
+                onClick={() => setIntent(value)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={rail === "SHIPSHOP" ? "default" : "outline"}
+              onClick={() => setRail("SHIPSHOP")}
+            >
+              Payer sur ShipShop
+            </Button>
+            <Button
+              size="sm"
+              variant={rail === "OFF_PLATFORM" ? "default" : "outline"}
+              onClick={() => setRail("OFF_PLATFORM")}
+            >
+              Hors ShipShop
+            </Button>
+          </div>
+          {rail === "SHIPSHOP" ? (
+            <PhoneField
+              id="wanted-checkout-phone"
+              label="Téléphone de contact"
+              value={contactPhone}
+              onChange={setContactPhone}
+            />
+          ) : (
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={waiver}
+                onChange={(e) => setWaiver(e.target.checked)}
+              />
+              Je comprends : pas de trace ShipShop = pas de remboursement.
+            </label>
+          )}
+          {intent === "DELIVERY" ? (
+            <KinshasaAddressForm value={address} onChange={setAddress} />
+          ) : null}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setAccepting(null)}
+            >
+              Annuler
+            </Button>
+            <Button className="flex-1" disabled={busy} onClick={checkout}>
+              {rail === "SHIPSHOP" ? "Payer et confirmer" : "Accepter hors piste"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

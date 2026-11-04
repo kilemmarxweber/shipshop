@@ -1,24 +1,27 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { getOrCreateWallet, getSession } from "@/lib/session";
-import {
-  MIN_WITHDRAWAL_USD_CENTS,
-  amountUsdCents,
-  withdrawalFeeCents,
-} from "@/lib/platform-fees";
-import { creditTreasury } from "@/lib/platform-ledger";
-import { applyBucketDelta, getBucketCents } from "@/lib/wallet-buckets";
 import { parseCurrency, shopFxRates, walletCents } from "@/lib/money";
+import { isCinetPayConfigured } from "@/lib/payments/cinetpay";
+import { sendCinetPayPayout } from "@/lib/payments/cinetpay-transfer";
+import {
+    beginIdempotentInTx,
+    completeIdempotentInTx,
+    findIdempotentOp,
+    fingerprintPayload,
+    isUniqueConflict,
+    replayIfComplete,
+} from "@/lib/payments/idempotent-op";
 import { idempotencyFrom } from "@/lib/payments/ledger";
 import {
-  beginIdempotentInTx,
-  completeIdempotentInTx,
-  findIdempotentOp,
-  fingerprintPayload,
-  isUniqueConflict,
-  replayIfComplete,
-} from "@/lib/payments/idempotent-op";
+    MIN_WITHDRAWAL_USD_CENTS,
+    amountUsdCents,
+    withdrawalFeeCents,
+} from "@/lib/platform-fees";
+import { creditTreasury } from "@/lib/platform-ledger";
+import { revertUnsentWithdrawal } from "@/lib/payments/revert-withdrawal";
+import { prisma } from "@/lib/prisma";
+import { getOrCreateWallet, getSession } from "@/lib/session";
+import { applyBucketDelta, getBucketCents } from "@/lib/wallet-buckets";
+import { NextResponse, after } from "next/server";
+import { z } from "zod";
 
 const schema = z.object({
   bucket: z.enum(["BUYER", "VENDOR", "COURIER"]),
@@ -78,6 +81,7 @@ export async function POST(req: Request) {
 
     const fee = withdrawalFeeCents(body.amountCents, body.bucket);
     const net = body.amountCents - fee;
+    const livePayout = isCinetPayConfigured();
 
     const result = await prisma.$transaction(async (tx) => {
       const began = await beginIdempotentInTx(tx, {
@@ -106,7 +110,11 @@ export async function POST(req: Request) {
         return { payload };
       }
 
-      await tx.$queryRaw`SELECT id FROM "wallet" WHERE id = ${wallet.id} FOR UPDATE`;
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { updatedAt: new Date() },
+        select: { id: true },
+      });
       const locked = await tx.wallet.findUnique({ where: { id: wallet.id } });
       if (!locked) throw new Error("Portefeuille introuvable");
       if (getBucketCents(locked, body.bucket, currency) < body.amountCents) {
@@ -114,7 +122,12 @@ export async function POST(req: Request) {
       }
       await tx.wallet.update({
         where: { id: locked.id },
-        data: applyBucketDelta(locked, currency, -body.amountCents, body.bucket),
+        data: applyBucketDelta(
+          locked,
+          currency,
+          -body.amountCents,
+          body.bucket,
+        ),
       });
       const withdrawal = await tx.withdrawal.create({
         data: {
@@ -124,10 +137,10 @@ export async function POST(req: Request) {
           grossCents: body.amountCents,
           feeCents: fee,
           netCents: net,
-          status: "PAID",
+          status: livePayout ? "PENDING" : "PAID",
           provider: body.provider,
           phone: body.phone.trim(),
-          paidAt: new Date(),
+          paidAt: livePayout ? null : new Date(),
           clientIdempotencyKey: key,
         },
       });
@@ -139,14 +152,17 @@ export async function POST(req: Request) {
           currency,
           balanceAfterCents: walletCents(locked, currency) - body.amountCents,
           provider: body.provider,
+          phone: body.phone.trim(),
           status: "SUCCESS",
           reference: `WD-${withdrawal.id.slice(0, 8)}`,
           metadata: {
             bucket: body.bucket,
             fee,
             net,
+            phone: body.phone.trim(),
             withdrawalId: withdrawal.id,
             idempotencyKey: key,
+            rail: livePayout ? "CINETPAY" : "SIMULATED",
           },
         },
       });
@@ -175,7 +191,41 @@ export async function POST(req: Request) {
         status: result.replay.httpStatus,
       });
     }
-    return NextResponse.json(result.payload);
+    const payload = result.payload;
+    if (
+      livePayout &&
+      payload &&
+      "withdrawal" in payload &&
+      payload.withdrawal
+    ) {
+      const withdrawal = payload.withdrawal;
+      after(() => {
+        void (async () => {
+          try {
+            const user = await prisma.user.findUnique({
+              where: { id: session.user.id },
+              select: { name: true, email: true },
+            });
+            await sendCinetPayPayout({
+              withdrawalId: withdrawal.id,
+              amountCents: net,
+              currency,
+              phone: body.phone.trim(),
+              provider: body.provider,
+              customerName: user?.name ?? "Client",
+            });
+          } catch (error) {
+            console.error("[cinetpay-payout]", withdrawal.id, error);
+            try {
+              await revertUnsentWithdrawal(withdrawal.id);
+            } catch (revertError) {
+              console.error("[cinetpay-payout-revert]", withdrawal.id, revertError);
+            }
+          }
+        })();
+      });
+    }
+    return NextResponse.json(payload);
   } catch (error) {
     if (isUniqueConflict(error) && key) {
       const row = await findIdempotentOp({

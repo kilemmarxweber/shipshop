@@ -627,6 +627,121 @@ function GuestStageCard({
   );
 }
 
+/** Son distant des invités — pour le host qui n’affiche plus leurs cartes. */
+export function LiveGuestAudioBus({
+  guests,
+  selfUserId,
+  remoteStreams,
+}: {
+  guests: LiveGuestCard[];
+  selfUserId?: string | null;
+  remoteStreams?: Record<string, MediaStream>;
+}) {
+  const onStage = guests.filter(
+    (g) => g.status === "ON_STAGE" && g.user.id !== selfUserId,
+  );
+  if (!onStage.length) return null;
+  return (
+    <>
+      {onStage.map((g) => (
+        <GuestRemoteAudio
+          key={g.id}
+          stream={remoteStreams?.[g.user.id] ?? null}
+        />
+      ))}
+    </>
+  );
+}
+
+function GuestRemoteAudio({ stream }: { stream?: MediaStream | null }) {
+  const audioRef = useRemoteLiveAudio(stream ?? null, Boolean(stream));
+  return <audio ref={audioRef} autoPlay playsInline className="hidden" />;
+}
+
+/** Host : pastilles compactes (kick / parole), pas les cartes vidéo viewers. */
+export function LiveHostOnStageDock({
+  guests,
+  busy,
+  onKick,
+  onGrantFloor,
+  onRevokeFloor,
+}: {
+  guests: LiveGuestCard[];
+  busy?: boolean;
+  onKick: (guestId: string) => void;
+  onGrantFloor?: (guestId: string) => void;
+  onRevokeFloor?: (guestId: string) => void;
+}) {
+  const onStage = guests.filter((g) => g.status === "ON_STAGE");
+  if (!onStage.length) return null;
+  const floorMode = onStage.length >= 2;
+  return (
+    <div className="pointer-events-auto space-y-1.5">
+      <p className="px-0.5 text-[9px] font-bold uppercase tracking-wide text-white/55">
+        Sur scène
+      </p>
+      {onStage.map((g) => (
+        <div
+          key={g.id}
+          className="flex items-center gap-1.5 rounded-2xl border border-white/15 bg-black/70 px-2 py-1.5 shadow-lg backdrop-blur-md"
+        >
+          <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10">
+            {g.user.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={g.user.image} alt="" className="size-full object-cover" />
+            ) : (
+              <UserRound className="size-3.5 text-white/60" />
+            )}
+          </span>
+          <p className="min-w-0 flex-1 truncate text-[11px] font-bold text-white">
+            {g.user.name}
+          </p>
+          {floorMode && g.hasFloor ? (
+            <button
+              type="button"
+              disabled={busy}
+              title="Retirer la parole"
+              onClick={() => onRevokeFloor?.(g.id)}
+              className="grid size-7 place-items-center rounded-full bg-amber-950/80 text-amber-100"
+            >
+              <MicOff className="size-3.5" />
+            </button>
+          ) : null}
+          {floorMode && !g.hasFloor ? (
+            <button
+              type="button"
+              disabled={busy}
+              title="Donner la parole"
+              onClick={() => onGrantFloor?.(g.id)}
+              className={cn(
+                "grid size-7 place-items-center rounded-full",
+                g.handRaised
+                  ? "bg-[#7dffb3] text-black"
+                  : "bg-[#7dffb3]/20 text-[#7dffb3]",
+              )}
+            >
+              {g.handRaised ? (
+                <Hand className="size-3.5" />
+              ) : (
+                <Mic className="size-3.5" />
+              )}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            aria-label="Retirer de la scène"
+            onClick={() => onKick(g.id)}
+            className="grid size-7 place-items-center rounded-full bg-white/10 text-white/80 hover:bg-red-600/80"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** File d’attente host — demandes viewers + invitations en attente. */
 export function LiveGuestRequestQueue({
   pending,
@@ -635,6 +750,7 @@ export function LiveGuestRequestQueue({
   onAccept,
   onRefuse,
   onCancelInvite,
+  embedded = false,
 }: {
   pending: LiveGuestCard[];
   invited?: LiveGuestCard[];
@@ -642,10 +758,17 @@ export function LiveGuestRequestQueue({
   onAccept: (guestId: string) => void;
   onRefuse: (guestId: string) => void;
   onCancelInvite?: (guestId: string) => void;
+  embedded?: boolean;
 }) {
   if (!pending.length && !invited.length) return null;
   return (
-    <div className="pointer-events-auto absolute inset-x-3 top-[4.35rem] z-[28] max-h-[40%] space-y-2 overflow-y-auto sm:left-3 sm:right-auto sm:w-[17rem]">
+    <div
+      className={cn(
+        "pointer-events-auto space-y-2",
+        !embedded &&
+          "absolute inset-x-3 top-[4.35rem] z-[28] max-h-[40%] overflow-y-auto sm:left-3 sm:right-auto sm:w-[17rem]",
+      )}
+    >
       {pending.map((g) => (
         <div
           key={g.id}

@@ -1,13 +1,9 @@
-import { after } from "next/server";
 import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
 import type { WalletNotifyInput } from "@/lib/messaging/notify";
-import {
-  parseCurrency,
-  walletCents,
-  type AppCurrency,
-} from "@/lib/money";
+import { parseCurrency, walletCents, type AppCurrency } from "@/lib/money";
+import { prisma } from "@/lib/prisma";
 import { applyBucketDelta, drainBucketsData } from "@/lib/wallet-buckets";
+import { after } from "next/server";
 
 export const MOVEMENT_TTL_MS = 30 * 60 * 1000;
 export const IDEMPOTENCY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
@@ -36,9 +32,7 @@ export function auditFromRequest(
 ): AuditCtx {
   const forwarded = req.headers.get("x-forwarded-for");
   const ip =
-    forwarded?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    null;
+    forwarded?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
   return {
     actorUserId,
     actorType,
@@ -56,12 +50,29 @@ export function idempotencyFrom(req: Request, bodyKey?: string | null) {
   );
 }
 
+/** Row lock via UPDATE — évite $queryRaw FOR UPDATE qui abort la tx (Prisma pg). */
 export async function lockWallet(tx: Tx, walletId: string) {
-  await tx.$queryRaw`SELECT id FROM "wallet" WHERE id = ${walletId} FOR UPDATE`;
+  await tx.wallet.update({
+    where: { id: walletId },
+    data: { updatedAt: new Date() },
+    select: { id: true },
+  });
+}
+
+export async function lockWalletByUser(tx: Tx, userId: string) {
+  await tx.wallet.update({
+    where: { userId },
+    data: { updatedAt: new Date() },
+    select: { id: true },
+  });
 }
 
 export async function lockMovement(tx: Tx, movementId: string) {
-  await tx.$queryRaw`SELECT id FROM "money_movement" WHERE id = ${movementId} FOR UPDATE`;
+  await tx.moneyMovement.update({
+    where: { id: movementId },
+    data: { updatedAt: new Date() },
+    select: { id: true },
+  });
 }
 
 export async function writeAudit(
@@ -116,9 +127,7 @@ export async function enqueueWalletOutbox(
 
 export function scheduleOutboxFlush() {
   const run = () =>
-    flushNotifyOutbox().catch((err) =>
-      console.error("[payments] outbox", err),
-    );
+    flushNotifyOutbox().catch((err) => console.error("[payments] outbox", err));
   try {
     after(run);
   } catch {
@@ -146,10 +155,10 @@ export async function flushNotifyOutbox(limit = 25) {
         where: { id: row.id },
         data: {
           attempts,
-          lastError: (error instanceof Error ? error.message : String(error)).slice(
-            0,
-            500,
-          ),
+          lastError: (error instanceof Error
+            ? error.message
+            : String(error)
+          ).slice(0, 500),
           status: attempts >= 8 ? "DEAD" : "PENDING",
         },
       });

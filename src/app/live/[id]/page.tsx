@@ -1,95 +1,98 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { toast } from "sonner";
-import {
-  Camera,
-  CameraOff,
-  Clock,
-  Gift,
-  Heart,
-  LogOut,
-  MessageCircle,
-  MessageCircleOff,
-  Mic,
-  MicOff,
-  MoreVertical,
-  Pause,
-  Play,
-  Plus,
-  Radio,
-  RefreshCw,
-  Send,
-  Share2,
-  ShoppingBag,
-  Aperture,
-  LayoutGrid,
-  Lock,
-  LockOpen,
-  Sparkles,
-  Type,
-  UserPlus,
-  UserRound,
-  WifiOff,
-  X,
-} from "lucide-react";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
-import {
-  clearPaymentIdempotencyKey,
-  fetchPaymentJson,
-  paymentIdempotencyKey,
-} from "@/lib/payments/idempotency-client";
-import { iosInlineVideo } from "@/lib/ios-inline-video";
-import { cn, formatMoney } from "@/lib/utils";
-import { notifyWalletUpdated } from "@/lib/wallet-events";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { PageLoader } from "@/components/page-loader";
 import { usePageBack } from "@/components/back-nav-context";
-import { ShareMenu } from "@/components/share-menu";
-import {
-  LIVE_END_ALERT_BEFORE_MS,
-  LIVE_HEARTBEAT_HIDDEN_MS,
-  LIVE_HEARTBEAT_MS,
-  LIVE_PAUSE_TIMEOUT_MS,
-  LIVE_POLL_HIDDEN_MS,
-  LIVE_POLL_MS,
-  formatLiveClock,
-  liveEndMessage,
-  livePauseMessage,
-} from "@/lib/growth/live-session";
-import {
-  newOverlayId,
-  type LiveOverlay,
-} from "@/lib/growth/live-overlays";
-import { LiveStageOverlays } from "@/components/live/live-stage-overlays";
-import {
-  LiveProductPicker,
-  type LiveCatalogProduct,
-} from "@/components/live/live-product-picker";
-import {
-  LiveGuestRequestQueue,
-  useRemoteLiveAudio,
-  type LiveGuestCard,
-} from "@/components/live/live-guest-stage";
-import { LiveStageComposer } from "@/components/live/live-stage-composer";
-import {
-  LIVE_STAGE_LAYOUTS,
-  normalizeStageLayout,
-  type LiveStageLayoutId,
-} from "@/lib/growth/live-stage-layout";
 import { LiveBackdropLayer } from "@/components/live/live-backdrop-layer";
 import { LiveBackdropPicker } from "@/components/live/live-backdrop-picker";
+import { LiveGiftPicker } from "@/components/live/live-gift-picker";
 import {
-  LiveVideoStudioGrade,
-  liveVideoFilterStyle,
-} from "@/components/live/live-video-studio-grade";
+    LiveGuestAudioBus,
+    LiveGuestRequestQueue,
+    LiveHostOnStageDock,
+    useRemoteLiveAudio,
+    type LiveGuestCard,
+} from "@/components/live/live-guest-stage";
+import {
+    LiveProductPicker,
+    type LiveCatalogProduct,
+} from "@/components/live/live-product-picker";
+import {
+    LiveStageBurst,
+    type LiveBurst,
+} from "@/components/live/live-stage-burst";
+import { LiveStageComposer } from "@/components/live/live-stage-composer";
+import { LiveStageOverlays } from "@/components/live/live-stage-overlays";
 import { LiveVideoFilterPicker } from "@/components/live/live-video-filter-picker";
+import {
+    LiveVideoStudioGrade,
+    liveVideoFilterStyle,
+} from "@/components/live/live-video-studio-grade";
+import { PageLoader } from "@/components/page-loader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { authClient } from "@/lib/auth-client";
+import { fetchJson } from "@/lib/fetch-json";
+import { newOverlayId, type LiveOverlay } from "@/lib/growth/live-overlays";
 import { type LivePublisherPeer } from "@/lib/growth/live-rtc-shared";
+import {
+    LIVE_HEARTBEAT_HIDDEN_MS,
+    LIVE_HEARTBEAT_MS,
+    LIVE_PAUSE_TIMEOUT_MS,
+    LIVE_POLL_HIDDEN_MS,
+    LIVE_POLL_MS,
+    formatLiveClock,
+    liveEndMessage,
+    livePauseMessage,
+} from "@/lib/growth/live-session";
+import {
+    LIVE_STAGE_LAYOUTS,
+    normalizeStageLayout,
+    type LiveStageLayoutId,
+} from "@/lib/growth/live-stage-layout";
 import { useLiveRtc } from "@/lib/growth/use-live-rtc";
 import { useLiveSfu } from "@/lib/growth/use-live-sfu";
+import { notifyLiveEnded } from "@/lib/growth/use-open-lives";
+import { iosInlineVideo } from "@/lib/ios-inline-video";
+import {
+    clearPaymentIdempotencyKey,
+    fetchPaymentJson,
+    paymentIdempotencyKey,
+} from "@/lib/payments/idempotency-client";
+import { cn, formatMoney } from "@/lib/utils";
+import { notifyWalletUpdated } from "@/lib/wallet-events";
+import {
+    Aperture,
+    Camera,
+    CameraOff,
+    Clock,
+    Eye,
+    Gift,
+    Heart,
+    LayoutGrid,
+    Lock,
+    LockOpen,
+    LogOut,
+    MessageCircle,
+    Mic,
+    MicOff,
+    Pause,
+    Play,
+    Plus,
+    Radio,
+    RefreshCw,
+    Send,
+    Share2,
+    ShoppingBag,
+    Sparkles,
+    Square,
+    Type,
+    UserPlus,
+    UserRound,
+    WifiOff,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { use, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 type LiveDetail = {
   id: string;
@@ -118,6 +121,20 @@ type LiveDetail = {
   /** true = montées invités fermées */
   guestJoinLocked?: boolean;
   overlays?: LiveOverlay[];
+  catalogOpen?: boolean;
+  presentedProductId?: string | null;
+  catalogScrollY?: number;
+  lastGiftBurst?: { id: string; amountCents: number } | null;
+  catalogProducts?: {
+    id: string;
+    title: string;
+    description: string | null;
+    images: string[];
+    priceCents: number;
+    currency?: string;
+    category?: string;
+    shop?: { id?: string; name?: string; slug?: string };
+  }[];
   guests?: LiveGuestCard[];
   myGuest?: LiveGuestCard | null;
   publishers?: LivePublisherPeer[];
@@ -152,6 +169,7 @@ export default function LiveRoomPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: session } = authClient.useSession();
   usePageBack({ fallbackHref: "/live" });
   const [live, setLive] = useState<LiveDetail | null>(null);
@@ -164,7 +182,6 @@ export default function LiveRoomPage({
   const [guestMicOn, setGuestMicOn] = useState(false);
   const [hostStream, setHostStream] = useState<MediaStream | null>(null);
   const [camError, setCamError] = useState<string | null>(null);
-  const [durationAlerted, setDurationAlerted] = useState(false);
   const [overlays, setOverlays] = useState<LiveOverlay[]>([]);
   const [guests, setGuests] = useState<LiveGuestCard[]>([]);
   const [myGuest, setMyGuest] = useState<LiveGuestCard | null>(null);
@@ -176,12 +193,9 @@ export default function LiveRoomPage({
   const [backdropPickerOpen, setBackdropPickerOpen] = useState(false);
   const [filterPickerOpen, setFilterPickerOpen] = useState(false);
   const [layoutPickerOpen, setLayoutPickerOpen] = useState(false);
-  const [railMenuOpen, setRailMenuOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
   const [giftCustomOpen, setGiftCustomOpen] = useState(false);
   const [giftCustomAmount, setGiftCustomAmount] = useState("150");
-  const [chatSelectMode, setChatSelectMode] = useState(false);
-  const [chatInviteIds, setChatInviteIds] = useState<string[]>([]);
   /** Afficher / masquer le fil de commentaires (local, bas-gauche) */
   const [chatVisible, setChatVisible] = useState(true);
   /** SFU down → bascule mesh (évite live muet / noir) */
@@ -192,9 +206,11 @@ export default function LiveRoomPage({
   const [liveRefreshing, setLiveRefreshing] = useState(false);
   const autoRefreshDoneRef = useRef<string | null>(null);
   const viewerMediaRetryRef = useRef(0);
-  const [heartBursts, setHeartBursts] = useState<
-    { id: string; x: number; y: number }[]
-  >([]);
+  const [stageBursts, setStageBursts] = useState<LiveBurst[]>([]);
+  const skipLikeFx = useRef(0);
+  const skipGiftFx = useRef(0);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [kbLift, setKbLift] = useState(0);
   const lastTapRef = useRef(0);
   const likeBusyRef = useRef(false);
   const engagementWarnedRef = useRef(false);
@@ -208,6 +224,7 @@ export default function LiveRoomPage({
   const prevStatus = useRef<string | null>(null);
   const prevGuestStatus = useRef<string | null>(null);
   const overlaySyncTimer = useRef<number | null>(null);
+  const catalogScrollTimer = useRef<number | null>(null);
   const skipRemoteOverlays = useRef(false);
   const overlaysSeeded = useRef(false);
   const isHostRef = useRef(false);
@@ -216,7 +233,9 @@ export default function LiveRoomPage({
   const endedRef = useRef(false);
   const loadInFlightRef = useRef<Promise<void> | null>(null);
   const pageVisibleRef = useRef(
-    typeof document === "undefined" ? true : document.visibilityState === "visible",
+    typeof document === "undefined"
+      ? true
+      : document.visibilityState === "visible",
   );
   const localCameraOnRef = useRef(true);
   const localMicOnRef = useRef(true);
@@ -232,6 +251,55 @@ export default function LiveRoomPage({
     session?.user?.id && live?.user?.id === session.user.id,
   );
   isHostRef.current = isHost;
+
+  useEffect(() => {
+    const sync = () => {
+      const root = stageRef.current;
+      const vv = window.visualViewport;
+      if (!root || !vv) {
+        setKbLift(0);
+        return;
+      }
+      const overlap = Math.max(
+        0,
+        root.getBoundingClientRect().bottom - (vv.offsetTop + vv.height),
+      );
+      setKbLift(overlap > 48 ? Math.round(overlap) : 0);
+    };
+    sync();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", sync);
+    vv?.addEventListener("scroll", sync);
+    window.addEventListener("resize", sync);
+    return () => {
+      vv?.removeEventListener("resize", sync);
+      vv?.removeEventListener("scroll", sync);
+      window.removeEventListener("resize", sync);
+    };
+  }, []);
+
+  const shareLive = useCallback(async () => {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/live/${id}`
+        : `/live/${id}`;
+    const title = live?.title || "Live ShipShop";
+    const text = `${live?.user?.name ?? "Créateur"} est en live — ${title}`;
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title, text, url });
+        return;
+      }
+    } catch {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Lien copié");
+    } catch {
+      toast.error("Impossible de partager");
+    }
+  }, [id, live?.title, live?.user?.name]);
 
   function stopStream(stream: MediaStream | null | undefined) {
     stream?.getTracks().forEach((t) => t.stop());
@@ -257,18 +325,44 @@ export default function LiveRoomPage({
     }
   }
 
+  const spawnBurst = useCallback(
+    (kind: LiveBurst["kind"], amountCents?: number) => {
+      const id = `b-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      setStageBursts((prev) => [...prev.slice(-3), { id, kind, amountCents }]);
+      window.setTimeout(() => {
+        setStageBursts((prev) => prev.filter((row) => row.id !== id));
+      }, 2100);
+    },
+    [],
+  );
+  const spawnBurstRef = useRef(spawnBurst);
+  spawnBurstRef.current = spawnBurst;
+
   const applyLive = useCallback((next: LiveDetail) => {
     endedRef.current = next.status === "ENDED";
     setLive((prev) => {
       if (!prev) return next;
+      const likeDelta = (next.likeCount ?? 0) - (prev.likeCount ?? 0);
+      const giftId = next.lastGiftBurst?.id ?? null;
+      if (
+        giftId &&
+        giftId !== (prev.lastGiftBurst?.id ?? null) &&
+        Date.now() - skipGiftFx.current > 900
+      ) {
+        queueMicrotask(() =>
+          spawnBurstRef.current("gift", next.lastGiftBurst?.amountCents ?? 0),
+        );
+      }
+      if (likeDelta > 0 && Date.now() - skipLikeFx.current > 900) {
+        queueMicrotask(() => spawnBurstRef.current("like"));
+      }
       const chats = Array.isArray(next.chats) ? next.chats : prev.chats;
       const guests = Array.isArray(next.guests) ? next.guests : prev.guests;
       const overlays = Array.isArray(next.overlays)
         ? next.overlays
         : prev.overlays;
       const user = next.user ?? prev.user;
-      const product =
-        next.product !== undefined ? next.product : prev.product;
+      const product = next.product !== undefined ? next.product : prev.product;
       // Évite re-render / effets caméra si le poll n’a rien changé d’utile
       if (
         prev.status === next.status &&
@@ -281,6 +375,12 @@ export default function LiveRoomPage({
         prev.videoFilter === next.videoFilter &&
         prev.stageLayout === next.stageLayout &&
         prev.guestJoinLocked === next.guestJoinLocked &&
+        prev.catalogOpen === next.catalogOpen &&
+        prev.presentedProductId === next.presentedProductId &&
+        prev.catalogScrollY === next.catalogScrollY &&
+        (prev.lastGiftBurst?.id ?? null) === (next.lastGiftBurst?.id ?? null) &&
+        (prev.catalogProducts?.length ?? 0) ===
+          (next.catalogProducts?.length ?? 0) &&
         prev.engagement?.warn === next.engagement?.warn &&
         prev.plannedMinutes === next.plannedMinutes &&
         prev.pausedAt === next.pausedAt &&
@@ -295,8 +395,7 @@ export default function LiveRoomPage({
         JSON.stringify(prev.guests) === JSON.stringify(guests) &&
         (prev.myGuest?.id ?? null) === (next.myGuest?.id ?? null) &&
         (prev.myGuest?.status ?? null) === (next.myGuest?.status ?? null) &&
-        (prev.myGuest?.cameraOn ?? null) ===
-          (next.myGuest?.cameraOn ?? null) &&
+        (prev.myGuest?.cameraOn ?? null) === (next.myGuest?.cameraOn ?? null) &&
         (isHostRef.current ||
           JSON.stringify(prev.overlays) === JSON.stringify(overlays))
       ) {
@@ -454,7 +553,8 @@ export default function LiveRoomPage({
         toast.message(live.statusMessage ?? livePauseMessage(live.pauseReason));
       }
       if (live.status === "ENDED") {
-        toast.error(live.statusMessage ?? liveEndMessage(live.endReason));
+        toast.message(live.statusMessage ?? liveEndMessage(live.endReason));
+        notifyLiveEnded();
       }
       // Reprise LIVE → reconnect A/V côté viewers / host
       if (prev === "PAUSED" && live.status === "LIVE") {
@@ -476,10 +576,7 @@ export default function LiveRoomPage({
     return () => window.clearTimeout(t);
   }, [live?.id, live?.status]);
 
-  async function hostAction(
-    action: string,
-    extra?: Record<string, unknown>,
-  ) {
+  async function hostAction(action: string, extra?: Record<string, unknown>) {
     const { res, data } = await fetchJson<{
       live?: LiveDetail;
       guests?: LiveGuestCard[];
@@ -517,8 +614,7 @@ export default function LiveRoomPage({
 
       if (isHost && live?.status === "PAUSED") {
         // Auto : reprise seulement si pause « connexion » (pas pause volontaire)
-        const shouldResume =
-          !opts?.silent || live.pauseReason === "connection";
+        const shouldResume = !opts?.silent || live.pauseReason === "connection";
         if (shouldResume) {
           await hostAction("resume");
         }
@@ -535,10 +631,7 @@ export default function LiveRoomPage({
     }
   }
 
-  async function guestAction(
-    action: string,
-    extra?: Record<string, unknown>,
-  ) {
+  async function guestAction(action: string, extra?: Record<string, unknown>) {
     const { res, data } = await fetchJson<{
       guests?: LiveGuestCard[];
       guest?: LiveGuestCard;
@@ -738,9 +831,7 @@ export default function LiveRoomPage({
   }, [guestMicOn]);
 
   const myGuestRow =
-    myGuest ??
-    guests.find((g) => g.user.id === session?.user?.id) ??
-    null;
+    myGuest ?? guests.find((g) => g.user.id === session?.user?.id) ?? null;
   const myGuestStatus = myGuestRow?.status ?? null;
   const onStageAsGuest = !isHost && myGuestStatus === "ON_STAGE";
   const pendingAsGuest = !isHost && myGuestStatus === "PENDING";
@@ -761,12 +852,14 @@ export default function LiveRoomPage({
           ? "Invitation envoyée"
           : `${ids.length} invitations envoyées`,
       );
-      setChatInviteIds([]);
-      setChatSelectMode(false);
     }
   }
   const isPublisher = isHost || onStageAsGuest;
-  const publishStream = isHost ? hostStream : onStageAsGuest ? guestStream : null;
+  const publishStream = isHost
+    ? hostStream
+    : onStageAsGuest
+      ? guestStream
+      : null;
 
   // SFU LiveKit si serveur configuré ; fallback mesh si SFU échoue
   // NEXT_PUBLIC_LIVE_SFU=0 force le mesh même avec LiveKit
@@ -776,9 +869,9 @@ export default function LiveRoomPage({
     !sfuGaveUp;
   const rtcEnabled = Boolean(
     session?.user?.id &&
-      live &&
-      live.status !== "ENDED" &&
-      live.status !== "PAUSED",
+    live &&
+    live.status !== "ENDED" &&
+    live.status !== "PAUSED",
   );
 
   const sfu = useLiveSfu({
@@ -804,7 +897,7 @@ export default function LiveRoomPage({
   });
   const remoteStreams = sfuEnabled ? sfu.remoteStreams : mesh.remoteStreams;
   const hostRemoteStream = live?.user?.id
-    ? remoteStreams[live.user.id] ?? null
+    ? (remoteStreams[live.user.id] ?? null)
     : null;
   const hostRemoteTrackKey = hostRemoteStream
     ? hostRemoteStream
@@ -1062,48 +1155,18 @@ export default function LiveRoomPage({
   }, []);
 
   useEffect(() => {
-    if (!isHost || !live || live.status === "ENDED" || durationAlerted) return;
-    const started = new Date(live.startedAt).getTime();
-    const plannedMs = (live.plannedMinutes ?? 60) * 60_000;
-    const remaining = started + plannedMs - now;
-    if (remaining > 0 && remaining <= LIVE_END_ALERT_BEFORE_MS) {
-      setDurationAlerted(true);
-      toast.message("Durée prévue bientôt atteinte — terminez ou prolongez.", {
-        duration: 8000,
-      });
-    }
-  }, [isHost, live, now, durationAlerted]);
-
-  useEffect(() => {
     const sel = overlays.find((o) => o.id === selectedOverlayId);
     if (sel?.kind === "product") setNoteDraft(sel.note);
     else if (sel?.kind === "text") setTextDraft(sel.text);
   }, [selectedOverlayId, overlays]);
 
-  function spawnHeart(clientX?: number, clientY?: number) {
-    const id = `h-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const stage = document.getElementById("live-stage");
-    const rect = stage?.getBoundingClientRect();
-    const x = rect
-      ? (((clientX ?? rect.left + rect.width * 0.55) - rect.left) / rect.width) *
-        100
-      : 55 + Math.random() * 20;
-    const y = rect
-      ? (((clientY ?? rect.top + rect.height * 0.45) - rect.top) / rect.height) *
-        100
-      : 40 + Math.random() * 15;
-    setHeartBursts((prev) => [...prev.slice(-18), { id, x, y }]);
-    window.setTimeout(() => {
-      setHeartBursts((prev) => prev.filter((h) => h.id !== id));
-    }, 1100);
-  }
-
-  async function sendLike(clientX?: number, clientY?: number) {
+  async function sendLike(_clientX?: number, _clientY?: number) {
     if (isHost || endedRef.current || !session?.user?.id) {
       if (!session?.user?.id) toast.message("Connectez-vous pour aimer");
       return;
     }
-    spawnHeart(clientX, clientY);
+    skipLikeFx.current = Date.now();
+    spawnBurst("like");
     if (likeBusyRef.current) return;
     likeBusyRef.current = true;
     const { res, data } = await fetchJson<{
@@ -1193,12 +1256,22 @@ export default function LiveRoomPage({
       if (action === "gift") {
         clearPaymentIdempotencyKey(giftIntent);
         notifyWalletUpdated();
-        toast.success("Cadeau envoyé");
+        const amount =
+          extra && typeof extra === "object" && "amountCents" in extra
+            ? Number((extra as { amountCents?: number }).amountCents)
+            : 0;
+        skipGiftFx.current = Date.now();
+        spawnBurst("gift", Number.isFinite(amount) ? amount : 0);
         setGiftOpen(false);
         setGiftCustomOpen(false);
       }
       if (action === "chat") setChat("");
-      if (action === "end") toast.success("Live terminé");
+      if (action === "end") {
+        toast.success("Live terminé");
+        notifyLiveEnded();
+        router.push("/");
+        return;
+      }
       await load();
     } catch (error) {
       toast.error(
@@ -1275,9 +1348,7 @@ export default function LiveRoomPage({
     const existing = overlays.find((o) => o.id === selectedOverlayId);
     if (existing?.kind === "text") {
       pushOverlays(
-        overlays.map((o) =>
-          o.id === existing.id ? { ...o, text } : o,
-        ),
+        overlays.map((o) => (o.id === existing.id ? { ...o, text } : o)),
       );
     } else {
       const ov: LiveOverlay = {
@@ -1317,8 +1388,8 @@ export default function LiveRoomPage({
     const withoutProducts = overlays.filter((o) => o.kind !== "product");
     pushOverlays([...withoutProducts, ov]);
     setSelectedOverlayId(ov.id);
-    setProductPickerOpen(false);
-    toast.success("Produit à l’écran — déplacez / redimensionnez");
+    void hostAction("catalog", { open: true, presentedProductId: p.id });
+    toast.success("Produit visible pour tes spectateurs");
   }
 
   function saveProductNote() {
@@ -1347,8 +1418,6 @@ export default function LiveRoomPage({
 
   const startedAt = new Date(live.startedAt).getTime();
   const elapsedSec = Math.floor((now - startedAt) / 1000);
-  const plannedMs = (live.plannedMinutes ?? 60) * 60_000;
-  const remainingMs = startedAt + plannedMs - now;
   const pauseLeftMs =
     live.status === "PAUSED" && live.pausedAt
       ? Math.max(
@@ -1363,36 +1432,28 @@ export default function LiveRoomPage({
     live.product?.images[0] ??
     overlays.find((o) => o.kind === "product")?.image ??
     null;
-  const hasBackdrop = Boolean(
-    live.backdropUrl?.trim() || live.backdropPreset,
-  );
+  const hasBackdrop = Boolean(live.backdropUrl?.trim() || live.backdropPreset);
   const showHostLocalVideo =
     isHost && localCameraOn && !ended && Boolean(hostStream);
   const hostRemote = hostRemoteStream;
   // Viewer : plein écran dès qu’un flux distant existe et cam host ON
   const showHostRemoteVideo =
     !isHost && !ended && Boolean(hostRemote) && live.cameraOn !== false;
-  const viewerWaitingForMedia =
-    !isHost && !ended && !paused && !hostRemote;
+  const viewerWaitingForMedia = !isHost && !ended && !paused && !hostRemote;
   const selected = overlays.find((o) => o.id === selectedOverlayId);
   const chats = live.chats ?? [];
   const videoFilterStyle = liveVideoFilterStyle(live.videoFilter);
   const stageLayout = normalizeStageLayout(live.stageLayout);
   const guestJoinLocked = Boolean(live.guestJoinLocked);
-  const showStageChrome =
-    !ended &&
-    (isHost ||
-      stageGuests.length > 0 ||
-      pendingAsGuest ||
-      invitedAsGuest);
-  const hostMediaFill =
-    "absolute inset-0 size-full object-cover";
+  const showStageChrome = !ended && !isHost;
+  const hostMediaFill = "absolute inset-0 size-full object-cover";
 
   return (
-    <div className="relative mx-auto flex h-full min-h-0 w-full max-w-lg flex-col overflow-hidden bg-[#050508] text-white sm:max-w-xl md:max-w-2xl">
+    <div className="relative h-full min-h-0 w-full overflow-hidden bg-[#050508] text-white">
       <div
         id="live-stage"
-        className="relative min-h-0 flex-1 overflow-hidden"
+        ref={stageRef}
+        className="absolute inset-0 overflow-hidden"
         onPointerUp={onStagePointer}
       >
         <LiveBackdropLayer
@@ -1411,16 +1472,19 @@ export default function LiveRoomPage({
           isHost={isHost}
           joinLocked={guestJoinLocked}
           canRequestJoin={Boolean(
-            session?.user &&
-              !isHost &&
-              !onStageAsGuest &&
-              !pendingAsGuest &&
-              !invitedAsGuest &&
-              !guestJoinLocked,
+            !isHost &&
+            !onStageAsGuest &&
+            !pendingAsGuest &&
+            !invitedAsGuest &&
+            !guestJoinLocked,
           )}
           pendingSelf={pendingAsGuest}
           onRequestJoin={() => {
             void (async () => {
+              if (!session?.user) {
+                toast.message("Connectez-vous pour monter sur scène");
+                return;
+              }
               setBusy(true);
               const ok = await guestAction("guest_request");
               setBusy(false);
@@ -1428,14 +1492,6 @@ export default function LiveRoomPage({
             })();
           }}
           videoFilter={live.videoFilter}
-          hostMicOn={isHost ? localMicOn : undefined}
-          onToggleHostMic={
-            isHost
-              ? () => {
-                  void toggleMic();
-                }
-              : undefined
-          }
           onToggleSelfCam={
             onStageAsGuest
               ? () => {
@@ -1473,44 +1529,6 @@ export default function LiveRoomPage({
                 }
               : undefined
           }
-          onGrantFloor={
-            isHost
-              ? (guestId) => {
-                  void (async () => {
-                    setBusy(true);
-                    const ok = await hostAction("guest_grant_floor", {
-                      guestId,
-                    });
-                    setBusy(false);
-                    if (ok) toast.success("Parole accordée");
-                  })();
-                }
-              : undefined
-          }
-          onRevokeFloor={
-            isHost
-              ? (guestId) => {
-                  void (async () => {
-                    setBusy(true);
-                    await hostAction("guest_revoke_floor", { guestId });
-                    setBusy(false);
-                    toast.message("Parole retirée");
-                  })();
-                }
-              : undefined
-          }
-          onKick={
-            isHost
-              ? (guestId) => {
-                  void (async () => {
-                    setBusy(true);
-                    await hostAction("guest_kick", { guestId });
-                    setBusy(false);
-                    toast.message("Invité retiré");
-                  })();
-                }
-              : undefined
-          }
           hostNode={
             <>
               {showHostLocalVideo ? (
@@ -1526,10 +1544,7 @@ export default function LiveRoomPage({
                     "[-webkit-transform:scaleX(-1)] [transform:scaleX(-1)]",
                   )}
                 />
-              ) : cover &&
-                !hasBackdrop &&
-                isHost &&
-                !showHostLocalVideo ? (
+              ) : cover && !hasBackdrop && isHost && !showHostLocalVideo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={cover}
@@ -1584,35 +1599,80 @@ export default function LiveRoomPage({
           onCommit={commitOverlays}
         />
 
-        {!ended && isHost ? (
-          <LiveGuestRequestQueue
-            pending={pendingGuests}
-            invited={invitedGuests}
-            busy={busy}
-            onAccept={(guestId) => {
-              void (async () => {
-                setBusy(true);
-                const ok = await hostAction("guest_accept", { guestId });
-                setBusy(false);
-                if (ok) toast.success("Invité sur scène");
-              })();
-            }}
-            onRefuse={(guestId) => {
-              void (async () => {
-                setBusy(true);
-                await hostAction("guest_refuse", { guestId });
-                setBusy(false);
-              })();
-            }}
-            onCancelInvite={(guestId) => {
-              void (async () => {
-                setBusy(true);
-                await hostAction("guest_refuse", { guestId });
-                setBusy(false);
-                toast.message("Invitation annulée");
-              })();
-            }}
+        {isHost && !ended ? (
+          <LiveGuestAudioBus
+            guests={guests}
+            selfUserId={session?.user?.id}
+            remoteStreams={remoteStreams}
           />
+        ) : null}
+
+        {!ended &&
+        isHost &&
+        (pendingGuests.length > 0 ||
+          invitedGuests.length > 0 ||
+          stageGuests.length > 0) ? (
+          <div className="pointer-events-none absolute inset-x-3 top-[4.35rem] z-[28] max-h-[42%] space-y-2 overflow-y-auto sm:left-3 sm:right-auto sm:w-[17rem]">
+            <LiveGuestRequestQueue
+              embedded
+              pending={pendingGuests}
+              invited={invitedGuests}
+              busy={busy}
+              onAccept={(guestId) => {
+                void (async () => {
+                  setBusy(true);
+                  const ok = await hostAction("guest_accept", { guestId });
+                  setBusy(false);
+                  if (ok) toast.success("Invité sur scène");
+                })();
+              }}
+              onRefuse={(guestId) => {
+                void (async () => {
+                  setBusy(true);
+                  await hostAction("guest_refuse", { guestId });
+                  setBusy(false);
+                })();
+              }}
+              onCancelInvite={(guestId) => {
+                void (async () => {
+                  setBusy(true);
+                  await hostAction("guest_refuse", { guestId });
+                  setBusy(false);
+                  toast.message("Invitation annulée");
+                })();
+              }}
+            />
+            <LiveHostOnStageDock
+              guests={guests}
+              busy={busy}
+              onKick={(guestId) => {
+                void (async () => {
+                  setBusy(true);
+                  await hostAction("guest_kick", { guestId });
+                  setBusy(false);
+                  toast.message("Invité retiré");
+                })();
+              }}
+              onGrantFloor={(guestId) => {
+                void (async () => {
+                  setBusy(true);
+                  const ok = await hostAction("guest_grant_floor", {
+                    guestId,
+                  });
+                  setBusy(false);
+                  if (ok) toast.success("Parole accordée");
+                })();
+              }}
+              onRevokeFloor={(guestId) => {
+                void (async () => {
+                  setBusy(true);
+                  await hostAction("guest_revoke_floor", { guestId });
+                  setBusy(false);
+                  toast.message("Parole retirée");
+                })();
+              }}
+            />
+          </div>
         ) : null}
 
         {/* Viewer : invitation host → accepter / refuser */}
@@ -1683,7 +1743,9 @@ export default function LiveRoomPage({
           <div className="absolute inset-0 z-[12] flex flex-col items-center justify-center gap-2 bg-black/55 backdrop-blur-sm">
             <CameraOff className="size-10 text-white/80" />
             <p className="text-sm font-semibold">Caméra du diffuseur coupée</p>
-            <p className="text-xs text-white/60">Le live continue — le son est actif</p>
+            <p className="text-xs text-white/60">
+              Le live continue — le son est actif
+            </p>
           </div>
         ) : null}
 
@@ -1736,7 +1798,8 @@ export default function LiveRoomPage({
         {ended ? (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/80 px-4 text-center sm:px-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
             <Radio className="size-10 text-white/50" />
-            <p className="max-w-md text-base font-bold leading-snug">
+            <p className="text-xl font-extrabold">Live terminé</p>
+            <p className="max-w-md text-sm font-medium leading-snug text-white/75">
               {live.statusMessage ?? liveEndMessage(live.endReason)}
             </p>
             <div className="mt-2 flex w-full max-w-sm flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
@@ -1765,397 +1828,69 @@ export default function LiveRoomPage({
           </div>
         ) : null}
 
-        {/* Top — stats · pic/likes (tous) · solde cadeaux = host seul */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-black/80 via-black/30 to-transparent px-3 pb-8 pt-[max(0.75rem,env(safe-area-inset-top))]">
-          <div className="flex items-start gap-2">
-            <div className="pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold tracking-wide",
-                  ended
-                    ? "bg-white/20"
-                    : paused
-                      ? "bg-amber-500 text-black"
-                      : "bg-destructive text-white",
-                )}
-              >
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-black/55 via-black/20 to-transparent px-3 pb-10 pt-[max(0.5rem,env(safe-area-inset-top))]">
+          <div className="pointer-events-auto flex items-center gap-2">
+            {live.user?.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={live.user.image}
+                alt=""
+                className="size-9 shrink-0 rounded-full border border-white/15 object-cover outline outline-1 outline-white/10 -outline-offset-1"
+              />
+            ) : (
+              <span className="grid size-9 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10">
+                <UserRound className="size-4 text-white/70" />
+              </span>
+            )}
+            <p className="min-w-0 flex-1 truncate text-[14px] font-extrabold text-balance">
+              {live.user?.name ?? live.title}
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              aria-label={
+                ended
+                  ? "Live terminé, quitter"
+                  : isHost
+                    ? "Arrêter le live"
+                    : "Quitter le live"
+              }
+              onClick={() => {
+                if (isHost && !ended) {
+                  void send("end");
+                  return;
+                }
+                router.push("/");
+              }}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-extrabold tracking-wide transition-transform duration-150 ease-out active:scale-95 disabled:opacity-60",
+                ended
+                  ? "bg-white/28 text-white"
+                  : paused
+                    ? "bg-amber-500 text-black"
+                    : "bg-[#E11D48] text-white",
+              )}
+            >
+              {ended ? (
                 <Radio className="size-3" />
-                {ended ? "FINI" : paused ? "PAUSE" : "LIVE"}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold backdrop-blur">
-                <Clock className="size-3" />
-                {formatLiveClock(elapsedSec)}
-              </span>
-              <span className="max-w-[7.5rem] truncate rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold backdrop-blur">
-                {live.user?.name ?? "…"}
-              </span>
-              {!ended && remainingMs > 0 ? (
-                <span className="rounded-full bg-black/35 px-2 py-0.5 text-[10px] text-white/75">
-                  fin {formatLiveClock(Math.floor(remainingMs / 1000))}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
-              <div className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1.5 backdrop-blur">
-                {typeof live.viewerPeak === "number" ? (
-                  <span className="text-[11px] font-semibold text-white/80">
-                    pic {live.viewerPeak}
-                  </span>
-                ) : null}
-                {typeof live.viewerPeak === "number" ? (
-                  <span className="text-white/25">·</span>
-                ) : null}
-                {/* Solde cadeaux du live : visible uniquement pour le diffuseur */}
-                {isHost ? (
-                  <>
-                    <span
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-[#7dffb3]"
-                      title="Vos cadeaux reçus (privé)"
-                    >
-                      <Gift className="size-3" />
-                      {formatMoney(live.giftCents ?? 0)}
-                    </span>
-                    <span className="text-white/25">·</span>
-                  </>
-                ) : null}
-                <span
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-pink-300"
-                  title="J’aime"
-                >
-                  <Heart className="size-3 fill-pink-300" />
-                  {live.likeCount ?? 0}
-                </span>
-              </div>
-
-              {!ended ? (
-                <button
-                  type="button"
-                  aria-expanded={railMenuOpen}
-                  aria-label={railMenuOpen ? "Fermer le menu" : "Actions live"}
-                  onClick={() => setRailMenuOpen((v) => !v)}
-                  className={cn(
-                    "grid size-10 place-items-center rounded-full border shadow-lg backdrop-blur transition active:scale-95",
-                    railMenuOpen
-                      ? "border-white/40 bg-white text-black"
-                      : "border-white/20 bg-black/55 text-white",
-                  )}
-                >
-                  {railMenuOpen ? (
-                    <X className="size-5" />
-                  ) : (
-                    <MoreVertical className="size-5" />
-                  )}
-                </button>
-              ) : null}
-            </div>
+              ) : (
+                <Square className="size-2.5 fill-current" />
+              )}
+              {ended ? "FINI" : "STOP"}
+            </button>
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/45 px-2 py-1 text-[11px] font-bold tabular-nums backdrop-blur-sm">
+              <Clock className="size-3" />
+              {formatLiveClock(elapsedSec)}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/45 px-2 py-1 text-[11px] font-bold tabular-nums backdrop-blur-sm">
+              <Eye className="size-3" />
+              {compactCount(live.viewerPeak ?? 0)}
+            </span>
           </div>
         </div>
 
-        {/* Menu actions — panneau depuis le haut */}
-        {railMenuOpen && !ended ? (
-          <>
-            <button
-              type="button"
-              aria-label="Fermer"
-              className="absolute inset-0 z-[34] bg-black/50"
-              onClick={() => setRailMenuOpen(false)}
-            />
-            <div className="absolute top-[max(3.75rem,calc(env(safe-area-inset-top)+3rem))] right-3 left-3 z-[35] origin-top-right animate-in fade-in zoom-in-95 duration-150 sm:left-auto sm:w-[17.5rem]">
-              <div className="overflow-hidden rounded-3xl border border-white/15 bg-[#121218]/95 shadow-2xl backdrop-blur-xl">
-                <div className="border-b border-white/10 px-4 py-3">
-                  <p className="text-sm font-bold text-white">Actions</p>
-                  <p className="text-[11px] text-white/50">
-                    {isHost
-                      ? "Contrôles diffuseur"
-                      : onStageAsGuest
-                        ? "Vous êtes sur scène"
-                        : "Regarder · interagir"}
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-1 p-2">
-                  {isHost ? (
-                    <>
-                      <MenuAction
-                        label="Texte"
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          setTextComposer(true);
-                          setTextDraft("");
-                          setSelectedOverlayId(null);
-                        }}
-                      >
-                        <Type className="size-5" />
-                      </MenuAction>
-                      <MenuAction
-                        label="Shop"
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          setProductPickerOpen(true);
-                        }}
-                      >
-                        <ShoppingBag className="size-5" />
-                      </MenuAction>
-                      <MenuAction
-                        label="Fond"
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          setBackdropPickerOpen(true);
-                        }}
-                      >
-                        <Sparkles className="size-5" />
-                      </MenuAction>
-                      <MenuAction
-                        label="Filtre"
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          setFilterPickerOpen(true);
-                        }}
-                      >
-                        <Aperture className="size-5" />
-                      </MenuAction>
-                      <MenuAction
-                        label="Scène"
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          setLayoutPickerOpen(true);
-                        }}
-                      >
-                        <LayoutGrid className="size-5" />
-                      </MenuAction>
-                      <MenuAction
-                        label={guestJoinLocked ? "Ouvert" : "Verrou"}
-                        tone={guestJoinLocked ? "warn" : undefined}
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          void (async () => {
-                            setBusy(true);
-                            const ok = await hostAction("guest_join_lock", {
-                              locked: !guestJoinLocked,
-                            });
-                            setBusy(false);
-                            if (ok) {
-                              toast.message(
-                                guestJoinLocked
-                                  ? "Montées ouvertes"
-                                  : "Montées fermées",
-                              );
-                            }
-                          })();
-                        }}
-                      >
-                        {guestJoinLocked ? (
-                          <Lock className="size-5" />
-                        ) : (
-                          <LockOpen className="size-5" />
-                        )}
-                      </MenuAction>
-                      <MenuAction
-                        label={localCameraOn ? "Cam" : "Cam off"}
-                        tone={!localCameraOn ? "warn" : undefined}
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          void toggleCamera();
-                        }}
-                      >
-                        {localCameraOn ? (
-                          <Camera className="size-5" />
-                        ) : (
-                          <CameraOff className="size-5" />
-                        )}
-                      </MenuAction>
-                      <MenuAction
-                        label={localMicOn ? "Micro" : "Muet"}
-                        tone={!localMicOn ? "warn" : undefined}
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          void toggleMic();
-                        }}
-                      >
-                        {localMicOn ? (
-                          <Mic className="size-5" />
-                        ) : (
-                          <MicOff className="size-5" />
-                        )}
-                      </MenuAction>
-                      {!paused ? (
-                        <MenuAction
-                          label="Pause"
-                          onClick={() => {
-                            setRailMenuOpen(false);
-                            void hostAction("pause", { reason: "host" });
-                          }}
-                        >
-                          <Pause className="size-5" />
-                        </MenuAction>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>
-                      {session?.user ? (
-                        pendingAsGuest ? (
-                          <MenuAction
-                            label="Annuler"
-                            tone="warn"
-                            onClick={() => {
-                              setRailMenuOpen(false);
-                              void (async () => {
-                                setBusy(true);
-                                await guestAction("guest_cancel");
-                                setBusy(false);
-                                toast.message("Demande annulée");
-                              })();
-                            }}
-                          >
-                            <Clock className="size-5" />
-                          </MenuAction>
-                        ) : onStageAsGuest ? (
-                          <>
-                            <MenuAction
-                              label={guestCameraOn ? "Cam" : "Cam off"}
-                              tone={!guestCameraOn ? "warn" : undefined}
-                              onClick={() => {
-                                setRailMenuOpen(false);
-                                void toggleGuestCamera();
-                              }}
-                            >
-                              {guestCameraOn ? (
-                                <Camera className="size-5" />
-                              ) : (
-                                <CameraOff className="size-5" />
-                              )}
-                            </MenuAction>
-                            <MenuAction
-                              label={guestMicOn ? "Micro" : "Muet"}
-                              tone={!guestMicOn ? "warn" : undefined}
-                              onClick={() => {
-                                setRailMenuOpen(false);
-                                void toggleGuestMic();
-                              }}
-                            >
-                              {guestMicOn ? (
-                                <Mic className="size-5" />
-                              ) : (
-                                <MicOff className="size-5" />
-                              )}
-                            </MenuAction>
-                            <MenuAction
-                              label="Quitter"
-                              tone="warn"
-                              onClick={() => {
-                                setRailMenuOpen(false);
-                                void (async () => {
-                                  setBusy(true);
-                                  setGuestCameraOn(false);
-                                  setGuestMicOn(false);
-                                  await guestAction("guest_leave");
-                                  setBusy(false);
-                                })();
-                              }}
-                            >
-                              <LogOut className="size-5" />
-                            </MenuAction>
-                          </>
-                        ) : (
-                          <MenuAction
-                            label="Monter"
-                            tone="accent"
-                            onClick={() => {
-                              setRailMenuOpen(false);
-                              void (async () => {
-                                setBusy(true);
-                                const ok = await guestAction("guest_request");
-                                setBusy(false);
-                                if (ok) {
-                                  toast.message("Demande envoyée au diffuseur");
-                                }
-                              })();
-                            }}
-                          >
-                            <UserPlus className="size-5" />
-                          </MenuAction>
-                        )
-                      ) : null}
-                      <MenuAction
-                        label="J’aime"
-                        tone="pink"
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          void sendLike();
-                        }}
-                      >
-                        <Heart className="size-5 fill-pink-300" />
-                      </MenuAction>
-                      <MenuAction
-                        label="Cadeau"
-                        tone="pink"
-                        onClick={() => {
-                          setRailMenuOpen(false);
-                          setGiftCustomOpen(false);
-                          setGiftOpen(true);
-                        }}
-                      >
-                        <Gift className="size-5" />
-                      </MenuAction>
-                    </>
-                  )}
-                  <ShareMenu
-                    title={live.title || "Live ShipShop"}
-                    text={`${live.user?.name ?? "Créateur"} est en live — ${live.title || "rejoins maintenant"}`}
-                    url={
-                      typeof window !== "undefined"
-                        ? `${window.location.origin}/live/${id}`
-                        : `/live/${id}`
-                    }
-                    side="bottom"
-                    align="end"
-                    triggerClassName="flex w-full flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-white outline-none transition hover:bg-white/10 active:scale-[0.97]"
-                  >
-                    <span className="grid size-10 place-items-center rounded-full bg-white/10">
-                      <Share2 className="size-5" />
-                    </span>
-                    <span className="text-[10px] font-semibold text-white/75">
-                      Partager
-                    </span>
-                  </ShareMenu>
-                </div>
-              </div>
-            </div>
-          </>
-        ) : null}
-
         {/* Cœurs flottants (double-tap / j’aime) */}
-        {heartBursts.map((h) => (
-          <span
-            key={h.id}
-            className="pointer-events-none absolute z-[25] animate-in fade-in zoom-in-50 slide-out-to-top-8 duration-1000"
-            style={{
-              left: `${h.x}%`,
-              top: `${h.y}%`,
-              transform: "translate(-50%, -50%)",
-            }}
-          >
-            <Heart className="size-10 fill-pink-400 text-pink-300 drop-shadow-lg" />
-          </span>
-        ))}
-
-        {/* Viewer : bouton j’aime rapide */}
-        {!ended && !isHost ? (
-          <button
-            type="button"
-            data-no-like
-            aria-label="J’aime"
-            onClick={() => void sendLike()}
-            className="absolute right-3 z-[28] flex flex-col items-center gap-0.5 bottom-[max(7rem,calc(env(safe-area-inset-bottom)+6.25rem))] sm:bottom-32"
-          >
-            <span className="grid size-12 place-items-center rounded-full border border-pink-300/40 bg-black/55 text-pink-300 shadow-lg backdrop-blur transition active:scale-90">
-              <Heart className="size-6 fill-pink-400/90" />
-            </span>
-            <span className="text-[10px] font-bold text-pink-200/90 drop-shadow">
-              {live.likeCount ?? 0}
-            </span>
-          </button>
-        ) : null}
+        <LiveStageBurst bursts={stageBursts} />
 
         {/* Host : alerte engagement faible */}
         {isHost && live.engagement?.warn && !ended ? (
@@ -2177,98 +1912,68 @@ export default function LiveRoomPage({
           </div>
         ) : null}
 
-        {/* Commentaires bas — toggle pour tout le monde */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[14] h-52 bg-gradient-to-t from-black/55 to-transparent" />
+
         {!ended ? (
-          <>
-            {chatVisible ? (
-              <div
-                data-no-like
-                className="pointer-events-none absolute inset-x-0 bottom-11 z-[16] flex max-h-[38%] flex-col justify-end gap-1 px-3"
-              >
-                <div className="flex items-center justify-between gap-2 pl-11">
-                  <p className="min-w-0 truncate text-[12px] font-bold drop-shadow">
-                    {live.title}
-                  </p>
-                  {isHost ? (
-                    <button
-                      type="button"
-                      className={cn(
-                        "pointer-events-auto shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold backdrop-blur transition",
-                        chatSelectMode
-                          ? "bg-[#7dffb3] text-black"
-                          : "bg-black/45 text-white/85",
-                      )}
-                      onClick={() => {
-                        setChatSelectMode((v) => !v);
-                        setChatInviteIds([]);
-                      }}
-                    >
-                      {chatSelectMode ? "Annuler" : "Inviter"}
-                    </button>
-                  ) : null}
-                </div>
-                {isHost && chatSelectMode && chatInviteIds.length > 0 ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="pointer-events-auto self-start rounded-full bg-[#7dffb3] px-3 py-1.5 text-[11px] font-extrabold text-black shadow-lg disabled:opacity-50"
-                    onClick={() => void inviteViewers(chatInviteIds)}
-                  >
-                    Inviter {chatInviteIds.length} viewer
-                    {chatInviteIds.length > 1 ? "s" : ""}
-                  </button>
-                ) : null}
-                <LiveChatFeed
-                  chats={chats}
-                  isHost={isHost}
-                  hostUserId={live.user?.id}
-                  guestByUserId={Object.fromEntries(
-                    guests.map((g) => [g.user.id, g.status]),
-                  )}
-                  selectMode={chatSelectMode}
-                  selectedIds={chatInviteIds}
-                  onToggleSelect={(userId) => {
-                    setChatInviteIds((prev) =>
-                      prev.includes(userId)
-                        ? prev.filter((x) => x !== userId)
-                        : [...prev, userId],
-                    );
-                  }}
-                  onInviteOne={(userId) => void inviteViewers([userId])}
-                />
-              </div>
-            ) : (
-              <p className="pointer-events-none absolute inset-x-0 bottom-11 z-[16] truncate px-3 pl-14 text-[12px] font-bold drop-shadow">
-                {live.title}
-              </p>
+          <div
+            data-no-like
+            className={cn(
+              "pointer-events-none absolute inset-x-0 z-[20] flex flex-col justify-end gap-2 px-3 pr-[3.75rem]",
+              kbLift > 40
+                ? "pb-2"
+                : "bottom-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]",
             )}
-            <button
-              type="button"
-              data-no-like
-              aria-label={
-                chatVisible
-                  ? "Masquer les commentaires"
-                  : "Afficher les commentaires"
-              }
-              aria-pressed={chatVisible}
-              className="absolute bottom-2 left-3 z-[28] flex size-9 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/75 active:scale-95"
-              onClick={() => {
-                setChatVisible((v) => {
-                  if (v) {
-                    setChatSelectMode(false);
-                    setChatInviteIds([]);
-                  }
-                  return !v;
-                });
-              }}
-            >
-              {chatVisible ? (
-                <MessageCircleOff className="size-4" strokeWidth={2.25} />
-              ) : (
-                <MessageCircle className="size-4" strokeWidth={2.25} />
-              )}
-            </button>
-          </>
+            style={kbLift > 40 ? { bottom: kbLift } : undefined}
+          >
+            {chatVisible ? (
+              <LiveChatFeed
+                chats={chats}
+                isHost={isHost}
+                hostUserId={live.user?.id}
+                onInviteOne={(userId) => void inviteViewers([userId])}
+              />
+            ) : null}
+
+            <div className="pointer-events-auto flex items-center gap-2">
+              <button
+                type="button"
+                aria-label={
+                  chatVisible
+                    ? "Masquer les commentaires"
+                    : "Afficher les commentaires"
+                }
+                aria-pressed={chatVisible}
+                className="grid size-11 shrink-0 place-items-center rounded-full text-white transition-transform duration-150 ease-out active:scale-[0.96]"
+                onClick={() => setChatVisible((v) => !v)}
+              >
+                <MessageCircle className="size-[18px]" strokeWidth={2.2} />
+              </button>
+              <div className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-white/10 px-3">
+                <input
+                  value={chat}
+                  onChange={(e) => setChat(e.target.value)}
+                  placeholder="Commenter…"
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  className="h-11 min-h-11 min-w-0 flex-1 border-0 bg-transparent px-0 text-[15px] text-white outline-none placeholder:text-white/45"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && chat.trim()) {
+                      void send("chat", { body: chat.trim() });
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  aria-label="Envoyer"
+                  disabled={busy || !chat.trim()}
+                  onClick={() => void send("chat", { body: chat.trim() })}
+                  className="grid size-9 shrink-0 place-items-center text-[#00D68F] disabled:opacity-40"
+                >
+                  <Send className="size-[18px]" />
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {camError && isHost ? (
@@ -2366,91 +2071,21 @@ export default function LiveRoomPage({
           </div>
         ) : null}
 
-        {giftOpen && !isHost && !ended ? (
-          <div
-            data-no-like
-            className="absolute inset-x-3 z-40 rounded-2xl border border-white/15 bg-black/88 p-3 shadow-xl backdrop-blur-md bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+4.75rem))] sm:bottom-24"
-          >
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="text-[13px] font-bold text-white">Envoyer un cadeau</p>
-              <button
-                type="button"
-                aria-label="Fermer"
-                onClick={() => {
-                  setGiftOpen(false);
-                  setGiftCustomOpen(false);
-                }}
-                className="grid size-11 shrink-0 place-items-center rounded-full border border-white/20 bg-white/10 text-white transition touch-manipulation hover:bg-white/20 active:scale-95"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {([50, 100] as const).map((cents) => (
-                <button
-                  key={cents}
-                  type="button"
-                  disabled={busy || paused}
-                  onClick={() =>
-                    void send("gift", { amountCents: cents, kind: "CUSTOM" })
-                  }
-                  className="min-h-11 touch-manipulation rounded-xl border border-white/15 bg-white/8 py-2.5 text-[12px] font-extrabold text-white disabled:opacity-40 active:scale-[0.98]"
-                >
-                  {formatMoney(cents)}
-                </button>
-              ))}
-              <button
-                type="button"
-                disabled={busy || paused}
-                onClick={() => setGiftCustomOpen((v) => !v)}
-                className={cn(
-                  "min-h-11 touch-manipulation rounded-xl border py-2.5 text-[12px] font-extrabold disabled:opacity-40 active:scale-[0.98]",
-                  giftCustomOpen
-                    ? "border-[#7dffb3]/50 bg-[#7dffb3]/15 text-[#7dffb3]"
-                    : "border-white/15 bg-white/8 text-white",
-                )}
-              >
-                Plus…
-              </button>
-            </div>
-            {giftCustomOpen ? (
-              <div className="mt-2.5 flex flex-col gap-2 sm:flex-row">
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  enterKeyHint="done"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  value={giftCustomAmount}
-                  onChange={(e) => setGiftCustomAmount(e.target.value)}
-                  placeholder="Montant ($)"
-                  className="h-11 min-h-11 flex-1 border-white/15 bg-white/10 text-base text-white placeholder:text-white/40"
-                />
-                <Button
-                  type="button"
-                  disabled={busy || paused}
-                  className="h-11 min-h-11 shrink-0 touch-manipulation rounded-xl px-4 font-bold"
-                  onClick={() => {
-                    const dollars = Number.parseFloat(
-                      giftCustomAmount.replace(",", "."),
-                    );
-                    if (!Number.isFinite(dollars) || dollars < 0.1) {
-                      toast.error("Indiquez un montant (min. 0,10 $)");
-                      return;
-                    }
-                    const amountCents = Math.round(dollars * 100);
-                    void send("gift", { amountCents, kind: "CUSTOM" });
-                  }}
-                >
-                  Envoyer
-                </Button>
-              </div>
-            ) : null}
-            <p className="mt-2 text-[10px] leading-snug text-white/45">
-              Débit sur votre portefeuille — le solde du diffuseur reste privé.
-            </p>
-          </div>
-        ) : null}
+        <LiveGiftPicker
+          open={giftOpen && !isHost && !ended}
+          busy={busy || paused}
+          customOpen={giftCustomOpen}
+          customAmount={giftCustomAmount}
+          onCustomOpen={setGiftCustomOpen}
+          onCustomAmount={setGiftCustomAmount}
+          onClose={() => {
+            setGiftOpen(false);
+            setGiftCustomOpen(false);
+          }}
+          onSend={(amountCents) =>
+            void send("gift", { amountCents, kind: "CUSTOM" })
+          }
+        />
 
         <LiveBackdropPicker
           open={backdropPickerOpen && isHost && !ended}
@@ -2531,7 +2166,9 @@ export default function LiveRoomPage({
                         {l.label}
                         {active ? " · actif" : ""}
                       </span>
-                      <span className="text-[11px] text-white/55">{l.hint}</span>
+                      <span className="text-[11px] text-white/55">
+                        {l.hint}
+                      </span>
                     </button>
                   );
                 })}
@@ -2570,79 +2207,315 @@ export default function LiveRoomPage({
           </>
         ) : null}
 
+        {!ended ? (
+          <div
+            data-no-like
+            className="absolute right-2.5 z-40 flex max-h-[58%] flex-col items-center gap-2.5 overflow-y-auto [scrollbar-width:none]"
+            style={{
+              bottom:
+                (kbLift > 40 ? kbLift : 0) +
+                (isHost && kbLift < 40 ? 148 : 118),
+            }}
+          >
+            {isHost ? (
+              <LiveRailBtn
+                label="Catalogue"
+                onClick={() => {
+                  setProductPickerOpen(true);
+                  void hostAction("catalog", { open: true });
+                }}
+              >
+                <ShoppingBag className="size-5" />
+              </LiveRailBtn>
+            ) : null}
+
+            {isHost ? (
+              <LiveRailBtn
+                label="J’aime"
+                count={compactCount(live.likeCount ?? 0)}
+              >
+                <Heart className="size-5 fill-[#FF5BA0] text-[#FF5BA0]" />
+              </LiveRailBtn>
+            ) : (
+              <LiveRailBtn
+                label="J’aime"
+                count={compactCount(live.likeCount ?? 0)}
+                onClick={() => void sendLike()}
+              >
+                <Heart className="size-5 fill-[#FF5BA0] text-[#FF5BA0]" />
+              </LiveRailBtn>
+            )}
+
+            {isHost ? (
+              <LiveRailBtn
+                label="Cadeaux"
+                count={formatMoney(live.giftCents ?? 0)}
+              >
+                <Gift className="size-5 text-[#7dffb3]" />
+              </LiveRailBtn>
+            ) : (
+              <LiveRailBtn
+                label="Cadeau"
+                onClick={() => {
+                  if (!session?.user) {
+                    toast.message("Connectez-vous pour offrir un cadeau");
+                    return;
+                  }
+                  setGiftCustomOpen(false);
+                  setGiftOpen(true);
+                }}
+              >
+                <Gift className="size-5 text-[#7dffb3]" />
+              </LiveRailBtn>
+            )}
+
+            {!isHost ? (
+              <LiveRailBtn
+                label={
+                  onStageAsGuest
+                    ? "Quitter"
+                    : pendingAsGuest
+                      ? "Annuler"
+                      : "Monter"
+                }
+                wait={pendingAsGuest}
+                on={onStageAsGuest}
+                onClick={() => {
+                  void (async () => {
+                    if (!session?.user) {
+                      toast.message("Connectez-vous pour monter sur scène");
+                      return;
+                    }
+                    if (guestJoinLocked && !onStageAsGuest && !pendingAsGuest) {
+                      toast.message("Le diffuseur a fermé les montées");
+                      return;
+                    }
+                    setBusy(true);
+                    if (pendingAsGuest) {
+                      await guestAction("guest_cancel");
+                      toast.message("Demande annulée");
+                    } else if (onStageAsGuest) {
+                      setGuestCameraOn(false);
+                      setGuestMicOn(false);
+                      await guestAction("guest_leave");
+                    } else {
+                      const ok = await guestAction("guest_request");
+                      if (ok) toast.message("Demande envoyée au diffuseur");
+                    }
+                    setBusy(false);
+                  })();
+                }}
+              >
+                {onStageAsGuest ? (
+                  <Mic className="size-5" />
+                ) : pendingAsGuest ? (
+                  <Clock className="size-5 text-amber-300" />
+                ) : (
+                  <UserPlus className="size-5" />
+                )}
+              </LiveRailBtn>
+            ) : null}
+
+            {onStageAsGuest ? (
+              <>
+                <LiveRailBtn
+                  label={guestCameraOn ? "Caméra" : "Caméra coupée"}
+                  wait={!guestCameraOn}
+                  onClick={() => void toggleGuestCamera()}
+                >
+                  {guestCameraOn ? (
+                    <Camera className="size-5" />
+                  ) : (
+                    <CameraOff className="size-5" />
+                  )}
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label={guestMicOn ? "Micro" : "Micro coupé"}
+                  wait={!guestMicOn}
+                  onClick={() => void toggleGuestMic()}
+                >
+                  {guestMicOn ? (
+                    <Mic className="size-5" />
+                  ) : (
+                    <MicOff className="size-5" />
+                  )}
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label="Quitter la scène"
+                  wait
+                  onClick={() => {
+                    void (async () => {
+                      setBusy(true);
+                      setGuestCameraOn(false);
+                      setGuestMicOn(false);
+                      await guestAction("guest_leave");
+                      setBusy(false);
+                    })();
+                  }}
+                >
+                  <LogOut className="size-5" />
+                </LiveRailBtn>
+              </>
+            ) : null}
+
+            <LiveRailBtn label="Partager" onClick={() => void shareLive()}>
+              <Share2 className="size-5" />
+            </LiveRailBtn>
+
+            {isHost ? (
+              <>
+                <LiveRailBtn
+                  label={localCameraOn ? "Caméra" : "Caméra coupée"}
+                  wait={!localCameraOn}
+                  onClick={() => void toggleCamera()}
+                >
+                  {localCameraOn ? (
+                    <Camera className="size-5" />
+                  ) : (
+                    <CameraOff className="size-5" />
+                  )}
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label={localMicOn ? "Micro" : "Micro coupé"}
+                  wait={!localMicOn}
+                  onClick={() => void toggleMic()}
+                >
+                  {localMicOn ? (
+                    <Mic className="size-5" />
+                  ) : (
+                    <MicOff className="size-5" />
+                  )}
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label="Texte"
+                  onClick={() => {
+                    setTextComposer(true);
+                    setTextDraft("");
+                    setSelectedOverlayId(null);
+                  }}
+                >
+                  <Type className="size-5" />
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label="Fond"
+                  onClick={() => setBackdropPickerOpen(true)}
+                >
+                  <Sparkles className="size-5" />
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label="Filtre"
+                  onClick={() => setFilterPickerOpen(true)}
+                >
+                  <Aperture className="size-5" />
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label="Scène"
+                  onClick={() => setLayoutPickerOpen(true)}
+                >
+                  <LayoutGrid className="size-5" />
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label={
+                    guestJoinLocked ? "Montées fermées" : "Montées ouvertes"
+                  }
+                  wait={guestJoinLocked}
+                  onClick={() => {
+                    void (async () => {
+                      setBusy(true);
+                      const ok = await hostAction("guest_join_lock", {
+                        locked: !guestJoinLocked,
+                      });
+                      setBusy(false);
+                      if (ok) {
+                        toast.message(
+                          guestJoinLocked
+                            ? "Montées ouvertes"
+                            : "Montées fermées",
+                        );
+                      }
+                    })();
+                  }}
+                >
+                  {guestJoinLocked ? (
+                    <Lock className="size-5" />
+                  ) : (
+                    <LockOpen className="size-5" />
+                  )}
+                </LiveRailBtn>
+                {!paused ? (
+                  <LiveRailBtn
+                    label="Pause"
+                    onClick={() => void hostAction("pause", { reason: "host" })}
+                  >
+                    <Pause className="size-5" />
+                  </LiveRailBtn>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
         <LiveProductPicker
           liveId={id}
-          open={productPickerOpen && isHost && !ended}
-          onClose={() => setProductPickerOpen(false)}
+          open={
+            !ended && (isHost ? productPickerOpen : Boolean(live.catalogOpen))
+          }
+          isHost={isHost}
+          presentedProductId={live.presentedProductId}
+          seed={live.catalogProducts}
+          scrollY={live.catalogScrollY ?? 0}
+          onScroll={
+            isHost
+              ? (y) => {
+                  if (catalogScrollTimer.current) {
+                    window.clearTimeout(catalogScrollTimer.current);
+                  }
+                  catalogScrollTimer.current = window.setTimeout(() => {
+                    void hostAction("catalog", { open: true, scrollY: y });
+                  }, 200);
+                }
+              : undefined
+          }
+          onClose={() => {
+            setProductPickerOpen(false);
+            if (isHost) void hostAction("catalog", { open: false });
+          }}
           onPick={pickProduct}
+          onClearPresented={() => {
+            void hostAction("catalog", {
+              open: true,
+              presentedProductId: null,
+            });
+          }}
         />
-      </div>
-
-      {/* Barre chat bas */}
-      <div className="shrink-0 border-t border-white/10 bg-[#0c0c12]/95 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md">
-        {!ended ? (
-          <div className="flex gap-2">
-            <Input
-              value={chat}
-              onChange={(e) => setChat(e.target.value)}
-              placeholder="Commenter…"
-              enterKeyHint="send"
-              autoComplete="off"
-              className="h-11 min-h-11 rounded-full border-white/15 bg-white/10 text-base text-white placeholder:text-white/40"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && chat.trim()) {
-                  void send("chat", { body: chat.trim() });
-                }
-              }}
-            />
-            <Button
-              size="icon"
-              className="size-11 shrink-0 touch-manipulation rounded-full"
-              disabled={busy || !chat.trim()}
-              onClick={() => void send("chat", { body: chat.trim() })}
-            >
-              <Send className="size-4" />
-            </Button>
-          </div>
-        ) : null}
-
-        {isHost && !ended ? (
-          <div className="mt-2 flex gap-2">
-            <Button
-              variant="secondary"
-              className="flex-1 rounded-full bg-white/10 text-white hover:bg-white/15"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                const ok = await hostAction("prolong");
-                setBusy(false);
-                if (ok) {
-                  setDurationAlerted(false);
-                  toast.success("Live prolongé de 15 min");
-                }
-              }}
-            >
-              +15 min
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1 rounded-full border-destructive/50 text-destructive"
-              disabled={busy}
-              onClick={() => void send("end")}
-            >
-              Terminer
-            </Button>
-          </div>
-        ) : null}
       </div>
     </div>
   );
 }
 
-/** ~5 bulles visibles ; avatar + nom ; host peut inviter 1/N viewers. */
 const LIVE_CHAT_KEEP = 40;
-const LIVE_CHAT_VIEWPORT_CLASS =
-  "max-h-[8.75rem]"; /* ≈ 5 × (py + ligne) */
+const NAME_COLORS = [
+  "#5B8CFF",
+  "#FF7AB6",
+  "#FFB020",
+  "#3DDC97",
+  "#C084FC",
+  "#38BDF8",
+];
+
+function nameColor(id: string) {
+  let hash = 0;
+  for (const char of id)
+    hash = (hash + char.charCodeAt(0)) % NAME_COLORS.length;
+  return NAME_COLORS[hash] ?? NAME_COLORS[0];
+}
+
+function compactCount(n: number) {
+  if (n >= 1_000_000)
+    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(n);
+}
 
 type LiveChatRow = {
   id: string;
@@ -2654,19 +2527,11 @@ function LiveChatFeed({
   chats,
   isHost,
   hostUserId,
-  guestByUserId,
-  selectMode,
-  selectedIds,
-  onToggleSelect,
   onInviteOne,
 }: {
   chats: LiveChatRow[];
   isHost?: boolean;
   hostUserId?: string;
-  guestByUserId?: Record<string, string>;
-  selectMode?: boolean;
-  selectedIds?: string[];
-  onToggleSelect?: (userId: string) => void;
   onInviteOne?: (userId: string) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -2680,13 +2545,7 @@ function LiveChatFeed({
     el.scrollTop = el.scrollHeight;
   }, [lastId, rows.length]);
 
-  if (rows.length === 0) {
-    return (
-      <p className="text-[11px] text-white/45">
-        Les commentaires apparaissent ici pour tout le monde.
-      </p>
-    );
-  }
+  if (rows.length === 0) return null;
 
   return (
     <div
@@ -2694,94 +2553,59 @@ function LiveChatFeed({
       onScroll={() => {
         const el = scrollerRef.current;
         if (!el) return;
-        const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-        stickBottomRef.current = gap < 48;
+        stickBottomRef.current =
+          el.scrollHeight - el.scrollTop - el.clientHeight < 48;
       }}
-      className={cn(
-        "pointer-events-auto space-y-1.5 overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.25)_transparent]",
-        LIVE_CHAT_VIEWPORT_CLASS,
-        "[mask-image:linear-gradient(to_bottom,transparent_0%,black_18%,black_100%)]",
-      )}
+      className="pointer-events-auto max-h-60 w-[72%] space-y-2.5 overflow-y-auto overscroll-contain [scrollbar-width:none] [mask-image:linear-gradient(to_bottom,transparent,black_16%,black_100%)]"
       aria-live="polite"
     >
-      {rows.map((m, i) => {
-        const fromBottom = rows.length - 1 - i;
-        const dim = fromBottom >= 4;
-        const uid = m.user.id;
-        const status = guestByUserId?.[uid];
-        const isSelfHost = Boolean(hostUserId && uid === hostUserId);
-        const canInvite =
-          Boolean(isHost) &&
-          !isSelfHost &&
-          status !== "ON_STAGE" &&
-          status !== "INVITED" &&
-          status !== "PENDING";
-        const selected = Boolean(selectedIds?.includes(uid));
-
+      {rows.map((m) => {
+        const seller = Boolean(hostUserId && m.user.id === hostUserId);
         return (
           <div
             key={m.id}
-            className={cn(
-              "flex max-w-[92%] items-start gap-2 rounded-2xl bg-black/40 px-2 py-1.5 backdrop-blur-sm transition-opacity",
-              dim ? "opacity-55" : "opacity-100",
-              selected && "ring-1 ring-[#7dffb3]/70",
-            )}
+            className="flex max-w-[88%] items-start gap-2 bg-transparent"
           >
-            {selectMode && canInvite ? (
-              <button
-                type="button"
-                aria-label={selected ? "Désélectionner" : "Sélectionner"}
-                onClick={() => onToggleSelect?.(uid)}
-                className={cn(
-                  "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border text-[10px] font-bold",
-                  selected
-                    ? "border-[#7dffb3] bg-[#7dffb3] text-black"
-                    : "border-white/35 bg-white/10 text-transparent",
-                )}
-              >
-                ✓
-              </button>
-            ) : null}
-            <span className="relative mt-0.5 grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-white/15">
-              {m.user.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={m.user.image}
-                  alt=""
-                  className="size-full object-cover"
-                />
-              ) : (
-                <UserRound className="size-3.5 text-white/55" />
-              )}
-            </span>
+            {m.user.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={m.user.image}
+                alt=""
+                className="size-9 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/25">
+                <UserRound className="size-3.5 text-white/80" />
+              </span>
+            )}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <p className="truncate text-[12px] font-bold text-[#7dffb3]">
-                  {m.user.name}
+              {seller ? (
+                <p className="flex flex-wrap items-center gap-1.5 text-[14px] font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] text-pretty">
+                  <span className="rounded-full bg-[#3B82F6] px-2 py-0.5 text-[11px] font-extrabold">
+                    Vendeur
+                  </span>
+                  {m.body}
                 </p>
-                {status === "ON_STAGE" ? (
-                  <span className="shrink-0 rounded-full bg-[#7dffb3]/20 px-1.5 py-0.5 text-[8px] font-bold text-[#7dffb3]">
-                    scène
-                  </span>
-                ) : status === "INVITED" ? (
-                  <span className="shrink-0 rounded-full bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white/70">
-                    invité
-                  </span>
-                ) : status === "PENDING" ? (
-                  <span className="shrink-0 rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[8px] font-bold text-amber-200">
-                    demande
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-[12px] leading-snug text-white/90">{m.body}</p>
+              ) : (
+                <>
+                  <p
+                    className="truncate text-[13px] font-extrabold [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]"
+                    style={{ color: nameColor(m.user.id) }}
+                  >
+                    {m.user.name}
+                  </p>
+                  <p className="text-[14px] font-semibold leading-[19px] text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] text-pretty">
+                    {m.body}
+                  </p>
+                </>
+              )}
             </div>
-            {isHost && canInvite && !selectMode ? (
+            {isHost && !seller ? (
               <button
                 type="button"
-                title="Inviter sur scène"
                 aria-label={`Inviter ${m.user.name}`}
-                onClick={() => onInviteOne?.(uid)}
-                className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-[#7dffb3]/20 text-[#7dffb3] transition active:scale-95"
+                onClick={() => onInviteOne?.(m.user.id)}
+                className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full text-[#7dffb3] transition-transform duration-150 ease-out active:scale-95"
               >
                 <UserPlus className="size-3.5" />
               </button>
@@ -2793,35 +2617,54 @@ function LiveChatFeed({
   );
 }
 
-function MenuAction({
+function LiveRailBtn({
   children,
   label,
+  count,
   onClick,
-  tone,
+  wait,
+  on,
 }: {
   children: React.ReactNode;
   label: string;
-  onClick: () => void;
-  tone?: "warn" | "accent" | "pink";
+  count?: string;
+  onClick?: () => void;
+  wait?: boolean;
+  on?: boolean;
 }) {
+  const className = cn(
+    "relative flex size-11 flex-col items-center justify-center rounded-full border bg-black/55 text-white transition-transform duration-150 ease-out active:scale-[0.96]",
+    wait
+      ? "border-amber-400/70 bg-amber-400/18"
+      : on
+        ? "border-[#00D68F] bg-[#00D68F]/22"
+        : "border-white/16",
+  );
+  if (!onClick) {
+    return (
+      <div aria-label={label} className={className}>
+        {children}
+        {count ? (
+          <span className="-mt-0.5 max-w-10 truncate text-[9px] font-extrabold tabular-nums">
+            {count}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <button
       type="button"
+      aria-label={label}
       onClick={onClick}
-      className="flex flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-white transition hover:bg-white/10 active:scale-[0.97]"
+      className={className}
     >
-      <span
-        className={cn(
-          "grid size-10 place-items-center rounded-full",
-          tone === "warn" && "bg-amber-400/20 text-amber-200",
-          tone === "accent" && "bg-[#7dffb3]/20 text-[#7dffb3]",
-          tone === "pink" && "bg-pink-400/20 text-pink-200",
-          !tone && "bg-white/10 text-white",
-        )}
-      >
-        {children}
-      </span>
-      <span className="text-[10px] font-semibold text-white/75">{label}</span>
+      {children}
+      {count ? (
+        <span className="-mt-0.5 max-w-10 truncate text-[9px] font-extrabold tabular-nums">
+          {count}
+        </span>
+      ) : null}
     </button>
   );
 }

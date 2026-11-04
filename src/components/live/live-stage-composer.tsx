@@ -2,10 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import {
-  LIVE_GUEST_MAX_ON_STAGE,
-  type LiveStageLayoutId,
-} from "@/lib/growth/live-stage-layout";
+import type { LiveStageLayoutId } from "@/lib/growth/live-stage-layout";
 import {
   LiveGuestStageGrid,
   type LiveGuestCard,
@@ -42,7 +39,7 @@ type ComposerProps = {
   layout: LiveStageLayoutId;
   hostName?: string | null;
   hostNode: ReactNode;
-  /** Afficher le plateau même sans invité (slots Demande) */
+  /** Rail viewers (Demande + cartes montées). Jamais côté diffuseur. */
   showStageChrome: boolean;
   guests: LiveGuestCard[];
   selfUserId?: string | null;
@@ -54,24 +51,17 @@ type ComposerProps = {
   pendingSelf?: boolean;
   onRequestJoin?: () => void;
   videoFilter?: string | null;
-  hostMicOn?: boolean;
-  onToggleHostMic?: () => void;
   onToggleSelfCam?: () => void;
   onToggleSelfMic?: () => void;
   onRaiseHand?: () => void;
   onLowerHand?: () => void;
-  onGrantFloor?: (guestId: string) => void;
-  onRevokeFloor?: (guestId: string) => void;
-  onKick?: (guestId: string) => void;
 };
 
 /**
- * Compose hôte + invités selon rail / split / board.
- * Le chat reste en overlay bas (page).
+ * Hôte plein écran. Cartes Demande + viewers montés : rail droite, viewers only.
  */
 export function LiveStageComposer({
   layout,
-  hostName,
   hostNode,
   showStageChrome,
   guests,
@@ -84,103 +74,42 @@ export function LiveStageComposer({
   pendingSelf,
   onRequestJoin,
   videoFilter,
-  hostMicOn,
-  onToggleHostMic,
   onToggleSelfCam,
   onToggleSelfMic,
   onRaiseHand,
   onLowerHand,
-  onGrantFloor,
-  onRevokeFloor,
-  onKick,
 }: ComposerProps) {
   const onStage = guests.filter((g) => g.status === "ON_STAGE");
-  const hasOnStage = onStage.length > 0;
-  /** Viewers sans invité : hôte plein écran (pas de plateau « en attente »). */
-  const useSplitBoard = (layout === "split" || layout === "board") &&
-    (hasOnStage || Boolean(isHost));
-  const emptyCount = Math.max(0, LIVE_GUEST_MAX_ON_STAGE - onStage.length);
-  const showEmpty =
-    showStageChrome &&
-    !joinLocked &&
-    (canRequestJoin || isHost) &&
-    emptyCount > 0;
-  /** Host : cases Demande. Viewer : 1 seule tuile, jamais un mur d’attente. */
-  const emptySlots = joinLocked && isHost && showStageChrome
-    ? 1
-    : showEmpty
-      ? isHost
-        ? Math.min(emptyCount, layout === "rail" ? 3 : layout === "split" ? 4 : 6)
-        : 1
-      : 0;
+  const selfOnStage = onStage.some((g) => g.user.id === selfUserId);
+  /** Viewers : 1 carte Demande. Jamais sur l’écran du diffuseur. */
+  const emptySlots =
+    showStageChrome && !isHost && !selfOnStage ? 1 : 0;
+  const showGuestRail =
+    showStageChrome && !isHost && (onStage.length > 0 || emptySlots > 0);
 
-  const guestGrid = (
-    <LiveGuestStageGrid
-      guests={guests}
-      selfUserId={selfUserId}
-      selfStream={selfStream}
-      remoteStreams={remoteStreams}
-      isHost={isHost}
-      videoFilter={videoFilter}
-      layout={layout}
-      embedded
-      emptySlots={emptySlots}
-      joinLocked={joinLocked}
-      pendingSelf={pendingSelf}
-      onRequestJoin={canRequestJoin ? onRequestJoin : undefined}
-      hostMicOn={hostMicOn}
-      onToggleHostMic={onToggleHostMic}
-      onToggleSelfCam={onToggleSelfCam}
-      onToggleSelfMic={onToggleSelfMic}
-      onRaiseHand={onRaiseHand}
-      onLowerHand={onLowerHand}
-      onGrantFloor={onGrantFloor}
-      onRevokeFloor={onRevokeFloor}
-      onKick={onKick}
-    />
-  );
-
-  if (layout === "split" && showStageChrome && useSplitBoard) {
-    return (
-      <div className="pointer-events-none absolute inset-0 z-[1] flex gap-0.5 p-0.5 pt-[max(3.5rem,env(safe-area-inset-top))] pb-[5.5rem]">
-        <LiveHostSurface
-          name={hostName}
-          className="pointer-events-none min-w-0 flex-[1.15] rounded-xl"
-        >
-          {hostNode}
-        </LiveHostSurface>
-        <div className="flex w-[42%] min-w-[7.5rem] max-w-[11rem] flex-col">
-          {guestGrid}
-        </div>
-      </div>
-    );
-  }
-
-  if (layout === "board" && showStageChrome && useSplitBoard) {
-    return (
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] flex h-[min(48%,24rem)] flex-col gap-0.5 p-0.5 pt-[max(3.25rem,calc(env(safe-area-inset-top)+0.25rem))]">
-        <div className="grid min-h-0 flex-1 grid-cols-4 grid-rows-3 gap-0.5">
-          <LiveHostSurface
-            name={hostName}
-            className="pointer-events-none col-span-2 row-span-2 rounded-lg"
-          >
-            {hostNode}
-          </LiveHostSurface>
-          <div className="col-span-2 row-span-3 min-h-0">
-            {guestGrid}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // rail (défaut) : hôte plein écran + rail droite
   return (
     <>
       <div className="absolute inset-0 z-[1]">{hostNode}</div>
-      {showStageChrome ? (
-        <div className="pointer-events-none absolute top-[4.5rem] right-2 bottom-[5.5rem] z-[22] flex w-[7.75rem] flex-col sm:right-3 sm:w-[9rem]">
-          {guestGrid}
+      {showGuestRail ? (
+        <div className="pointer-events-none absolute top-[4.5rem] right-2.5 bottom-[max(8.75rem,calc(env(safe-area-inset-bottom)+7.5rem))] z-[22] flex w-[7.75rem] flex-col sm:right-3 sm:w-[9rem]">
+          <LiveGuestStageGrid
+            guests={guests}
+            selfUserId={selfUserId}
+            selfStream={selfStream}
+            remoteStreams={remoteStreams}
+            isHost={false}
+            videoFilter={videoFilter}
+            layout={layout}
+            embedded
+            emptySlots={emptySlots}
+            joinLocked={joinLocked}
+            pendingSelf={pendingSelf}
+            onRequestJoin={canRequestJoin ? onRequestJoin : undefined}
+            onToggleSelfCam={onToggleSelfCam}
+            onToggleSelfMic={onToggleSelfMic}
+            onRaiseHand={onRaiseHand}
+            onLowerHand={onLowerHand}
+          />
         </div>
       ) : null}
     </>

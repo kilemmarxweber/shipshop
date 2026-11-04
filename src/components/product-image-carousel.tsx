@@ -173,8 +173,9 @@ function SlideMedia({
     }
 
     if (playing && !document.hidden) {
-      // Chaque entrée dans le viewport : lecture depuis 0 (pas de reprise mid-clip)
-      if (!wasPlayingRef.current) {
+      // Rewind seulement si le fichier est déjà en mémoire.
+      // Un seek pendant le téléchargement annule la requête et relance tout le mp4.
+      if (!wasPlayingRef.current && el.readyState >= 2) {
         try {
           if (el.currentTime > 0.04) el.currentTime = 0;
         } catch {
@@ -184,7 +185,6 @@ function SlideMedia({
       wasPlayingRef.current = true;
       if (el.paused || el.muted !== muted) {
         void tryPlayMedia(el, !muted).then((ok) => {
-          // Ne spam pas le CTA clic si le son a juste changé de card
           if (!ok && !muted) onAutoplayBlocked?.();
         });
       }
@@ -193,11 +193,6 @@ function SlideMedia({
       el.dataset.wantSound = "0";
       if (!el.muted) el.muted = true;
       if (!el.paused) el.pause();
-      try {
-        if (el.currentTime > 0.04) el.currentTime = 0;
-      } catch {
-        /* ignore */
-      }
     }
   }, [playing, shouldLoad, src, video, muted, onAutoplayBlocked]);
 
@@ -229,17 +224,7 @@ function SlideMedia({
       if (document.hidden) {
         wasPlayingRef.current = false;
         el.pause();
-        try {
-          if (el.currentTime > 0.04) el.currentTime = 0;
-        } catch {
-          /* ignore */
-        }
       } else if (playing && shouldLoad) {
-        try {
-          el.currentTime = 0;
-        } catch {
-          /* ignore */
-        }
         wasPlayingRef.current = true;
         void tryPlayMedia(el, !muted);
       }

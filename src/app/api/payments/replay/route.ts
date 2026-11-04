@@ -1,16 +1,17 @@
-import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
 import {
-  findIdempotentOp,
-  type IdempotencyScope,
+    findIdempotentOp,
+    type IdempotencyScope,
 } from "@/lib/payments/idempotent-op";
 import { parseIdempotencyKey } from "@/lib/payments/ledger";
+import { getSession } from "@/lib/session";
+import { NextResponse } from "next/server";
 
 const SCOPES = new Set<IdempotencyScope>([
   "WITHDRAW",
   "CHECKOUT",
   "ORDER",
   "GIFT",
+  "TICKET",
 ]);
 
 export async function GET(req: Request) {
@@ -38,7 +39,10 @@ export async function GET(req: Request) {
     key: key!,
   });
   if (!row || row.status !== "COMPLETED" || row.response == null) {
-    return NextResponse.json({ error: "Opération introuvable" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Opération introuvable" },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json(row.response, {

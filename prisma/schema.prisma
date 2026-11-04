@@ -76,6 +76,12 @@ model User {
   liveChats         LiveChatMessage[]
   challengeDone     ChallengeCompletion[]
   campaignInfluencer BrandCampaign[]      @relation("CampaignInfluencer")
+  eventsCreated      Event[]              @relation("EventCreator")
+  eventsOrganized    Event[]              @relation("EventOrganizer")
+  ticketsBought      Ticket[]             @relation("TicketBuyer")
+  ticketsCheckedIn   Ticket[]             @relation("TicketChecker")
+  ticketRefundReviews TicketRefundRequest[] @relation("TicketRefundReviewer")
+  ticketRefunds      TicketRefundRequest[]  @relation("TicketRefundBuyer")
 
   @@unique([email])
   @@map("user")
@@ -502,6 +508,12 @@ model WantedRequest {
   expiresAt   DateTime
   acceptedOfferId String?         @unique
   acceptedOffer   WantedOffer?    @relation("AcceptedWantedOffer", fields: [acceptedOfferId], references: [id], onDelete: SetNull)
+  /// SHIPSHOP | OFF_PLATFORM
+  paymentRail     String?
+  /// PICKUP | DELIVERY | SELLER_DROP
+  fulfillmentIntent String?
+  matchedAt       DateTime?
+  offPlatformWaiverAt DateTime?
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
@@ -1170,10 +1182,13 @@ model BrandCampaign {
   productId   String?
   influencerUserId String?
   influencer  User?     @relation("CampaignInfluencer", fields: [influencerUserId], references: [id], onDelete: SetNull)
+  eventId     String?
+  event       Event?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
   challenges  DailyChallenge[]
 
   @@index([status, startsAt])
   @@index([objective, status])
+  @@index([eventId])
   @@map("brand_campaign")
 }
 
@@ -1329,6 +1344,10 @@ model CreatorLive {
   guestJoinLocked  Boolean   @default(false)
   /// Stickers texte + cartes produit (x/y/scale %) visibles par les viewers
   overlays         Json      @default("[]")
+  /// Diffuseur a ouvert le catalogue — viewers voient la même liste
+  catalogOpen      Boolean   @default(false)
+  /// Fiche produit présentée aux viewers (null = liste seule)
+  presentedProductId String?
 
   gifts    CreatorGift[]
   chats    LiveChatMessage[]
@@ -1567,6 +1586,7 @@ enum PlatformFeeKind {
   SALE
   SHIPPING
   WITHDRAWAL
+  TICKET
 }
 
 enum WalletBucket {
@@ -1604,9 +1624,12 @@ model PlatformFee {
   withdrawal     Withdrawal?     @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
   shopId         String?
   courierId      String?
+  ticketId       String?
+  ticket         Ticket?         @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   createdAt      DateTime        @default(now())
 
   @@unique([orderId, kind])
+  @@unique([ticketId, kind])
   @@index([kind, createdAt])
   @@index([shopId])
   @@map("platform_fee")
@@ -1722,4 +1745,144 @@ model ShopRewardState {
   updatedAt                 DateTime @updatedAt
 
   @@map("shop_reward_state")
+}
+
+enum EventStatus {
+  DRAFT
+  ON_SALE
+  CLOSED
+  CANCELLED
+  ENDED
+}
+
+enum EventOrganizerKind {
+  ARTIST
+  ORGANIZATION
+}
+
+enum PlatformTicketFeeMode {
+  PERCENT
+  FLAT
+}
+
+enum TicketStatus {
+  PAID
+  CHECKED_IN
+  REFUNDED
+  VOID
+}
+
+enum TicketRefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Event {
+  id                 String               @id @default(cuid())
+  title              String
+  description        String               @default("")
+  imageUrl           String?
+  venue              String
+  city               String
+  currency           String               @default("USD")
+  capacity           Int?
+  accessNote         String?
+  status             EventStatus          @default(DRAFT)
+  organizerKind      EventOrganizerKind   @default(ARTIST)
+  organizerName      String
+  organizerUserId    String
+  organizer          User                 @relation("EventOrganizer", fields: [organizerUserId], references: [id], onDelete: Restrict)
+  createdByUserId    String
+  createdBy          User                 @relation("EventCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  platformFeeMode    PlatformTicketFeeMode @default(PERCENT)
+  platformFeeBps     Int                  @default(1000)
+  platformFeeCents   Int                  @default(0)
+  startsAt           DateTime
+  endsAt             DateTime
+  salesStartsAt      DateTime?
+  salesEndsAt        DateTime?
+  accessStartsAt     DateTime?
+  accessEndsAt       DateTime?
+  settledAt          DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  ticketTypes        TicketType[]
+  tickets            Ticket[]
+  campaigns          BrandCampaign[]
+
+  @@index([status, startsAt])
+  @@index([organizerUserId])
+  @@index([createdByUserId])
+  @@map("event")
+}
+
+model TicketType {
+  id         String   @id @default(cuid())
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name       String
+  description String  @default("")
+  priceCents Int
+  quota      Int
+  soldCount  Int      @default(0)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tickets    Ticket[]
+
+  @@index([eventId])
+  @@map("ticket_type")
+}
+
+model Ticket {
+  id               String        @id @default(cuid())
+  eventId          String
+  event            Event         @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  typeId           String
+  type             TicketType    @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  buyerUserId      String
+  buyer            User          @relation("TicketBuyer", fields: [buyerUserId], references: [id], onDelete: Cascade)
+  status           TicketStatus  @default(PAID)
+  currency         String        @default("USD")
+  purchaseCents    Int
+  platformFeeCents Int
+  organizerCents   Int
+  qrPayload        String
+  qrHmac           String
+  code             String
+  checkedInAt      DateTime?
+  checkedInById    String?
+  checkedInBy      User?         @relation("TicketChecker", fields: [checkedInById], references: [id], onDelete: SetNull)
+  settledAt        DateTime?
+  clawbackFailed   Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  refundRequests   TicketRefundRequest[]
+  platformFees     PlatformFee[]
+
+  @@unique([code])
+  @@index([eventId, status])
+  @@index([buyerUserId, createdAt])
+  @@index([qrHmac])
+  @@map("ticket")
+}
+
+model TicketRefundRequest {
+  id           String             @id @default(cuid())
+  ticketId     String
+  ticket       Ticket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  buyerUserId  String
+  buyer        User               @relation("TicketRefundBuyer", fields: [buyerUserId], references: [id], onDelete: Cascade)
+  reason       String
+  status       TicketRefundStatus @default(PENDING)
+  reviewedById String?
+  reviewedBy   User?              @relation("TicketRefundReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@index([ticketId])
+  @@map("ticket_refund_request")
 }

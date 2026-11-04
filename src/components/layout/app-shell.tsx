@@ -1,42 +1,62 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  AlertTriangle,
-  Bell,
-  Home,
-  Minus,
-  Search,
-  Plus,
-  User,
-  ShoppingCart,
-  MessageCircle,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { fetchJson } from "@/lib/fetch-json";
-import { useEffect, useState } from "react";
-import { authClient } from "@/lib/auth-client";
 import { BackButton } from "@/components/back-button";
 import { BackNavProvider } from "@/components/back-nav-context";
-import { NewListingFlash } from "@/components/new-listing-flash";
+import { FoxEmoji } from "@/components/fox-emoji";
 import { FoxScrollAdOverlay } from "@/components/fox-scroll-ad-overlay";
+import { useI18n } from "@/components/i18n-provider";
+import { NewListingFlash } from "@/components/new-listing-flash";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { useInboxUnread } from "@/hooks/use-inbox-unread";
 import { useVisualViewportLock } from "@/hooks/use-visual-viewport";
-import { armFeedSoundUnlock, enableFeedSound } from "@/lib/try-play-media";
-import { useI18n } from "@/components/i18n-provider";
+import { authClient } from "@/lib/auth-client";
 import { CART_UPDATED_EVENT, cartCountFromEvent } from "@/lib/cart-events";
+import { fetchJson } from "@/lib/fetch-json";
 import { useBindPageMediaSession } from "@/lib/page-media-session";
+import { armFeedSoundUnlock, enableFeedSound } from "@/lib/try-play-media";
+import { cn } from "@/lib/utils";
+import {
+    AlertTriangle,
+    Bell,
+    Compass,
+    Home,
+    MessageCircle,
+    Plus,
+    ShoppingCart,
+    User,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const NAV = [
   { href: "/", key: "home" as const, icon: Home },
-  { href: "/discover", key: "discover" as const, icon: Search },
+  { href: "/discover", key: "discover" as const, icon: Compass },
   { href: "/publish", key: "publish" as const, icon: Plus, accent: true },
   { href: "/messages", key: "messages" as const, icon: MessageCircle },
   { href: "/cart", key: "cart" as const, icon: ShoppingCart },
 ] as const;
+
+function compactCount(n: number) {
+  if (n >= 1_000_000)
+    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(n);
+}
+
+function PublishFab() {
+  return (
+    <span className="app-tabbar-fab" aria-hidden>
+      <span className="app-tabbar-fab-layer app-tabbar-fab-fox">
+        <FoxEmoji className="size-[52px]" alt="" />
+      </span>
+      <span className="app-tabbar-fab-layer app-tabbar-fab-plus">
+        <Plus className="size-[30px] text-white" strokeWidth={2.6} />
+      </span>
+    </span>
+  );
+}
 
 function BrandLabel({ name }: { name: string }) {
   const compact = name.replace(/\s+/g, "") || "ShipShop";
@@ -69,8 +89,6 @@ export function AppShell({
   const [cartCount, setCartCount] = useState(0);
   const inbox = useInboxUnread(userId, pathname);
   const [cartTick, setCartTick] = useState(0);
-  const [hasShop, setHasShop] = useState(false);
-  const [navOpen, setNavOpen] = useState(false);
   useVisualViewportLock();
   useEffect(() => {
     armFeedSoundUnlock();
@@ -90,13 +108,9 @@ export function AppShell({
 
   useEffect(() => {
     if (!userId) {
-      setHasShop(false);
       setCartCount(0);
       return;
     }
-    void fetchJson<{ shops?: { id: string }[] }>("/api/shops?mine=1")
-      .then(({ data }) => setHasShop((data?.shops?.length ?? 0) > 0))
-      .catch(() => setHasShop(false));
     void fetchJson<{ count?: number }>("/api/cart")
       .then((cart) => {
         setCartCount(cart.data?.count ?? 0);
@@ -106,54 +120,12 @@ export function AppShell({
       });
   }, [userId, pathname, cartTick]);
 
-  useEffect(() => {
-    setNavOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (navOpen) root.dataset.tabbarOpen = "1";
-    else delete root.dataset.tabbarOpen;
-    return () => {
-      delete root.dataset.tabbarOpen;
-    };
-  }, [navOpen]);
-
-  useEffect(() => {
-    if (!navOpen) return;
-    let armed = false;
-    const arm = window.setTimeout(() => {
-      armed = true;
-    }, 120);
-    const close = (event?: Event) => {
-      if (!armed) return;
-      const nav = document.querySelector(".app-tabbar");
-      const target = event?.target;
-      if (target instanceof Node && nav?.contains(target)) return;
-      setNavOpen(false);
-    };
-    const roots = document.querySelectorAll(
-      ".feed-snap, .app-main, .feed-wanted-scroll",
-    );
-    roots.forEach((el) => {
-      el.addEventListener("scroll", close, { passive: true });
-    });
-    window.addEventListener("wheel", close, { passive: true });
-    window.addEventListener("touchmove", close, { passive: true });
-    return () => {
-      window.clearTimeout(arm);
-      roots.forEach((el) => {
-        el.removeEventListener("scroll", close);
-      });
-      window.removeEventListener("wheel", close);
-      window.removeEventListener("touchmove", close);
-    };
-  }, [navOpen]);
-
+  const liveRoom = pathname.startsWith("/live/");
   const hideChrome =
     pathname.startsWith("/auth") ||
     pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/studio");
+    pathname.startsWith("/studio") ||
+    liveRoom;
   const hideBackOn = new Set([
     "/",
     "/discover",
@@ -163,9 +135,17 @@ export function AppShell({
   ]);
   const showBack = !hideChrome && !hideBackOn.has(pathname);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!hideChrome) root.dataset.tabbarOpen = "1";
+    else delete root.dataset.tabbarOpen;
+    return () => {
+      delete root.dataset.tabbarOpen;
+    };
+  }, [hideChrome]);
+
   const { urgentCount, unreadMessages } = inbox;
-  const feedLayout =
-    pathname === "/" || pathname.startsWith("/shop/");
+  const feedLayout = pathname === "/" || pathname.startsWith("/shop/");
 
   function onChromeNav(
     event: React.MouseEvent<HTMLAnchorElement>,
@@ -182,7 +162,6 @@ export function AppShell({
     }
     const unlockSound = href === "/" || href === "/discover";
     if (unlockSound) enableFeedSound();
-    setNavOpen(false);
     if (pathname === href) {
       event.preventDefault();
       if (href === "/") {
@@ -197,117 +176,112 @@ export function AppShell({
   return (
     <BackNavProvider>
       <div className="app-viewport">
-        <div className="app-shell">
+        <div className={cn("app-shell", liveRoom && "app-shell-live")}>
           <PullToRefresh>
-          {!hideChrome && (
-            <header className="z-40 shrink-0 border-b border-border bg-background px-3 pb-1.5 pt-[max(0.65rem,env(safe-area-inset-top))] sm:px-4">
-              <div className="flex items-center justify-between gap-1.5">
-                <Link
-                  href="/"
-                  aria-label={appName}
-                  onClick={(event) => onChromeNav(event, "/")}
-                  className="flex min-w-0 items-center gap-1.5 md:gap-2"
-                >
-                  <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-transparent">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/shipshop-logo.png"
-                      alt=""
-                      className="size-8 object-contain"
-                    />
-                  </div>
-                  <span className="font-heading truncate text-lg font-bold tracking-tight whitespace-nowrap">
-                    <BrandLabel name={appName} />
-                  </span>
-                </Link>
-                <div className="flex items-center justify-end gap-2">
-                  {session ? (
-                    <NotificationsBell
-                      userId={userId}
-                      unreadMessages={unreadMessages}
-                      unreadComments={inbox.unreadComments}
-                      urgentCount={urgentCount}
-                      conversations={inbox.conversations}
-                      comments={inbox.comments}
-                    />
-                  ) : (
-                    <Link
-                      href="/auth/login"
-                      className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50 text-foreground"
-                      aria-label={t("nav.notifications")}
-                    >
-                      <Bell className="size-4" />
-                    </Link>
-                  )}
+            {!hideChrome && (
+              <header className="z-40 shrink-0 border-b border-border bg-background px-3 pb-1.5 pt-[max(0.65rem,env(safe-area-inset-top))] sm:px-4">
+                <div className="flex items-center justify-between gap-1.5">
                   <Link
-                    href={session ? "/profile" : "/auth/login"}
-                    prefetch={false}
-                    onClick={(event) =>
-                      onChromeNav(
-                        event,
-                        session ? "/profile" : "/auth/login",
-                      )
-                    }
-                    className="grid size-9 place-items-center overflow-hidden rounded-full border border-border bg-muted/50"
-                    aria-label={t("nav.profile")}
+                    href="/"
+                    aria-label={appName}
+                    onClick={(event) => onChromeNav(event, "/")}
+                    className="flex min-w-0 items-center gap-1.5 md:gap-2"
                   >
-                    {session?.user.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
+                    <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-transparent">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={session.user.image}
+                        src="/shipshop-logo.png"
                         alt=""
-                        className="size-full object-cover"
+                        className="size-8 object-contain"
+                      />
+                    </div>
+                    <span className="font-heading truncate text-lg font-bold tracking-tight whitespace-nowrap">
+                      <BrandLabel name={appName} />
+                    </span>
+                  </Link>
+                  <div className="flex items-center justify-end gap-2">
+                    {session ? (
+                      <NotificationsBell
+                        userId={userId}
+                        unreadMessages={unreadMessages}
+                        unreadComments={inbox.unreadComments}
+                        urgentCount={urgentCount}
+                        conversations={inbox.conversations}
+                        comments={inbox.comments}
                       />
                     ) : (
-                      <User className="size-4" />
+                      <Link
+                        href="/auth/login"
+                        className="relative grid size-9 place-items-center rounded-full border border-border bg-muted/50 text-foreground"
+                        aria-label={t("nav.notifications")}
+                      >
+                        <Bell className="size-4" />
+                      </Link>
                     )}
-                  </Link>
+                    <Link
+                      href={session ? "/profile" : "/auth/login"}
+                      prefetch={false}
+                      onClick={(event) =>
+                        onChromeNav(event, session ? "/profile" : "/auth/login")
+                      }
+                      className="grid size-9 place-items-center overflow-hidden rounded-full border border-border bg-muted/50"
+                      aria-label={t("nav.profile")}
+                    >
+                      {session?.user.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={session.user.image}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <User className="size-4" />
+                      )}
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            </header>
-          )}
-          {!hideChrome && <NewListingFlash />}
-          {!hideChrome && <FoxScrollAdOverlay />}
+              </header>
+            )}
+            {!hideChrome && <NewListingFlash />}
+            {!hideChrome && <FoxScrollAdOverlay />}
 
-          <main
-            className={cn(
-              "app-main",
-              feedLayout && "app-main-feed",
-              pathname.startsWith("/shop/") && "app-main-shop-feed",
-              pathname.startsWith("/messages/") && "app-main-chat",
-              pathname.startsWith("/discover") && "app-main-discover",
-              !hideChrome &&
-                !feedLayout &&
-                "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
-              feedLayout && "pb-0",
-            )}
-          >
-            {showBack && (
-              <div className="sticky top-2 z-40 shrink-0 px-4 pt-1">
-                <BackButton inline fixed={false} />
-              </div>
-            )}
-            <div
+            <main
               className={cn(
-                "app-page",
-                pathname.startsWith("/shop/") && "app-page-shop-feed",
+                "app-main",
+                feedLayout && "app-main-feed",
+                pathname.startsWith("/shop/") && "app-main-shop-feed",
+                pathname.startsWith("/messages/") && "app-main-chat",
+                pathname.startsWith("/discover") && "app-main-discover",
+                liveRoom && "app-main-live",
+                !hideChrome &&
+                  !feedLayout &&
+                  "pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]",
+                feedLayout && "pb-0",
               )}
             >
-              {children}
-            </div>
-          </main>
-
-          {!hideChrome && (
-            <nav
-              className={cn(
-                "app-tabbar absolute bottom-0 left-0 right-0 z-40 shrink-0 px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]",
-                navOpen
-                  ? "pointer-events-auto border-t border-border bg-background/80 backdrop-blur-xl"
-                  : "pointer-events-none border-t border-transparent bg-transparent",
+              {showBack && (
+                <div className="sticky top-2 z-40 shrink-0 px-4 pt-1">
+                  <BackButton inline fixed={false} />
+                </div>
               )}
-            >
-              {navOpen ? (
-                <div className="grid grid-cols-5 gap-0.5">
+              <div
+                className={cn(
+                  "app-page",
+                  pathname.startsWith("/shop/") && "app-page-shop-feed",
+                )}
+              >
+                {children}
+              </div>
+            </main>
+
+            {!hideChrome && (
+              <nav
+                className="app-tabbar pointer-events-none absolute right-0 bottom-0 left-0 z-40 h-[calc(4rem+max(0.5rem,env(safe-area-inset-bottom,0px)))] overflow-visible"
+                aria-label="Navigation"
+              >
+                <div className="app-tabbar-shape" aria-hidden />
+                <div className="app-tabbar-safe" aria-hidden />
+                <div className="pointer-events-auto relative grid h-16 grid-cols-5">
                   {NAV.map((item) => {
                     const active =
                       item.href === "/"
@@ -315,11 +289,14 @@ export function AppShell({
                         : pathname.startsWith(item.href);
                     const Icon = item.icon;
                     const isPublish = item.href === "/publish";
+                    const href =
+                      isPublish && !session ? "/auth/login" : item.href;
                     return (
                       <Link
                         key={item.href}
-                        href={item.href}
+                        href={href}
                         prefetch={false}
+                        aria-label={t(`nav.${item.key}`)}
                         data-feed-sound={
                           item.href === "/" || item.href === "/discover"
                             ? "1"
@@ -327,95 +304,55 @@ export function AppShell({
                         }
                         onClick={(event) => onChromeNav(event, item.href)}
                         className={cn(
-                          "flex flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition",
-                          active
-                            ? "text-foreground"
-                            : "text-muted-foreground",
+                          "flex flex-col items-center overflow-visible pt-2.5 text-[11px] font-bold tabular-nums transition-colors duration-150",
+                          isPublish && "justify-start pt-0",
+                          active ? "text-[#00D68F]" : "text-white/50",
                         )}
                       >
                         {isPublish ? (
-                          <span
-                            className={cn(
-                              "relative -mt-4 grid size-16 place-items-center rounded-full bg-gradient-to-br from-[#ff5722] via-[#ff7a45] to-[#00d68f] text-white shadow-[0_8px_22px_rgba(255,87,34,0.45)]",
-                              !active && "motion-safe:animate-publish-attract",
-                            )}
-                          >
-                            {!active && (
-                              <span
-                                aria-hidden
-                                className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_0_3px_rgba(255,87,34,0.5)] motion-safe:animate-publish-ring"
-                              />
-                            )}
-                            <Plus
-                              className={cn(
-                                "relative size-7 text-white",
-                                !active && "motion-safe:animate-publish-plus",
-                              )}
-                              strokeWidth={2.6}
-                            />
-                          </span>
+                          <PublishFab />
                         ) : (
                           <span className="relative">
-                            <Icon className="size-5" />
+                            <Icon
+                              className="size-6"
+                              strokeWidth={active ? 2.4 : 1.9}
+                              fill={active ? "currentColor" : "none"}
+                            />
                             {item.href === "/cart" && cartCount > 0 && (
-                              <span className="absolute -top-1 -right-2 grid min-w-3.5 place-items-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-white">
-                                {cartCount > 9 ? "9+" : cartCount}
+                              <span className="absolute -top-1 -right-2.5 grid min-w-4 place-items-center rounded-full bg-[#FF7A00] px-0.5 text-[10px] font-extrabold text-white">
+                                {compactCount(cartCount)}
                               </span>
                             )}
                             {item.href === "/messages" &&
                               (urgentCount > 0 || unreadMessages > 0) && (
                                 <span
                                   className={cn(
-                                    "absolute -top-1.5 -right-2.5 grid min-w-4 place-items-center rounded-full px-0.5 text-[8px] font-bold shadow",
+                                    "absolute -top-1.5 -right-2.5 grid min-w-4 place-items-center rounded-full px-0.5 text-[10px] font-extrabold shadow",
                                     urgentCount > 0
                                       ? "size-4 bg-amber-500 text-black"
-                                      : "bg-primary text-white",
+                                      : "bg-[#FF7A00] text-white",
                                   )}
                                 >
                                   {urgentCount > 0 ? (
                                     <AlertTriangle className="size-2.5" />
-                                  ) : unreadMessages > 9 ? (
-                                    "9+"
                                   ) : (
-                                    unreadMessages
+                                    compactCount(unreadMessages)
                                   )}
                                 </span>
                               )}
                           </span>
                         )}
                         {isPublish ? (
-                          <span className="sr-only">
-                            {hasShop ? t("nav.publish") : t("nav.sellVideo")}
-                          </span>
+                          <span className="sr-only">{t("nav.publish")}</span>
                         ) : (
-                          <span>{t(`nav.${item.key}`)}</span>
+                          <span className="mt-0.5">{t(`nav.${item.key}`)}</span>
                         )}
                       </Link>
                     );
                   })}
                 </div>
-              ) : (
-                <div className="flex justify-center pb-1">
-                  <button
-                    type="button"
-                    aria-expanded={false}
-                    aria-label="Ouvrir le menu"
-                    onClick={() => setNavOpen(true)}
-                    className="pointer-events-auto relative grid size-16 place-items-center rounded-full bg-gradient-to-br from-[#ff5722] via-[#ff7a45] to-[#00d68f] text-white shadow-[0_8px_22px_rgba(255,87,34,0.45)] transition active:scale-95 motion-safe:animate-publish-attract"
-                  >
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_0_3px_rgba(255,87,34,0.5)] motion-safe:animate-publish-ring"
-                    />
-                    <Minus
-                      className="relative size-7 motion-safe:animate-publish-plus"
-                      strokeWidth={2.6}
-                    />
-                  </button>
-                </div>
-              )}
-            </nav>
-          )}
+              </nav>
+            )}
           </PullToRefresh>
         </div>
       </div>

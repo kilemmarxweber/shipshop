@@ -1,27 +1,31 @@
+import { Prisma } from "@/generated/prisma/client";
 import {
-  MONTAGE_MAX_MS,
-  MONTAGE_MAX_SECONDS,
-  PRODUCT_CLIP_MOOD,
-  SLIDE_MOTIONS,
-  type SlideMotion,
+    MONTAGE_MAX_MS,
+    MONTAGE_MAX_SECONDS,
+    PRODUCT_CLIP_MOOD,
+    SLIDE_MOTIONS,
+    type SlideMotion,
 } from "@/lib/montage";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSanityClient } from "@/lib/sanity/client";
-import { isSanityConfigured, sanityDataset, sanityProjectId } from "@/lib/sanity/env";
 import {
-  appConfigQuery,
-  catalogTracksQuery,
-  seoDefaultsQuery,
+    isSanityConfigured,
+    sanityDataset,
+    sanityProjectId,
+} from "@/lib/sanity/env";
+import {
+    appConfigQuery,
+    catalogTracksQuery,
+    seoDefaultsQuery,
 } from "@/lib/sanity/queries";
 import {
-  SCROLL_AD_DEFAULT_DELAY,
-  SCROLL_AD_DEFAULT_VIDEO,
-  clampScrollAdDelay,
-  parseScrollAdVideos,
-  scrollAdLiveVideos,
-  type ScrollAdCampaign,
+    SCROLL_AD_DEFAULT_DELAY,
+    SCROLL_AD_DEFAULT_VIDEO,
+    clampScrollAdDelay,
+    parseScrollAdVideos,
+    scrollAdLiveVideos,
+    type ScrollAdCampaign,
 } from "@/lib/scroll-ad";
-import { Prisma } from "@/generated/prisma/client";
 
 export type ContentSource = "system" | "sanity";
 
@@ -114,13 +118,15 @@ const DEFAULT_SCROLL_AD: ScrollAdCampaign = {
   videos: [{ url: SCROLL_AD_DEFAULT_VIDEO, enabled: true, priority: 1 }],
 };
 
-function parseScrollAd(row: {
-  scrollAdEnabled?: boolean;
-  scrollAdDelaySeconds?: number;
-  scrollAdStartsAt?: Date | null;
-  scrollAdEndsAt?: Date | null;
-  scrollAdVideos?: unknown;
-} | null): ScrollAdCampaign {
+function parseScrollAd(
+  row: {
+    scrollAdEnabled?: boolean;
+    scrollAdDelaySeconds?: number;
+    scrollAdStartsAt?: Date | null;
+    scrollAdEndsAt?: Date | null;
+    scrollAdVideos?: unknown;
+  } | null,
+): ScrollAdCampaign {
   if (!row) return { ...DEFAULT_SCROLL_AD };
   return {
     enabled: row.scrollAdEnabled !== false,
@@ -303,7 +309,8 @@ export async function getAppConfig(): Promise<AppContentConfig> {
       forbidden: true,
       humanReview,
       blockedLabels: (doc?.nsfw?.blockedLabels ?? []).filter(
-        (label): label is string => typeof label === "string" && label.trim().length > 0,
+        (label): label is string =>
+          typeof label === "string" && label.trim().length > 0,
       ),
       rejectFr: doc?.nsfw?.rejectFr?.trim() || SYSTEM_NSFW.rejectFr,
       rejectEn: doc?.nsfw?.rejectEn?.trim() || SYSTEM_NSFW.rejectEn,
@@ -364,18 +371,25 @@ export async function setScrollAdCampaign(input: Partial<ScrollAdCampaign>) {
   const current = (await readSwitch()).scrollAd;
   const next: ScrollAdCampaign = {
     enabled: input.enabled ?? current.enabled,
-    delaySeconds: clampScrollAdDelay(input.delaySeconds ?? current.delaySeconds),
+    delaySeconds: clampScrollAdDelay(
+      input.delaySeconds ?? current.delaySeconds,
+    ),
     startsAt: input.startsAt === undefined ? current.startsAt : input.startsAt,
     endsAt: input.endsAt === undefined ? current.endsAt : input.endsAt,
     videos: input.videos ?? current.videos,
   };
-  if (next.startsAt && next.endsAt && Date.parse(next.startsAt) > Date.parse(next.endsAt)) {
+  if (
+    next.startsAt &&
+    next.endsAt &&
+    Date.parse(next.startsAt) > Date.parse(next.endsAt)
+  ) {
     throw new Error("La fin de période doit être après le début");
   }
   const videosJson = next.videos.map((clip) => ({
     url: clip.url,
     enabled: clip.enabled,
     priority: clip.priority,
+    ...(clip.eventId ? { eventId: clip.eventId } : {}),
   })) as unknown as Prisma.InputJsonValue;
   return withDbRetry(() =>
     prisma.contentSourceConfig.upsert({
@@ -401,6 +415,9 @@ export async function setScrollAdCampaign(input: Partial<ScrollAdCampaign>) {
 
 export function publicAppConfig(cfg: AppContentConfig) {
   const live = scrollAdLiveVideos(cfg.scrollAd);
+  const liveClips = [...cfg.scrollAd.videos]
+    .filter((clip) => clip.enabled)
+    .sort((a, b) => a.priority - b.priority);
   return {
     source: cfg.source,
     clipMs: cfg.clipMs,
@@ -412,5 +429,8 @@ export function publicAppConfig(cfg: AppContentConfig) {
     scrollAdEnabled: live.length > 0,
     scrollAdDelaySeconds: cfg.scrollAd.delaySeconds,
     scrollAdVideos: live,
+    scrollAdCtas: liveClips
+      .filter((clip) => clip.eventId)
+      .map((clip) => ({ url: clip.url, eventId: clip.eventId })),
   };
 }

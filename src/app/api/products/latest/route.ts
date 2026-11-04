@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const products = await withDbRetry(() =>
       prisma.product.findMany({
-        where: { status: "ACTIVE", wantedRequestId: null },
+        where: { status: "ACTIVE", quantity: { gt: 0 }, wantedRequestId: null },
         orderBy: { createdAt: "desc" },
         take: 8,
         select: {

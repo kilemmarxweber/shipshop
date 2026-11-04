@@ -2,9 +2,30 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+const SESSION_COOKIE = "better-auth.session_token";
+
+/** Les routes métier lisent le cookie. L'app native envoie le jeton bearer. */
+export function sessionHeaders(incoming: Headers) {
+  const authorization = incoming.get("authorization");
+  if (!authorization?.toLowerCase().startsWith("bearer ")) return incoming;
+  const token = authorization.slice(7).trim();
+  if (!token || token.includes(";")) return incoming;
+  const secure = (process.env.BETTER_AUTH_URL ?? "").startsWith("https://");
+  const name = `${secure ? "__Secure-" : ""}${SESSION_COOKIE}`;
+  const current = incoming.get("cookie") ?? "";
+  const already = current
+    .split(";")
+    .some((part) => part.trim().startsWith(`${name}=`));
+  if (already) return incoming;
+  const headers = new Headers(incoming);
+  const pair = `${name}=${token}`;
+  headers.set("cookie", current ? `${current}; ${pair}` : pair);
+  return headers;
+}
+
 export async function getSession() {
   return auth.api.getSession({
-    headers: await headers(),
+    headers: sessionHeaders(await headers()),
   });
 }
 

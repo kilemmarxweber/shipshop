@@ -78,6 +78,16 @@ function pruneSession() {
   }
 }
 
+export function clearFeedListCache(feedKey: string) {
+  memory.delete(feedKey);
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.removeItem(storageKey(feedKey));
+  } catch {
+    /* private mode */
+  }
+}
+
 export function clearAllFeedListCaches() {
   memory.clear();
   if (typeof sessionStorage === "undefined") return;

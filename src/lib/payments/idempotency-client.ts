@@ -19,7 +19,13 @@ export async function fetchPaymentJson<T>(
   url: string,
   init: RequestInit & {
     idempotencyKey: string;
-    replayScope?: "MOVEMENT" | "WITHDRAW" | "CHECKOUT" | "ORDER" | "GIFT";
+    replayScope?:
+      | "MOVEMENT"
+      | "WITHDRAW"
+      | "CHECKOUT"
+      | "ORDER"
+      | "GIFT"
+      | "TICKET";
   },
 ): Promise<{ res: Response; data: T }> {
   const headers = new Headers(init.headers);

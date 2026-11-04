@@ -144,6 +144,7 @@ export type Messages = {
     likeRemoved: string;
     conversationFailed: string;
     newListing: string;
+    reviews: string;
   };
   discover: {
     searchPlaceholder: string;
@@ -482,6 +483,17 @@ export type Messages = {
     REFUNDED: string;
     CANCELLED: string;
   };
+  tickets: {
+    events: string;
+    myTickets: string;
+    buy: string;
+    nonRefundable: string;
+    acceptPolicy: string;
+    soldOut: string;
+    requestRefund: string;
+    showQr: string;
+    access: string;
+  };
 };
 
 const fr: Messages = {
@@ -631,6 +643,7 @@ const fr: Messages = {
     likeRemoved: "Like retiré — message vendeur annulé",
     conversationFailed: "Impossible d'ouvrir la conversation",
     newListing: "Nouveau",
+    reviews: "avis",
   },
   discover: {
     searchPlaceholder: "Rechercher un produit, vendeur…",
@@ -768,7 +781,8 @@ const fr: Messages = {
     cancelCart: "Annuler le panier",
     removeAria: "Retirer du panier",
     payOneClick: "Payer en 1 clic",
-    perShopQr: "Chaque boutique reçoit seulement ses articles — 1 QR à scanner.",
+    perShopQr:
+      "Chaque boutique reçoit seulement ses articles — 1 QR à scanner.",
     insufficient: "Solde insuffisant — rechargez votre portefeuille",
   },
   share: {
@@ -797,7 +811,8 @@ const fr: Messages = {
   },
   messages: {
     title: "Messages",
-    empty: "Aucune conversation. Ouvrez une boutique et touchez l'icône Messages.",
+    empty:
+      "Aucune conversation. Ouvrez une boutique et touchez l'icône Messages.",
     emptyHint: "Pour écrire à un nouveau vendeur, ouvrez sa boutique.",
     urgent: "Urgent",
     writePlaceholder: "Écrire un message…",
@@ -834,7 +849,8 @@ const fr: Messages = {
     saveNumbers: "Enregistrer les numéros",
     sendPay: "Payer avec CinetPay",
     confirmPay: "Vérifier le paiement",
-    ussdHint: "Le guichet CinetPay confirme le paiement. ShipShop crédite le portefeuille ensuite.",
+    ussdHint:
+      "Le guichet CinetPay confirme le paiement. ShipShop crédite le portefeuille ensuite.",
     forYou: "pour toi",
     vodacom: "Vodacom M-Pesa",
     orange: "Orange Money",
@@ -846,7 +862,8 @@ const fr: Messages = {
       "Sans réseau : ShipShop débite votre solde et crédite le bénéficiaire.",
     transferOk: "Transfert effectué",
     verifyState: "Vérifier l’état",
-    connectionLost: "Connexion interrompue — on vérifie le paiement, sans renvoyer.",
+    connectionLost:
+      "Connexion interrompue — on vérifie le paiement, sans renvoyer.",
     expiredPay: "Délai dépassé — relancez une nouvelle demande.",
     txnRefund: "Remboursement",
     txnPurchase: "Achat",
@@ -912,7 +929,8 @@ const fr: Messages = {
     clipWindow: "Extrait (1 min)",
     clipPlay: "Écouter l’extrait",
     clipPause: "Pause",
-    clipHint: "Faites glisser pour choisir la minute jouée. Écoutez avant de publier.",
+    clipHint:
+      "Faites glisser pour choisir la minute jouée. Écoutez avant de publier.",
     importOk: "Son importé — choisissez 1 minute",
     undo: "Annuler",
     pickColor: "Pipette (couleur de fond)",
@@ -976,6 +994,18 @@ const fr: Messages = {
     FAILED: "Échoué",
     REFUNDED: "Remboursé",
     CANCELLED: "Annulé",
+  },
+  tickets: {
+    events: "Événements",
+    myTickets: "Mes billets",
+    buy: "Acheter",
+    nonRefundable:
+      "Non remboursable, sauf demande validée ou annulation de l’événement.",
+    acceptPolicy: "J’accepte la politique non remboursable",
+    soldOut: "Complet",
+    requestRefund: "Demander un remboursement",
+    showQr: "QR d’accès",
+    access: "Présente ce QR à l’entrée",
   },
 };
 
@@ -1125,6 +1155,7 @@ const en: Messages = {
     likeRemoved: "Like removed — seller message cancelled",
     conversationFailed: "Could not open conversation",
     newListing: "New",
+    reviews: "reviews",
   },
   discover: {
     searchPlaceholder: "Search a product, seller…",
@@ -1247,7 +1278,8 @@ const en: Messages = {
       "Each item has its own QR. When this shop hands it over, that QR ends and only that product is paid after confirmation.",
     pickItem: "Which item are you handing over?",
     goCart: "Go to cart",
-    payUseCart: "Cart already has an item — pay everything in 1 tap from the cart",
+    payUseCart:
+      "Cart already has an item — pay everything in 1 tap from the cart",
     alreadyInCart: "Already in your cart",
   },
   cart: {
@@ -1328,7 +1360,8 @@ const en: Messages = {
     saveNumbers: "Save numbers",
     sendPay: "Pay with CinetPay",
     confirmPay: "Check payment",
-    ussdHint: "The CinetPay checkout confirms the payment. ShipShop credits the wallet after that.",
+    ussdHint:
+      "The CinetPay checkout confirms the payment. ShipShop credits the wallet after that.",
     forYou: "for you",
     vodacom: "Vodacom M-Pesa",
     orange: "Orange Money",
@@ -1340,7 +1373,8 @@ const en: Messages = {
       "No network: ShipShop debits your balance and credits the recipient.",
     transferOk: "Transfer complete",
     verifyState: "Check status",
-    connectionLost: "Connection lost — checking the payment, not sending again.",
+    connectionLost:
+      "Connection lost — checking the payment, not sending again.",
     expiredPay: "Timed out — start a new request.",
     txnRefund: "Refund",
     txnPurchase: "Purchase",
@@ -1392,8 +1426,7 @@ const en: Messages = {
     needPrice: "Set the product price first",
     deleteOverlay: "Delete element",
     resizeOverlay: "Resize",
-    overlayHint:
-      "Drag to move · corner to resize · zoom to crop the logo",
+    overlayHint: "Drag to move · corner to resize · zoom to crop the logo",
     cropZoom: "Crop",
     eraser: "Eraser",
     apply: "Apply",
@@ -1470,6 +1503,18 @@ const en: Messages = {
     FAILED: "Failed",
     REFUNDED: "Refunded",
     CANCELLED: "Cancelled",
+  },
+  tickets: {
+    events: "Events",
+    myTickets: "My tickets",
+    buy: "Buy",
+    nonRefundable:
+      "Non-refundable, except an approved request or event cancellation.",
+    acceptPolicy: "I accept the non-refundable policy",
+    soldOut: "Sold out",
+    requestRefund: "Request a refund",
+    showQr: "Access QR",
+    access: "Show this QR at the door",
   },
 };
 
@@ -1619,6 +1664,7 @@ const pt: Messages = {
     likeRemoved: "Gosto removido — mensagem ao vendedor cancelada",
     conversationFailed: "Não foi possível abrir a conversa",
     newListing: "Novo",
+    reviews: "avaliações",
   },
   discover: {
     searchPlaceholder: "Pesquisar produto, vendedor…",
@@ -1822,7 +1868,8 @@ const pt: Messages = {
     saveNumbers: "Guardar números",
     sendPay: "Pagar com CinetPay",
     confirmPay: "Verificar pagamento",
-    ussdHint: "O guichê CinetPay confirma o pagamento. A ShipShop credita a carteira em seguida.",
+    ussdHint:
+      "O guichê CinetPay confirma o pagamento. A ShipShop credita a carteira em seguida.",
     forYou: "para si",
     vodacom: "Vodacom M-Pesa",
     orange: "Orange Money",
@@ -1834,7 +1881,8 @@ const pt: Messages = {
       "Sem rede: a ShipShop debita o seu saldo e credita o beneficiário.",
     transferOk: "Transferência concluída",
     verifyState: "Verificar estado",
-    connectionLost: "Ligação interrompida — a verificar o pagamento, sem reenviar.",
+    connectionLost:
+      "Ligação interrompida — a verificar o pagamento, sem reenviar.",
     expiredPay: "Prazo esgotado — inicie um novo pedido.",
     txnRefund: "Reembolso",
     txnPurchase: "Compra",
@@ -1964,6 +2012,18 @@ const pt: Messages = {
     FAILED: "Falhou",
     REFUNDED: "Reembolsado",
     CANCELLED: "Cancelado",
+  },
+  tickets: {
+    events: "Eventos",
+    myTickets: "Os meus bilhetes",
+    buy: "Comprar",
+    nonRefundable:
+      "Não reembolsável, salvo pedido aceite ou cancelamento do evento.",
+    acceptPolicy: "Aceito a política de não reembolso",
+    soldOut: "Esgotado",
+    requestRefund: "Pedir reembolso",
+    showQr: "QR de acesso",
+    access: "Mostra este QR à entrada",
   },
 };
 

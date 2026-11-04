@@ -1,5 +1,4 @@
-const ARCHIVE_SEARCH =
-  "https://archive.org/advancedsearch.php";
+const ARCHIVE_SEARCH = "https://archive.org/advancedsearch.php";
 const ARCHIVE_META = "https://archive.org/metadata";
 
 const AUDIO_FORMATS = [
@@ -63,7 +62,12 @@ export function safeArchiveIdentifier(raw: string) {
 
 export function safeArchiveFileName(raw: string) {
   const name = raw.trim();
-  if (!name || name.includes("..") || name.includes("/") || name.includes("\\")) {
+  if (
+    !name ||
+    name.includes("..") ||
+    name.includes("/") ||
+    name.includes("\\")
+  ) {
     return null;
   }
   if (name.length > 240) return null;
@@ -74,13 +78,15 @@ export function archiveDownloadUrl(identifier: string, file: string) {
   return `https://archive.org/download/${encodeURIComponent(identifier)}/${encodeURIComponent(file)}`;
 }
 
-export async function searchOnlineAudio(query: string): Promise<OnlineTrackHit[]> {
+export async function searchOnlineAudio(
+  query: string,
+): Promise<OnlineTrackHit[]> {
   const q = query.trim().slice(0, 80);
   if (q.length < 2) return [];
 
   const params = new URLSearchParams({
     q: `mediatype:audio AND (${q})`,
-    rows: "8",
+    rows: "24",
     page: "1",
     output: "json",
   });
@@ -103,7 +109,7 @@ export async function searchOnlineAudio(query: string): Promise<OnlineTrackHit[]
   const hits: OnlineTrackHit[] = [];
 
   await Promise.all(
-    docs.slice(0, 8).map(async (doc) => {
+    docs.slice(0, 24).map(async (doc) => {
       const identifier = safeArchiveIdentifier(doc.identifier ?? "");
       if (!identifier) return;
       const metaRes = await fetch(`${ARCHIVE_META}/${identifier}`, {

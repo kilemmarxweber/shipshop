@@ -1,73 +1,72 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import Link from "next/link";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { CATEGORIES } from "@/lib/categories";
-import { PRESET_COLORS, PRESET_SIZES, colorHex } from "@/lib/product-options";
-import { fetchJson } from "@/lib/fetch-json";
+import { usePageBack } from "@/components/back-nav-context";
+import { useI18n, type MessagePath } from "@/components/i18n-provider";
+import { type AddressState } from "@/components/kinshasa-address-form";
+import { MediaUploader } from "@/components/media-uploader";
+import { PageLoader } from "@/components/page-loader";
+import {
+    PublishMontage,
+    type LocalMontageClip,
+} from "@/components/publish-montage";
+import { ShopPicker } from "@/components/shop-picker";
 import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { ShopPicker } from "@/components/shop-picker";
-import { usePageBack } from "@/components/back-nav-context";
-import { PageLoader } from "@/components/page-loader";
-import { MediaUploader } from "@/components/media-uploader";
 import {
-  PublishMontage,
-  type LocalMontageClip,
-} from "@/components/publish-montage";
-import {
-  LOCAL_SOUNDTRACK_ID,
-  looksUnspecifiedMotions,
-  normalizeMotions,
-} from "@/lib/montage";
-import { useAppConfig } from "@/lib/use-app-config";
-import { type AddressState } from "@/components/kinshasa-address-form";
-import { composeAddress } from "@/lib/address";
-import { reverseGeocode } from "@/lib/browser-geolocation";
-import { APP_CURRENCIES, type AppCurrency, parseCurrency } from "@/lib/money";
-import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useI18n, type MessagePath } from "@/components/i18n-provider";
-import { notifyNewListing } from "@/lib/new-listing-events";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import { composeAddress } from "@/lib/address";
+import { authClient } from "@/lib/auth-client";
+import { reverseGeocode } from "@/lib/browser-geolocation";
+import { CATEGORIES } from "@/lib/categories";
+import { fetchJson } from "@/lib/fetch-json";
+import { APP_CURRENCIES, parseCurrency, type AppCurrency } from "@/lib/money";
+import {
+    LOCAL_SOUNDTRACK_ID,
+    looksUnspecifiedMotions,
+    normalizeMotions,
+} from "@/lib/montage";
+import { notifyNewListing } from "@/lib/new-listing-events";
+import { PRESET_COLORS, PRESET_SIZES, colorHex } from "@/lib/product-options";
+import { isPublicUploadPath } from "@/lib/upload-url";
+import { useAppConfig } from "@/lib/use-app-config";
+import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import {
-  BookOpen,
-  Car,
-  Check,
-  Clapperboard,
-  ChevronDown,
-  ChevronRight,
-  Cpu,
-  Dumbbell,
-  Footprints,
-  Gamepad2,
-  Home,
-  Music2,
-  PackagePlus,
-  Palette,
-  Search,
-  Shirt,
-  Sparkles,
+    BookOpen,
+    Car,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Clapperboard,
+    Cpu,
+    Dumbbell,
+    Footprints,
+    Gamepad2,
+    Home,
+    Music2,
+    PackagePlus,
+    Palette,
+    Search,
+    Shirt,
+    Sparkles,
 } from "lucide-react";
-import { isPublicUploadPath } from "@/lib/upload-url";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
   Tech: Cpu,
@@ -169,8 +168,7 @@ function PublishInner() {
       const { data } = await fetchJson<{ shops?: Shop[] }>("/api/shops?mine=1");
       const list = data?.shops ?? [];
       setShops(list);
-      const selected =
-        list.find((s) => s.id === shopId) ?? list[0] ?? null;
+      const selected = list.find((s) => s.id === shopId) ?? list[0] ?? null;
       if (selected && selected.id !== shopId) setShopId(selected.id);
       if (selected?.currency) setCurrency(parseCurrency(selected.currency));
       if (selected) void applyShopLocation(selected);
@@ -321,7 +319,9 @@ function PublishInner() {
       toast.error("Choisissez une boutique");
       return;
     }
-    const sanitizedImages = [...new Set(images.map((u) => u.trim()).filter(Boolean))];
+    const sanitizedImages = [
+      ...new Set(images.map((u) => u.trim()).filter(Boolean)),
+    ];
     if (sanitizedImages.length === 0) {
       setLoading(false);
       toast.error("Ajoutez au moins une image");
@@ -763,8 +763,8 @@ function PublishInner() {
                   >
                     <span
                       className={cn(
-                        "grid size-10 place-items-center rounded-xl bg-gradient-to-br text-white shadow-sm",
-                        c.gradient,
+                        "grid size-10 place-items-center rounded-xl text-white",
+                        c.fill,
                       )}
                     >
                       <Icon className="size-5" strokeWidth={1.75} />
@@ -795,7 +795,7 @@ function PublishInner() {
                   "grid size-11 shrink-0 place-items-center rounded-xl",
                   colors.length > 0 || sizes.length > 0
                     ? "bg-primary/15 text-primary"
-                    : "bg-gradient-to-br from-rose-500/20 via-amber-400/15 to-sky-500/20 text-foreground",
+                    : "bg-muted text-foreground",
                 )}
               >
                 <Palette className="size-5" strokeWidth={1.75} />
@@ -805,7 +805,8 @@ function PublishInner() {
                   {t("publish.moreOptions")}
                   {colors.length + sizes.length > 0 ? (
                     <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
-                      {colors.length + sizes.length} {t("publish.optionsSelected")}
+                      {colors.length + sizes.length}{" "}
+                      {t("publish.optionsSelected")}
                     </span>
                   ) : null}
                 </span>
@@ -980,7 +981,11 @@ function PublishInner() {
             </div>
           </details>
           <div className="flex gap-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setStep(1)}>
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setStep(1)}
+            >
               Retour
             </Button>
             <Button

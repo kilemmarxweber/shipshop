@@ -11,6 +11,7 @@ export type ScrollAdClip = {
   enabled: boolean;
   /** 1 = passe en premier. */
   priority: number;
+  eventId?: string;
 };
 
 export type ScrollAdCampaign = {
@@ -42,7 +43,10 @@ export function isAllowedAdVideoUrl(url: string) {
   return /^https?:\/\//i.test(u);
 }
 
-export function parseScrollAdVideos(raw: unknown, fallbackDefault = true): ScrollAdClip[] {
+export function parseScrollAdVideos(
+  raw: unknown,
+  fallbackDefault = true,
+): ScrollAdClip[] {
   if (!Array.isArray(raw)) {
     return fallbackDefault
       ? [{ url: SCROLL_AD_DEFAULT_VIDEO, enabled: true, priority: 1 }]
@@ -61,16 +65,24 @@ export function parseScrollAdVideos(raw: unknown, fallbackDefault = true): Scrol
     const url = String((item as { url: unknown }).url).trim();
     if (!isAllowedAdVideoUrl(url)) continue;
     const rec = item as { enabled?: unknown; priority?: unknown };
+    const eventId =
+      typeof (item as { eventId?: unknown }).eventId === "string"
+        ? (item as { eventId: string }).eventId.trim()
+        : "";
     clips.push({
       url,
       enabled: rec.enabled !== false,
       priority: clampScrollAdPriority(rec.priority, clips.length + 1),
+      ...(eventId ? { eventId } : {}),
     });
   }
   return clips;
 }
 
-export function scrollAdPeriodActive(startsAt: string | null, endsAt: string | null) {
+export function scrollAdPeriodActive(
+  startsAt: string | null,
+  endsAt: string | null,
+) {
   const now = Date.now();
   if (startsAt) {
     const start = Date.parse(startsAt);

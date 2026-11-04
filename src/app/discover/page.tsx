@@ -1,66 +1,67 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { mediaCoverUrl } from "@/lib/media";
-import type { LucideIcon } from "lucide-react";
+import { BuyProductSheet } from "@/components/buy-product-sheet";
+import { FeedLoadSentinel } from "@/components/feed-load-trigger";
+import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
+import { ChallengeCard } from "@/components/growth/challenge-card";
+import { SellerMeta } from "@/components/growth/cover-image";
 import {
-  BookOpen,
-  Car,
-  Cpu,
-  Dumbbell,
-  Gamepad2,
-  Home,
-  ChevronRight,
-  MapPin,
-  Play,
-  Search,
-  Shirt,
-  Sparkles,
-} from "lucide-react";
-import { CATEGORIES, type CategoryId } from "@/lib/categories";
-import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
-import { useAppConfig } from "@/lib/use-app-config";
-import { formatMoney, cn } from "@/lib/utils";
-import { ProductPriceTag } from "@/components/product-price-tag";
+    GrowthFeedFormats,
+    highlightAudioKey,
+} from "@/components/growth/feed-formats";
+import { HScroll } from "@/components/h-scroll";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
-import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
-import {
-  DEFAULT_VIDEO_SOUND,
-  VideoSoundButton,
-  productHasVideo,
-  type VideoSoundState,
-} from "@/components/video-sound-button";
-import { BuyProductSheet } from "@/components/buy-product-sheet";
+import { ProductPriceTag } from "@/components/product-price-tag";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FeedLoadSentinel } from "@/components/feed-load-trigger";
-import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
 import {
-  GrowthFeedFormats,
-  highlightAudioKey,
-} from "@/components/growth/feed-formats";
-import { ChallengeCard } from "@/components/growth/challenge-card";
-import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
-import { usePaginatedList } from "@/lib/use-paginated-list";
-import { firstVisualUrl } from "@/lib/growth/challenge-look";
-import { SellerMeta } from "@/components/growth/cover-image";
-import { HScroll } from "@/components/h-scroll";
-import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+    DEFAULT_VIDEO_SOUND,
+    VideoSoundButton,
+    productHasVideo,
+    type VideoSoundState,
+} from "@/components/video-sound-button";
+import { CATEGORIES, type CategoryId } from "@/lib/categories";
 import {
-  getPinnedFeedAudioId,
-  requestFeedAudioFocus,
-  resetFeedAudioFocus,
-  unpinFeedAudio,
-  useFeedAudioFocus,
-  useResumeFeedSoundWhenVisible,
+    getPinnedFeedAudioId,
+    requestFeedAudioFocus,
+    resetFeedAudioFocus,
+    unpinFeedAudio,
+    useFeedAudioFocus,
+    useResumeFeedSoundWhenVisible,
 } from "@/lib/feed-audio-focus";
+import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+import { fetchJson } from "@/lib/fetch-json";
+import { firstVisualUrl } from "@/lib/growth/challenge-look";
+import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
+import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
+import { mediaCoverUrl } from "@/lib/media";
 import {
-  disableFeedSound,
-  enableFeedSound,
-  playFirstVisibleFeedSound,
+    disableFeedSound,
+    enableFeedSound,
+    playFirstVisibleFeedSound,
 } from "@/lib/try-play-media";
+import { useAppConfig } from "@/lib/use-app-config";
+import { usePaginatedList } from "@/lib/use-paginated-list";
+import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
+import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
+import {
+    BookOpen,
+    Car,
+    ChevronRight,
+    Cpu,
+    Dumbbell,
+    Gamepad2,
+    Home,
+    MapPin,
+    Play,
+    Search,
+    Shirt,
+    Sparkles,
+} from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Product = {
   id: string;
@@ -71,6 +72,7 @@ type Product = {
   promoTier?: string | null;
   currency?: string;
   quantity?: number;
+  status?: string;
   soldCount?: number;
   images: string[];
   imageMotions?: string[];
@@ -125,6 +127,14 @@ function cardMediaUrls(product: Product, max = 8) {
 export default function DiscoverPage() {
   const { t, locale } = useI18n();
   const appConfig = useAppConfig();
+  const [liveEvents, setLiveEvents] = useState<
+    {
+      id: string;
+      title: string;
+      organizerName: string;
+      imageUrl: string | null;
+    }[]
+  >([]);
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -148,6 +158,17 @@ export default function DiscoverPage() {
     return () => clearTimeout(timer);
   }, [q]);
 
+  useEffect(() => {
+    void fetchJson<{
+      events?: {
+        id: string;
+        title: string;
+        organizerName: string;
+        imageUrl: string | null;
+      }[];
+    }>("/api/events").then(({ data }) => setLiveEvents(data?.events ?? []));
+  }, []);
+
   const feed = usePaginatedList<Product>({
     prefetchRemaining: 4,
     resetGroup: `discover:${category ?? ""}:${debouncedQ}`,
@@ -165,7 +186,10 @@ export default function DiscoverPage() {
     },
     extract: (json) => {
       const data = json as { products?: Product[]; nextCursor?: string | null };
-      return { items: data.products ?? [], nextCursor: data.nextCursor ?? null };
+      return {
+        items: data.products ?? [],
+        nextCursor: data.nextCursor ?? null,
+      };
     },
   });
 
@@ -185,7 +209,10 @@ export default function DiscoverPage() {
     },
     extract: (json) => {
       const data = json as { products?: Product[]; nextCursor?: string | null };
-      return { items: data.products ?? [], nextCursor: data.nextCursor ?? null };
+      return {
+        items: data.products ?? [],
+        nextCursor: data.nextCursor ?? null,
+      };
     },
   });
 
@@ -203,23 +230,36 @@ export default function DiscoverPage() {
   }, [products]);
   const featuredEntries: CardEntry[] = products
     .slice(0, 12)
-    .map((product, index) => ({ key: `featured:${product.id}:${index}`, product }));
+    .map((product, index) => ({
+      key: `featured:${product.id}:${index}`,
+      product,
+    }));
   const videoEntries: CardEntry[] = products
     .filter((p) => hasAudio(p))
     .slice(0, 12)
-    .map((product, index) => ({ key: `video:${product.id}:${index}`, product }));
+    .map((product, index) => ({
+      key: `video:${product.id}:${index}`,
+      product,
+    }));
   const budgetEntries: CardEntry[] = [...products]
     .sort((a, b) => a.priceCents - b.priceCents)
     .slice(0, 12)
-    .map((product, index) => ({ key: `budget:${product.id}:${index}`, product }));
+    .map((product, index) => ({
+      key: `budget:${product.id}:${index}`,
+      product,
+    }));
   const dealsEntries: CardEntry[] = dealsFeed.items
     .slice(0, 12)
-    .map((product, index) => ({ key: `deals:${product.id}:${index}`, product }));
+    .map((product, index) => ({
+      key: `deals:${product.id}:${index}`,
+      product,
+    }));
   const resultEntries: CardEntry[] = products.map((product, index) => ({
     key: `results:${product.id}:${index}`,
     product,
   }));
-  const { busyId, joinChallenge, placeChallenges, surface } = useGrowthSurface();
+  const { busyId, joinChallenge, placeChallenges, surface } =
+    useGrowthSurface();
   const momentHighlight = surface?.highlights?.find(
     (item, index) => item.hasVideo && index === 0,
   );
@@ -425,6 +465,36 @@ export default function DiscoverPage() {
         />
       </div>
 
+      {liveEvents.length ? (
+        <section className="mb-6">
+          <h2 className="mb-3.5 font-heading text-[1.05rem] font-bold tracking-tight">
+            {t("tickets.events")}
+          </h2>
+          <HScroll className="gap-2.5">
+            {liveEvents.map((event) => (
+              <Link
+                key={event.id}
+                href={`/events/${event.id}`}
+                className="w-40 shrink-0 rounded-2xl border border-border bg-surface p-2 no-underline"
+              >
+                <div
+                  className="mb-2 aspect-[16/10] rounded-xl bg-muted bg-cover bg-center"
+                  style={
+                    event.imageUrl
+                      ? { backgroundImage: `url(${event.imageUrl})` }
+                      : undefined
+                  }
+                />
+                <p className="truncate text-sm font-semibold">{event.title}</p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {event.organizerName}
+                </p>
+              </Link>
+            ))}
+          </HScroll>
+        </section>
+      ) : null}
+
       <section className="mb-6">
         <h2 className="mb-3.5 font-heading text-[1.05rem] font-bold tracking-tight">
           {t("discover.categoriesHeading")}
@@ -449,14 +519,17 @@ export default function DiscoverPage() {
               >
                 <span
                   className={cn(
-                    "grid size-12 place-items-center rounded-full bg-gradient-to-br text-white shadow-[0_8px_20px_rgba(0,0,0,0.28)] transition duration-200 sm:size-14",
-                    c.gradient,
+                    "grid size-12 place-items-center rounded-full text-white transition duration-200 sm:size-14",
+                    c.fill,
                     selected
-                      ? "scale-[1.04] ring-2 ring-white/90 ring-offset-2 ring-offset-background"
-                      : "opacity-95 hover:scale-[1.03]",
+                      ? "ring-2 ring-white ring-offset-2 ring-offset-background"
+                      : "opacity-90",
                   )}
                 >
-                  <Icon className="size-5 sm:size-[1.35rem]" strokeWidth={1.75} />
+                  <Icon
+                    className="size-5 sm:size-[1.35rem]"
+                    strokeWidth={1.75}
+                  />
                 </span>
                 <span
                   className={cn(
@@ -772,7 +845,9 @@ export default function DiscoverPage() {
                 audioKey={audio ? cardKey : undefined}
                 forcePlay={focused}
                 loop={userPinned === cardKey}
-                onActivateSound={audio ? () => onTileActivate(cardKey) : undefined}
+                onActivateSound={
+                  audio ? () => onTileActivate(cardKey) : undefined
+                }
                 onPlaybackEnded={
                   p.soundtrack?.audioUrl ? undefined : () => playNext(cardKey)
                 }
@@ -786,6 +861,11 @@ export default function DiscoverPage() {
                   loop={userPinned === cardKey}
                   onCycleEnd={() => playNext(cardKey)}
                 />
+              ) : null}
+              {p.status === "SOLD" || (p.quantity ?? 1) <= 0 ? (
+                <div className="absolute top-3 left-3 z-20 rounded-md bg-red-600/90 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white sm:top-2 sm:left-2">
+                  Rupture · plus en stock
+                </div>
               ) : null}
               {audio ? (
                 <div className="absolute top-3 right-3 z-20 sm:top-2 sm:right-2">
@@ -842,14 +922,20 @@ export default function DiscoverPage() {
                         promoPercent={p.promoPercent}
                       />
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => setBuyProduct(p)}
-                      className="h-9 cursor-pointer rounded-full px-4 text-[12px] font-bold sm:h-7 sm:px-3 sm:text-[10px]"
-                    >
-                      {t("buy.cta")}
-                    </Button>
+                    {p.status === "SOLD" || (p.quantity ?? 1) <= 0 ? (
+                      <span className="rounded-full bg-white/15 px-3 py-2 text-[11px] font-bold text-white/80">
+                        Épuisé
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setBuyProduct(p)}
+                        className="h-9 cursor-pointer rounded-full px-4 text-[12px] font-bold sm:h-7 sm:px-3 sm:text-[10px]"
+                      >
+                        {t("buy.cta")}
+                      </Button>
+                    )}
                   </div>
                 ) : null}
               </div>

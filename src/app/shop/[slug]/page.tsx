@@ -1,66 +1,65 @@
 "use client";
 
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Archive,
-  Heart,
-  Link2,
-  MapPin,
-  MessageCircle,
-  PackagePlus,
-  Pencil,
-  Phone,
-  Search,
-  Share2,
-  Store,
-  Trash2,
-} from "lucide-react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { CATEGORIES } from "@/lib/categories";
-import { fetchJson } from "@/lib/fetch-json";
-import { useAppConfig } from "@/lib/use-app-config";
-import { uploadCompressedMedia } from "@/lib/compress-media";
-import { colorHex } from "@/lib/product-options";
-import { compactCount } from "@/lib/growth/challenge-look";
-import { formatMoney, cn } from "@/lib/utils";
-import { ProductPriceTag } from "@/components/product-price-tag";
 import { usePageBack } from "@/components/back-nav-context";
-import { useFeedOrientation } from "@/hooks/use-feed-orientation";
-import { useI18n, type MessagePath } from "@/components/i18n-provider";
-import { FollowShopButton } from "@/components/follow-shop-button";
+import { BuyProductSheet } from "@/components/buy-product-sheet";
+import { FeedBuyCard } from "@/components/feed-buy-card";
+import { matchOpenLive } from "@/components/feed-live-badge";
 import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
+import { FollowShopButton } from "@/components/follow-shop-button";
+import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { ProductCommentsSheet } from "@/components/product-comments-sheet";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
-import {
-  DEFAULT_VIDEO_SOUND,
-  VideoSoundButton,
-  productHasVideo,
-  type VideoSoundState,
-} from "@/components/video-sound-button";
-import {
-  requestFeedAudioFocus,
-  resetFeedAudioFocus,
-  unpinFeedAudio,
-  useFeedAudioFocus,
-  useResumeFeedSoundWhenVisible,
-} from "@/lib/feed-audio-focus";
-import {
-  disableFeedSound,
-  enableFeedSound,
-} from "@/lib/try-play-media";
-import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
-import { BuyProductSheet } from "@/components/buy-product-sheet";
-import { MediaThumb } from "@/components/media-thumb";
-import { useConfirmDialog } from "@/components/use-confirm-dialog";
+import { ShopBrand, ShopLiveAvatar } from "@/components/shop-brand";
+import { ShopHoursNotice } from "@/components/shop-hours-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
+import {
+    DEFAULT_VIDEO_SOUND,
+    VideoSoundButton,
+    productHasVideo,
+    type VideoSoundState,
+} from "@/components/video-sound-button";
+import { useFeedOrientation } from "@/hooks/use-feed-orientation";
+import { authClient } from "@/lib/auth-client";
+import { CATEGORIES } from "@/lib/categories";
+import { uploadCompressedMedia } from "@/lib/compress-media";
+import {
+    requestFeedAudioFocus,
+    resetFeedAudioFocus,
+    unpinFeedAudio,
+    useFeedAudioFocus,
+    useResumeFeedSoundWhenVisible,
+} from "@/lib/feed-audio-focus";
+import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
+import { fetchJson } from "@/lib/fetch-json";
+import { compactCount } from "@/lib/growth/challenge-look";
+import { useOpenLives } from "@/lib/growth/use-open-lives";
+import { colorHex } from "@/lib/product-options";
 import type { ShopHoursFields } from "@/lib/shop-hours";
+import { disableFeedSound, enableFeedSound } from "@/lib/try-play-media";
+import { useAppConfig } from "@/lib/use-app-config";
+import { cn, formatMoney } from "@/lib/utils";
+import {
+    Archive,
+    Heart,
+    Link2,
+    MapPin,
+    MessageCircle,
+    PackagePlus,
+    Pencil,
+    Phone,
+    Search,
+    Share2,
+    Store,
+    Trash2,
+} from "lucide-react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 type ShopProfile = {
   id: string;
@@ -76,7 +75,12 @@ type ShopProfile = {
   addressHint: string;
   contactPhone: string | null;
   contactName: string | null;
-  owner: { id: string; name: string; phone: string | null; image: string | null } | null;
+  owner: {
+    id: string;
+    name: string;
+    phone: string | null;
+    image: string | null;
+  } | null;
   followedByMe?: boolean;
   followersCount?: number;
   canManage?: boolean;
@@ -118,6 +122,7 @@ function ShopInner() {
   const { t, locale } = useI18n();
   const appConfig = useAppConfig();
   const { data: session } = authClient.useSession();
+  const openLives = useOpenLives();
   usePageBack({ fallbackHref: "/" });
   useFeedOrientation();
   const [shop, setShop] = useState<ShopProfile | null>(null);
@@ -261,9 +266,7 @@ function ShopInner() {
       label: CATEGORIES.find((x) => x.id === c.id)
         ? t(`categories.${c.id}` as MessagePath)
         : c.id,
-      gradient:
-        CATEGORIES.find((x) => x.id === c.id)?.gradient ??
-        "from-slate-500 to-slate-700",
+      gradient: CATEGORIES.find((x) => x.id === c.id)?.fill ?? "bg-[#636366]",
       known: known.has(c.id),
     }));
   }, [shop, t]);
@@ -428,42 +431,52 @@ function ShopInner() {
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${shop.lat},${shop.lng}`;
   const refCode = shop.slug.toUpperCase().slice(0, 12);
+  const shopLive = matchOpenLive(openLives, {
+    ownerUserId: shop.owner?.id,
+  });
 
   return (
     <div className="feed-reel-root flex h-auto min-h-0 flex-col overflow-visible">
       {/* En-tête boutique */}
       <header className="shrink-0 border-b border-border bg-background/95 px-4 pb-3 pt-1 backdrop-blur">
         <div className="flex items-start gap-3">
-          <label
-            className={cn(
-              "relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary to-violet-600 text-xl font-bold text-white",
-              isOwnShop && "cursor-pointer",
-            )}
-          >
-            {shop.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={shop.logoUrl}
-                alt=""
-                className="size-full object-cover"
+          {shopLive && !isOwnShop ? (
+            <Link href={`/live/${shopLive.id}`} className="shrink-0">
+              <ShopLiveAvatar
+                name={shop.name}
+                logoUrl={shop.logoUrl}
+                live
+                className="size-14 rounded-2xl text-xl ring-0"
               />
-            ) : (
-              shop.name.slice(0, 1).toUpperCase()
-            )}
-            {isOwnShop && (
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                disabled={logoBusy}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (file) void uploadLogo(file);
-                }}
+            </Link>
+          ) : (
+            <label
+              className={cn(
+                "relative grid size-14 shrink-0 cursor-default place-items-center",
+                isOwnShop && "cursor-pointer",
+              )}
+            >
+              <ShopLiveAvatar
+                name={shop.name}
+                logoUrl={shop.logoUrl}
+                live={Boolean(shopLive)}
+                className="size-14 rounded-2xl text-xl ring-0"
               />
-            )}
-          </label>
+              {isOwnShop && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={logoBusy}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void uploadLogo(file);
+                  }}
+                />
+              )}
+            </label>
+          )}
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-lg font-bold">
               <a
@@ -609,7 +622,8 @@ function ShopInner() {
               {shop.addressHint}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              {t("shop.coordinates")} · {shop.lat.toFixed(5)}, {shop.lng.toFixed(5)}
+              {t("shop.coordinates")} · {shop.lat.toFixed(5)},{" "}
+              {shop.lng.toFixed(5)}
             </p>
             <a
               href={mapsUrl}
@@ -682,227 +696,230 @@ function ShopInner() {
           className="feed-snap feed-product-list h-auto min-h-0 flex-none overflow-visible overscroll-y-auto"
           onScroll={() => unpinFeedAudio()}
         >
-          {products.map((p) => (
-            <article
-              key={p.id}
-              data-audio-key={p.id}
-              {...(!soundFor(p.id).muted ? { "data-feed-sound-on": "1" } : {})}
-              className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden"
-            >
-              <ProductImageCarousel
-                images={p.images}
-                overlay
-                className="absolute inset-0"
-                muted={mediaSound(p.id).muted}
-                volume={mediaSound(p.id).volume}
-                hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
-                clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
-                motions={p.imageMotions}
-                audioKey={
-                  productHasVideo(p.images) || p.soundtrack?.audioUrl
-                    ? p.id
-                    : undefined
-                }
-                onActivateSound={
-                  productHasVideo(p.images) || p.soundtrack?.audioUrl
-                    ? () => activateSound(p.id)
-                    : undefined
-                }
-                onDoubleLike={() => {
-                  if (p.likedByMe) return;
-                  void toggleLike(p);
-                }}
-              />
-              {p.soundtrack?.audioUrl ? (
-                <FeedSoundtrackPlayer
-                  audioUrl={p.soundtrack.audioUrl}
-                  startMs={p.soundtrackStartMs}
-                  sound={mediaSound(p.id)}
-                  active={audioFocusId === p.id}
-                />
-              ) : null}
-
-              <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
-                <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
-                  {p.category}
-                </span>
-              </div>
-
-              <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
-                {isOwnShop && (
-                  <>
-                    <Link
-                      href={`/product/${p.id}`}
-                      className="grid cursor-pointer place-items-center"
-                      title={t("product.edit")}
-                      aria-label={t("product.edit")}
-                    >
-                      <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
-                        <Pencil className="size-5 text-white" />
-                      </span>
-                    </Link>
-                    <button
-                      type="button"
-                      disabled={manageBusyId === p.id}
-                      onClick={() => archiveProduct(p)}
-                      className="grid cursor-pointer place-items-center disabled:opacity-50"
-                      title={t("product.archive")}
-                      aria-label={t("product.archive")}
-                    >
-                      <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
-                        <Archive className="size-5 text-white" />
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={manageBusyId === p.id}
-                      onClick={() => deleteProduct(p)}
-                      className="grid cursor-pointer place-items-center disabled:opacity-50"
-                      title={t("product.delete")}
-                      aria-label={t("product.delete")}
-                    >
-                      <span className="grid size-10 place-items-center rounded-full border border-destructive/40 bg-destructive/25 backdrop-blur transition hover:scale-105 active:scale-95">
-                        <Trash2 className="size-5 text-white" />
-                      </span>
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={() => toggleLike(p)}
-                  className="grid cursor-pointer place-items-center"
-                  aria-label={
-                    p.likesCount
-                      ? `${t("feed.like")} (${p.likesCount})`
-                      : t("feed.like")
-                  }
-                >
-                  <span
-                    className={cn(
-                      "grid size-10 place-items-center rounded-full border backdrop-blur transition hover:scale-105 active:scale-95",
-                      p.likedByMe
-                        ? "border-destructive/50 bg-destructive/25"
-                        : "border-white/15 bg-white/10",
-                    )}
-                  >
-                    <Heart
-                      className={cn(
-                        "size-5 text-white",
-                        p.likedByMe && "fill-destructive text-destructive",
-                      )}
-                    />
-                  </span>
-                  <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
-                    {compactCount(p.likesCount || 0, locale)}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCommentProductId(p.id)}
-                  className="grid cursor-pointer place-items-center"
-                  aria-label={t("feed.comments")}
-                >
-                  <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95">
-                    <MessageCircle className="size-5 text-white" />
-                  </span>
-                  <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
-                    {compactCount(p.commentsCount || 0, locale)}
-                  </span>
-                </button>
-                <ShareMenu
-                  title={p.title}
-                  productId={p.id}
-                  text={`${p.title} — ${formatMoney(p.priceCents, p.currency)}`}
-                  url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
-                  align="end"
-                  side="left"
-                  triggerClassName="grid cursor-pointer place-items-center border-0 bg-transparent p-0 text-white"
-                >
-                  <span
-                    className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95"
-                    aria-label={t("feed.share")}
-                  >
-                    <Share2 className="size-5" />
-                  </span>
-                </ShareMenu>
-                <VideoSoundButton
+          {products.map((p) => {
+            const live = matchOpenLive(openLives, {
+              productId: p.id,
+              ownerUserId: shop?.owner?.id ?? p.shop.ownerUserId,
+            });
+            return (
+              <article
+                key={p.id}
+                data-audio-key={p.id}
+                {...(!soundFor(p.id).muted
+                  ? { "data-feed-sound-on": "1" }
+                  : {})}
+                className="feed-snap-item relative flex h-full min-h-full w-full shrink-0 flex-col justify-end overflow-hidden"
+              >
+                <ProductImageCarousel
                   images={p.images}
+                  overlay
+                  className="absolute inset-0"
+                  muted={mediaSound(p.id).muted}
+                  volume={mediaSound(p.id).volume}
                   hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
-                  sound={soundFor(p.id)}
-                  onChange={(next) => {
-                    if (next.muted) {
-                      setShopAudioMuted(true);
-                      disableFeedSound();
+                  clipMs={p.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
+                  motions={p.imageMotions}
+                  audioKey={
+                    productHasVideo(p.images) || p.soundtrack?.audioUrl
+                      ? p.id
+                      : undefined
+                  }
+                  onActivateSound={
+                    productHasVideo(p.images) || p.soundtrack?.audioUrl
+                      ? () => activateSound(p.id)
+                      : undefined
+                  }
+                  onDoubleLike={() => {
+                    if (p.likedByMe) return;
+                    void toggleLike(p);
+                  }}
+                />
+                {p.soundtrack?.audioUrl ? (
+                  <FeedSoundtrackPlayer
+                    audioUrl={p.soundtrack.audioUrl}
+                    startMs={p.soundtrackStartMs}
+                    sound={mediaSound(p.id)}
+                    active={audioFocusId === p.id}
+                  />
+                ) : null}
+
+                <div className="absolute top-3 left-3 z-10 flex max-w-[70%] flex-col gap-1.5 sm:top-4 sm:left-4 sm:gap-2">
+                  <span className="w-fit rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
+                    {p.category}
+                  </span>
+                </div>
+
+                <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
+                  {isOwnShop && (
+                    <>
+                      <Link
+                        href={`/product/${p.id}`}
+                        className="grid cursor-pointer place-items-center"
+                        title={t("product.edit")}
+                        aria-label={t("product.edit")}
+                      >
+                        <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
+                          <Pencil className="size-5 text-white" />
+                        </span>
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={manageBusyId === p.id}
+                        onClick={() => archiveProduct(p)}
+                        className="grid cursor-pointer place-items-center disabled:opacity-50"
+                        title={t("product.archive")}
+                        aria-label={t("product.archive")}
+                      >
+                        <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95">
+                          <Archive className="size-5 text-white" />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={manageBusyId === p.id}
+                        onClick={() => deleteProduct(p)}
+                        className="grid cursor-pointer place-items-center disabled:opacity-50"
+                        title={t("product.delete")}
+                        aria-label={t("product.delete")}
+                      >
+                        <span className="grid size-10 place-items-center rounded-full border border-destructive/40 bg-destructive/25 backdrop-blur transition hover:scale-105 active:scale-95">
+                          <Trash2 className="size-5 text-white" />
+                        </span>
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleLike(p)}
+                    className="grid cursor-pointer place-items-center"
+                    aria-label={
+                      p.likesCount
+                        ? `${t("feed.like")} (${p.likesCount})`
+                        : t("feed.like")
+                    }
+                  >
+                    <span
+                      className={cn(
+                        "grid size-10 place-items-center rounded-full border backdrop-blur transition hover:scale-105 active:scale-95",
+                        p.likedByMe
+                          ? "border-destructive/50 bg-destructive/25"
+                          : "border-white/15 bg-white/10",
+                      )}
+                    >
+                      <Heart
+                        className={cn(
+                          "size-5 text-white",
+                          p.likedByMe && "fill-destructive text-destructive",
+                        )}
+                      />
+                    </span>
+                    <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+                      {compactCount(p.likesCount || 0, locale)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommentProductId(p.id)}
+                    className="grid cursor-pointer place-items-center"
+                    aria-label={t("feed.comments")}
+                  >
+                    <span className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur transition hover:scale-105 active:scale-95">
+                      <MessageCircle className="size-5 text-white" />
+                    </span>
+                    <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+                      {compactCount(p.commentsCount || 0, locale)}
+                    </span>
+                  </button>
+                  <ShareMenu
+                    title={p.title}
+                    productId={p.id}
+                    text={`${p.title} — ${formatMoney(p.priceCents, p.currency)}`}
+                    url={`${typeof window !== "undefined" ? window.location.origin : ""}/product/${p.id}`}
+                    align="end"
+                    side="left"
+                    triggerClassName="grid cursor-pointer place-items-center border-0 bg-transparent p-0 text-white"
+                  >
+                    <span
+                      className="grid size-10 place-items-center rounded-full border border-white/15 bg-white/10 backdrop-blur transition hover:scale-105 active:scale-95"
+                      aria-label={t("feed.share")}
+                    >
+                      <Share2 className="size-5" />
+                    </span>
+                  </ShareMenu>
+                  <VideoSoundButton
+                    images={p.images}
+                    hasSoundtrack={Boolean(p.soundtrack?.audioUrl)}
+                    sound={soundFor(p.id)}
+                    onChange={(next) => {
+                      if (next.muted) {
+                        setShopAudioMuted(true);
+                        disableFeedSound();
+                        setSoundById((prev) =>
+                          applyExclusiveVideoSound(prev, p.id, next),
+                        );
+                        return;
+                      }
+                      setShopAudioMuted(false);
+                      enableFeedSound(false);
+                      requestFeedAudioFocus(p.id);
                       setSoundById((prev) =>
                         applyExclusiveVideoSound(prev, p.id, next),
                       );
-                      return;
-                    }
-                    setShopAudioMuted(false);
-                    enableFeedSound(false);
-                    requestFeedAudioFocus(p.id);
-                    setSoundById((prev) =>
-                      applyExclusiveVideoSound(prev, p.id, next),
-                    );
-                  }}
-                />
-              </div>
-
-              <div className="feed-buy-pad relative z-10 mt-auto px-3 pt-3 pr-14 text-white sm:px-4 sm:pr-16">
-                {(p.colors.length > 0 || p.sizes.length > 0) && (
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    {p.colors.slice(0, 5).map((c) => (
-                      <span
-                        key={c}
-                        title={c}
-                        className="size-4 rounded-full border border-white/30"
-                        style={{ backgroundColor: colorHex(c) }}
-                      />
-                    ))}
-                    {p.sizes.slice(0, 4).map((s) => (
-                      <span
-                        key={s}
-                        className="rounded bg-black/40 px-1.5 py-0.5 text-[9px] font-semibold backdrop-blur"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {p.description && (
-                  <p className="mb-2.5 line-clamp-2 text-xs text-white/85 sm:mb-3">
-                    {p.description}
-                  </p>
-                )}
-                <div className="flex items-center gap-2.5 rounded-2xl border border-white/12 bg-black/45 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:gap-3 sm:p-2.5">
-                  <Link href={`/product/${p.id}`} className="contents">
-                    <MediaThumb
-                      images={p.images}
-                      className="size-11 shrink-0 rounded-xl ring-1 ring-white/10 sm:size-12"
-                    />
-                  </Link>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-white">
-                      {p.title}
-                    </p>
-                    <ProductPriceTag
-                      priceCents={p.priceCents}
-                      currency={p.currency}
-                      compareAtCents={p.compareAtCents}
-                      promoPercent={p.promoPercent}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setBuyProduct(p)}
-                    className="min-h-11 shrink-0 rounded-full bg-primary px-4 py-2 text-[11px] font-bold text-white"
-                  >
-                    {t("buy.cta")}
-                  </button>
+                    }}
+                  />
                 </div>
-              </div>
-            </article>
-          ))}
+
+                <div className="feed-buy-pad relative z-10 mt-auto px-3 pt-3 pr-14 text-white sm:px-4 sm:pr-16">
+                  {live ? (
+                    <div className="mb-2">
+                      <ShopBrand
+                        name={shop.name}
+                        slug={shop.slug}
+                        logoUrl={shop.logoUrl}
+                        liveId={live.id}
+                        showAt={false}
+                        className="min-w-0"
+                        nameClassName="text-sm text-white underline-offset-2 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  ) : null}
+                  {(p.colors.length > 0 || p.sizes.length > 0) && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      {p.colors.slice(0, 5).map((c) => (
+                        <span
+                          key={c}
+                          title={c}
+                          className="size-4 rounded-full border border-white/30"
+                          style={{ backgroundColor: colorHex(c) }}
+                        />
+                      ))}
+                      {p.sizes.slice(0, 4).map((s) => (
+                        <span
+                          key={s}
+                          className="rounded bg-black/40 px-1.5 py-0.5 text-[9px] font-semibold backdrop-blur"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {p.description && (
+                    <p className="mb-2.5 line-clamp-2 text-xs text-white/85 sm:mb-3">
+                      {p.description}
+                    </p>
+                  )}
+                  <FeedBuyCard
+                    product={p}
+                    onBuy={() => setBuyProduct(p)}
+                    buyLabel={t("buy.cta")}
+                    reviewsLabel={t("feed.reviews")}
+                    locale={locale}
+                  />
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
       <BuyProductSheet

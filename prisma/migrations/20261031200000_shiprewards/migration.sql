@@ -3,7 +3,11 @@ ALTER TYPE "WalletTxnType" ADD VALUE IF NOT EXISTS 'SHIPCASH_REWARD';
 ALTER TYPE "WalletTxnType" ADD VALUE IF NOT EXISTS 'SHIPCASH_CLAWBACK';
 
 -- CreateEnum
-CREATE TYPE "PromoStatus" AS ENUM ('ACTIVE', 'ENDED', 'CANCELLED', 'FLAGGED');
+DO $$ BEGIN
+  CREATE TYPE "PromoStatus" AS ENUM ('ACTIVE', 'ENDED', 'CANCELLED', 'FLAGGED');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AlterTable Product
 ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "compareAtCents" INTEGER;
@@ -81,10 +85,24 @@ CREATE TABLE IF NOT EXISTS "shop_reward_state" (
     CONSTRAINT "shop_reward_state_pkey" PRIMARY KEY ("shopId")
 );
 
-ALTER TABLE "product_promo" ADD CONSTRAINT "product_promo_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "product_promo" ADD CONSTRAINT "product_promo_productId_fkey" FOREIGN KEY ("productId") REFERENCES "product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "product_price_history" ADD CONSTRAINT "product_price_history_productId_fkey" FOREIGN KEY ("productId") REFERENCES "product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "product_price_history" ADD CONSTRAINT "product_price_history_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ship_point_ledger" ADD CONSTRAINT "ship_point_ledger_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ship_point_ledger" ADD CONSTRAINT "ship_point_ledger_promoId_fkey" FOREIGN KEY ("promoId") REFERENCES "product_promo"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "shop_reward_state" ADD CONSTRAINT "shop_reward_state_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "product_promo" ADD CONSTRAINT "product_promo_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "product_promo" ADD CONSTRAINT "product_promo_productId_fkey" FOREIGN KEY ("productId") REFERENCES "product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "product_price_history" ADD CONSTRAINT "product_price_history_productId_fkey" FOREIGN KEY ("productId") REFERENCES "product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "product_price_history" ADD CONSTRAINT "product_price_history_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "ship_point_ledger" ADD CONSTRAINT "ship_point_ledger_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "ship_point_ledger" ADD CONSTRAINT "ship_point_ledger_promoId_fkey" FOREIGN KEY ("promoId") REFERENCES "product_promo"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "shop_reward_state" ADD CONSTRAINT "shop_reward_state_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

@@ -1,10 +1,10 @@
 "use client";
 
+import type { LiveOverlay } from "@/lib/growth/live-overlays";
+import { cn, formatMoney } from "@/lib/utils";
+import { X } from "lucide-react";
 import Link from "next/link";
 import { useRef } from "react";
-import { X } from "lucide-react";
-import { cn, formatMoney } from "@/lib/utils";
-import type { LiveOverlay } from "@/lib/growth/live-overlays";
 
 type Props = {
   overlays: LiveOverlay[];
@@ -111,11 +111,15 @@ export function LiveStageOverlays({
       onClick={() => editable && onSelect(null)}
     >
       {overlays.map((o) => {
+        if (o.kind === "catalog") return null;
         const selected = editable && selectedId === o.id;
         const base = cn(
           "absolute -translate-x-1/2 -translate-y-1/2 touch-none select-none",
-          editable ? "pointer-events-auto cursor-grab active:cursor-grabbing" : "pointer-events-auto",
-          selected && "z-20 ring-2 ring-white/80 ring-offset-2 ring-offset-transparent",
+          editable
+            ? "pointer-events-auto cursor-grab active:cursor-grabbing"
+            : "pointer-events-auto",
+          selected &&
+            "z-20 ring-2 ring-white/80 ring-offset-2 ring-offset-transparent",
         );
         const style = {
           left: `${o.x}%`,

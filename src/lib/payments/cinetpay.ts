@@ -308,6 +308,47 @@ export async function checkCinetPayPayment(
   };
 }
 
+/** Envoie le retrait vers un numéro Mobile Money (numéro enregistré ou un autre). */
+export async function createCinetPayTransfer(input: {
+  transactionId: string;
+  amountCents: number;
+  currency: AppCurrency;
+  phone: string;
+  provider: RailProvider;
+  description: string;
+  notifyUrl: string;
+}) {
+  if (input.currency === "KW") {
+    throw new Error("CinetPay accepte CDF et USD. Le KW reste dans ShipShop.");
+  }
+  const major = Math.round(input.amountCents) / 100;
+  if (!Number.isFinite(major) || major <= 0) {
+    throw new Error("Montant de retrait invalide");
+  }
+  const config = cinetpayConfig();
+  const phone = cinetPayPhone(input.phone);
+  const body = {
+    currency: input.currency,
+    merchant_transaction_id: input.transactionId.slice(0, 30),
+    amount: major,
+    lang: "fr",
+    designation:
+      sanitizeCinetPayText(input.description, 255) || "Retrait ShipShop",
+    client_phone_number: phone,
+    phone_number: phone,
+    notify_url: input.notifyUrl,
+    payment_method: cinetPayMethod(input.provider),
+    channel: "PUSH",
+  };
+  const json = await cinetPayRequest(config, "POST", "/v1/transfer", body);
+  return {
+    code: String(json.code ?? ""),
+    status: stringField(json, "status"),
+    transactionId: stringField(json, "transaction_id"),
+    message: stringField(json, "message") || stringField(json, "description"),
+  };
+}
+
 export function cinetPayAccepted(check: CinetPayCheck) {
   return check.status === "SUCCESS" || check.code === "100";
 }

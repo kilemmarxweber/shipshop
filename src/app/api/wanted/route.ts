@@ -1,20 +1,21 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
 import { CATEGORIES } from "@/lib/categories";
 import {
-  decodeTimeIdCursor,
-  pageFromRows,
-  parseListLimit,
-  PUBLIC_PAGE_SIZE,
-  timeIdCursorWhere,
+    decodeTimeIdCursor,
+    pageFromRows,
+    parseListLimit,
+    PUBLIC_PAGE_SIZE,
+    timeIdCursorWhere,
 } from "@/lib/list-cursor";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import {
-  WANTED_BATCH_MAX,
-  WANTED_OPEN_LIMIT,
-  wantedExpiresAt,
+    WANTED_BATCH_MAX,
+    WANTED_OPEN_LIMIT,
+    wantedExpiresAt,
 } from "@/lib/wanted";
+import { reopenUnpaidWantedMatches } from "@/lib/wanted-timeout";
+import { NextResponse } from "next/server";
+import { z } from "zod";
 
 const categoryIds = CATEGORIES.map((c) => c.id) as [string, ...string[]];
 
@@ -57,6 +58,7 @@ const listSelect = {
   status: true,
   expiresAt: true,
   createdAt: true,
+  updatedAt: true,
   buyer: { select: { id: true, name: true, image: true } },
   _count: { select: { offers: true } },
 } as const;
@@ -75,6 +77,7 @@ export async function GET(req: Request) {
         data: { status: "EXPIRED" },
       }),
     );
+    await reopenUnpaidWantedMatches();
 
     if (mine) {
       if (!session) {
@@ -115,8 +118,25 @@ export async function GET(req: Request) {
       }),
     );
     const sliced = pageFromRows(fetched, limit);
+    let page = sliced.page;
+    if (session) {
+      const mine = await withDbRetry(() =>
+        prisma.wantedRequest.findMany({
+          where: {
+            buyerId: session.user.id,
+            status: "OPEN",
+            expiresAt: { gt: new Date() },
+          },
+          select: listSelect,
+          orderBy: { createdAt: "desc" },
+          take: WANTED_OPEN_LIMIT,
+        }),
+      );
+      const seen = new Set(page.map((row) => row.id));
+      page = [...mine.filter((row) => !seen.has(row.id)), ...page];
+    }
     return NextResponse.json({
-      requests: sliced.page,
+      requests: page,
       nextCursor: sliced.nextCursor,
     });
   } catch (error) {

@@ -248,6 +248,7 @@ export async function GET(req: Request) {
               select: {
                 likes: true,
                 comments: true,
+                shares: true,
                 orders: true,
               },
             },
@@ -284,6 +285,7 @@ export async function GET(req: Request) {
           ...rest,
           likesCount: _count.likes,
           commentsCount: _count.comments,
+          sharesCount: _count.shares,
           ordersCount: _count.orders,
           soldCount: soldMap.get(rest.id) ?? 0,
           canDelete: _count.orders === 0,
@@ -323,9 +325,16 @@ export async function GET(req: Request) {
       followingWhere = { OR: or };
     }
 
+    const searching = Boolean(q);
     const and: Record<string, unknown>[] = [];
     if (followingWhere) {
       and.push(followingWhere as Record<string, unknown>);
+      if (!searching) and.push({ quantity: { gt: 0 } });
+    } else if (searching) {
+      and.push({
+        status: { in: ["ACTIVE", "SOLD"] },
+        wantedRequestId: null,
+      });
     } else {
       and.push({
         status: (status ?? "ACTIVE") as
@@ -335,6 +344,9 @@ export async function GET(req: Request) {
           | "HIDDEN",
         wantedRequestId: null,
       });
+      if ((status ?? "ACTIVE") === "ACTIVE") {
+        and.push({ quantity: { gt: 0 } });
+      }
     }
     if (deals) {
       and.push({ promoTier: { in: ["FORTE", "FLASH"] } });
@@ -371,6 +383,7 @@ export async function GET(req: Request) {
             select: {
               likes: true,
               comments: true,
+              shares: true,
               orders: soldOrdersCount,
             },
           },
@@ -494,6 +507,7 @@ export async function GET(req: Request) {
         ...rest,
         likesCount: _count.likes,
         commentsCount: _count.comments,
+        sharesCount: _count.shares,
         soldCount: _count.orders,
         viewsCount: viewsMap.get(p.id) ?? 0,
         likedByMe: likedIds.has(p.id),

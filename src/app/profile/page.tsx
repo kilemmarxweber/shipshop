@@ -1,49 +1,56 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { AppearanceSettings } from "@/components/appearance-settings";
+import { usePageBack } from "@/components/back-nav-context";
+import { EventTicketSettings } from "@/components/event-ticket-settings";
 import {
-  BadgeCheck,
-  Camera,
-  Trophy,
-  LogOut,
-  Pencil,
-  Phone,
-  ShoppingCart,
-  Store,
-  Trash2,
-  Wallet,
-} from "lucide-react";
-import { toast } from "sonner";
+    AccountBadges,
+    type BadgeRow,
+} from "@/components/growth/account-badges";
+import { useI18n } from "@/components/i18n-provider";
+import { GoLiveCard } from "@/components/live/go-live-card";
+import { PageLoader } from "@/components/page-loader";
+import { PhoneField } from "@/components/phone-field";
+import { ScrollAdSettings } from "@/components/scroll-ad-settings";
+import { ShopHoursSettings } from "@/components/shop-hours-settings";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { isPhoneBackedEmail } from "@/lib/auth-register";
 import {
-  mediaUploadToastMessage,
-  uploadCompressedMedia,
+    mediaUploadToastMessage,
+    uploadCompressedMedia,
 } from "@/lib/compress-media";
 import { fetchJson } from "@/lib/fetch-json";
 import {
-  parseCurrency,
-  walletCents,
-  type AppCurrency,
-  type WalletBalances,
+    parseCurrency,
+    walletCents,
+    type AppCurrency,
+    type WalletBalances,
 } from "@/lib/money";
-import { WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
-import { formatMoney, cn } from "@/lib/utils";
-import { notifyWalletUpdated } from "@/lib/wallet-events";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { AppearanceSettings } from "@/components/appearance-settings";
-import { ShopHoursSettings } from "@/components/shop-hours-settings";
-import { ScrollAdSettings } from "@/components/scroll-ad-settings";
-import { usePageBack } from "@/components/back-nav-context";
-import { useI18n } from "@/components/i18n-provider";
-import { isPhoneBackedEmail } from "@/lib/auth-register";
-import { isValidContactPhone } from "@/lib/phone";
+import {
+    ORDER_UPDATED_EVENT,
+    ORDER_UPDATED_STORAGE_KEY,
+} from "@/lib/order-events";
 import { orderStatusLabel } from "@/lib/order-status-label";
-import { PageLoader } from "@/components/page-loader";
-import { PhoneField } from "@/components/phone-field";
-import { AccountBadges, type BadgeRow } from "@/components/growth/account-badges";
-import { GoLiveCard } from "@/components/live/go-live-card";
+import { isValidContactPhone } from "@/lib/phone";
+import { cn, formatMoney } from "@/lib/utils";
+import { notifyWalletUpdated, WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
+import {
+    BadgeCheck,
+    Camera,
+    LogOut,
+    Pencil,
+    Phone,
+    ShoppingCart,
+    Store,
+    Trash2,
+    Trophy,
+    Wallet,
+} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 type Order = {
   id: string;
@@ -114,7 +121,7 @@ export default function ProfilePage() {
     setPhoneDraft(user.phone ?? "");
   }
 
-  async function refreshCommerce() {
+  async function refreshCommerce(opts?: { quiet?: boolean }) {
     const [ordersRes, walletRes, cartRes] = await Promise.all([
       fetchJson<{ orders?: Order[]; error?: string }>(
         `/api/orders?period=${period}&status=${tab}`,
@@ -122,8 +129,10 @@ export default function ProfilePage() {
       fetchJson<{ wallet?: WalletBalances }>("/api/wallet"),
       fetchJson<{ count?: number }>("/api/cart"),
     ]);
-    if (!ordersRes.res.ok) {
-      toast.error(ordersRes.data?.error ?? "Impossible de charger tes commandes");
+    if (!ordersRes.res.ok && !opts?.quiet) {
+      toast.error(
+        ordersRes.data?.error ?? "Impossible de charger tes commandes",
+      );
     }
     const list = ordersRes.data?.orders ?? [];
     list.sort((a, b) =>
@@ -172,6 +181,32 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!userId) return;
     void refreshCommerce().catch(() => undefined);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (tab !== "active") return;
+      void refreshCommerce({ quiet: true }).catch(() => undefined);
+    }, 5000);
+    const onShow = () => {
+      if (document.visibilityState === "visible") {
+        void refreshCommerce({ quiet: true }).catch(() => undefined);
+      }
+    };
+    const onOrders = () => {
+      void refreshCommerce({ quiet: true }).catch(() => undefined);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== ORDER_UPDATED_STORAGE_KEY || !event.newValue) return;
+      onOrders();
+    };
+    document.addEventListener("visibilitychange", onShow);
+    window.addEventListener(ORDER_UPDATED_EVENT, onOrders);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener(ORDER_UPDATED_EVENT, onOrders);
+      window.removeEventListener("storage", onStorage);
+    };
   }, [userId, period, tab]);
 
   useEffect(() => {
@@ -343,10 +378,8 @@ export default function ProfilePage() {
             if (displayImage) setZoomOpen(true);
           }}
           className={cn(
-            "relative mx-auto mb-3 grid size-20 place-items-center overflow-hidden rounded-full border-2 border-border bg-gradient-to-br from-primary to-violet-600 font-heading text-2xl font-bold transition",
-            displayImage
-              ? "cursor-zoom-in hover:opacity-90"
-              : "cursor-default",
+            "relative mx-auto mb-3 grid size-20 place-items-center overflow-hidden rounded-full border-2 border-border bg-trust font-heading text-2xl font-bold text-white transition",
+            displayImage ? "cursor-zoom-in hover:opacity-90" : "cursor-default",
           )}
           aria-label={
             displayImage ? "Agrandir la photo de profil" : "Photo de profil"
@@ -354,11 +387,7 @@ export default function ProfilePage() {
         >
           {displayImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={displayImage}
-              alt=""
-              className="size-full object-cover"
-            />
+            <img src={displayImage} alt="" className="size-full object-cover" />
           ) : (
             displayName.slice(0, 1).toUpperCase()
           )}
@@ -408,7 +437,7 @@ export default function ProfilePage() {
             onChange={(e) => onAvatarPick(e.target.files?.[0])}
           />
           <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-2 p-2.5">
-            <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-violet-600 text-sm font-bold">
+            <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-trust text-sm font-bold text-white">
               {displayImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -432,7 +461,10 @@ export default function ProfilePage() {
               size="sm"
               disabled={uploadingAvatar}
               className="h-9 shrink-0 cursor-pointer gap-1.5"
-              onClick={() => fileRef.current?.click()}
+              onClick={() => {
+                if (fileRef.current) fileRef.current.value = "";
+                fileRef.current?.click();
+              }}
             >
               <Camera className="size-3.5" />
               {uploadingAvatar ? "…" : "Parcourir"}
@@ -515,9 +547,7 @@ export default function ProfilePage() {
             </div>
             <div className="min-w-0 flex-1 text-xs">
               <p className="font-bold text-foreground">Missions & classement</p>
-              <p className="text-muted-foreground">
-                Badges, défis et ranking
-              </p>
+              <p className="text-muted-foreground">Badges, défis et ranking</p>
             </div>
           </div>
         </Link>
@@ -574,7 +604,9 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <>
-                  <p className="font-bold text-foreground">Devenir vendeur pro</p>
+                  <p className="font-bold text-foreground">
+                    Devenir vendeur pro
+                  </p>
                   <p className="text-muted-foreground">Badge PRO</p>
                 </>
               )}
@@ -619,6 +651,16 @@ export default function ProfilePage() {
             {t("wallet.title")}
           </p>
           <p className="text-[10px] text-trust">{t("wallet.heldChip")}</p>
+        </Link>
+        <Link
+          href="/tickets"
+          className="rounded-2xl border border-border bg-surface p-3"
+        >
+          <Trophy className="mb-1 size-4 text-primary" />
+          <p className="font-heading text-lg font-extrabold">QR</p>
+          <p className="text-[10px] tracking-wide text-muted-foreground uppercase">
+            {t("tickets.myTickets")}
+          </p>
         </Link>
         <Link
           href="/cart"
@@ -791,47 +833,51 @@ export default function ProfilePage() {
         </div>
       ) : (
         <>
-        <div className="mt-6 flex flex-col gap-2">
-          {(
-            [
-              ["/shops/products", "Mes produits (prix, stock…)"],
-              ["/shops/orders", "Commandes & livreurs"],
-              ["/community", "Communauté & badges"],
-              ["/creator", "Studio créateur"],
-              ["/live", "Voir les lives en cours"],
-              ["/shops/reports", "Rapports & statistiques"],
-              ["/courier", "Espace livreur"],
-              ["/shops/contacts", "Contacts (acheteurs, abonnés, invités)"],
-              ...(isOwner
-                ? ([
-                    ["/shops/messaging", "Messages / Config Klambo / SMS / Infobip"],
-                    ["/shops/admin/products", "Modération produits (tout)"],
-                    ["/shops/admin/vendors", "Vendeurs & clients"],
-                    ["/shops/admin/ledger", "Ledger paiements"],
-                    ["/shops/admin/attention", "KPI attention"],
-                    ["/shops/admin/campaigns", "Stories partenaires"],
-                    ["/shops/admin/challenges", "Challenges"],
-                    ["/shops/admin/expansion", "Playbook expansion"],
-                    ["/shops/admin/content", "Contenu (Système / Sanity)"],
-                    ["/shops/kyc", "Revue KYC"],
-                    ["/shops/admin/moderation", "Modération NSFW"],
-                  ] as const)
-                : []),
-              ["/shops", isOwner ? "Toutes les boutiques" : "Mes boutiques"],
-              ["/publish", "Publier un produit"],
-              ["/onboarding", "Créer une boutique"],
-            ] as const
-          ).map(([href, label]) => (
-            <Link
-              key={href}
-              href={href}
-              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-colors duration-150 hover:border-primary/40 hover:bg-muted/60 hover:text-foreground active:bg-muted"
-            >
-              {label}
-            </Link>
-          ))}
-        </div>
-        {isOwner ? <ScrollAdSettings /> : null}
+          <div className="mt-6 flex flex-col gap-2">
+            {(
+              [
+                ["/shops/products", "Mes produits (prix, stock…)"],
+                ["/shops/orders", "Commandes & livreurs"],
+                ["/community", "Communauté & badges"],
+                ["/creator", "Studio créateur"],
+                ["/live", "Voir les lives en cours"],
+                ["/shops/reports", "Rapports & statistiques"],
+                ["/courier", "Espace livreur"],
+                ["/shops/contacts", "Contacts (acheteurs, abonnés, invités)"],
+                ...(isOwner
+                  ? ([
+                      [
+                        "/shops/messaging",
+                        "Messages / Config Klambo / SMS / Infobip",
+                      ],
+                      ["/shops/admin/products", "Modération produits (tout)"],
+                      ["/shops/admin/vendors", "Vendeurs & clients"],
+                      ["/shops/admin/ledger", "Ledger paiements"],
+                      ["/shops/admin/attention", "KPI attention"],
+                      ["/shops/admin/campaigns", "Stories partenaires"],
+                      ["/shops/admin/challenges", "Challenges"],
+                      ["/shops/admin/expansion", "Playbook expansion"],
+                      ["/shops/admin/content", "Contenu (Système / Sanity)"],
+                      ["/shops/kyc", "Revue KYC"],
+                      ["/shops/admin/moderation", "Modération NSFW"],
+                    ] as const)
+                  : []),
+                ["/shops", isOwner ? "Toutes les boutiques" : "Mes boutiques"],
+                ["/publish", "Publier un produit"],
+                ["/onboarding", "Créer une boutique"],
+              ] as const
+            ).map(([href, label]) => (
+              <Link
+                key={href}
+                href={href}
+                className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-colors duration-150 hover:border-primary/40 hover:bg-muted/60 hover:text-foreground active:bg-muted"
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+          {isOwner ? <ScrollAdSettings /> : null}
+          {isOwner ? <EventTicketSettings /> : null}
         </>
       )}
 

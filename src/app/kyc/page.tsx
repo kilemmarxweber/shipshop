@@ -1,19 +1,19 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { BadgeCheck, Camera, ImageIcon } from "lucide-react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
 import { usePageBack } from "@/components/back-nav-context";
 import { KycCamera } from "@/components/kyc-camera";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authClient } from "@/lib/auth-client";
 import { uploadCompressedMedia } from "@/lib/compress-media";
+import { fetchJson } from "@/lib/fetch-json";
 import { cn } from "@/lib/utils";
+import { BadgeCheck, Camera, ImageIcon } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 type Kyc = {
   id: string;
@@ -140,7 +140,9 @@ export default function KycPage() {
       },
     );
     if (!res.ok || !data?.kyc) {
-      toast.error(data?.error ?? "Upload enregistré, mais dossier non mis à jour");
+      toast.error(
+        data?.error ?? "Upload enregistré, mais dossier non mis à jour",
+      );
       return;
     }
     apply(data.kyc);
@@ -205,7 +207,9 @@ export default function KycPage() {
         <div className="mx-auto grid size-12 place-items-center rounded-full bg-amber-500/15 text-amber-400">
           <BadgeCheck className="size-6" />
         </div>
-        <h1 className="mt-4 font-heading text-lg font-bold">Dossier en revue</h1>
+        <h1 className="mt-4 font-heading text-lg font-bold">
+          Dossier en revue
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           L&apos;équipe Chip Shop examine vos documents. Vous serez notifié
           après décision.
@@ -226,7 +230,9 @@ export default function KycPage() {
         <div className="mx-auto grid size-12 place-items-center rounded-full bg-trust text-trust-foreground">
           <BadgeCheck className="size-6" />
         </div>
-        <h1 className="mt-4 font-heading text-lg font-bold">Vendeur pro vérifié</h1>
+        <h1 className="mt-4 font-heading text-lg font-bold">
+          Vendeur pro vérifié
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Votre badge PRO est actif sur votre profil.
         </p>
@@ -251,7 +257,9 @@ export default function KycPage() {
       {kyc?.status === "REJECTED" && kyc.rejectReason && (
         <div className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-3 text-sm">
           <p className="font-semibold text-destructive">Dossier refusé</p>
-          <p className="mt-1 text-xs text-muted-foreground">{kyc.rejectReason}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {kyc.rejectReason}
+          </p>
         </div>
       )}
 
@@ -487,7 +495,10 @@ function DocSlot({
               size="sm"
               disabled={uploading}
               className="h-8 cursor-pointer gap-1 px-2"
-              onClick={() => galleryRef.current?.click()}
+              onClick={() => {
+                if (galleryRef.current) galleryRef.current.value = "";
+                galleryRef.current?.click();
+              }}
             >
               <ImageIcon className="size-3.5" />
               {uploading ? "…" : "Parcourir"}

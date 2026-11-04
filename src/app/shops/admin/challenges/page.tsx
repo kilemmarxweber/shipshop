@@ -210,7 +210,7 @@ function ChallengeLivePreview({
             </span>
           ) : null}
           <div className="flex items-center gap-2 pt-0.5">
-            <span className="inline-flex h-8 flex-1 items-center justify-center rounded-full bg-gradient-to-r from-[#ff4f8b] via-[#ff7d86] to-[#ffb48c] text-[11px] font-semibold text-white">
+            <span className="inline-flex h-8 flex-1 items-center justify-center rounded-full bg-trust text-[11px] font-semibold text-white">
               Je participe
             </span>
           </div>

@@ -1,46 +1,50 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { Wallet } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
-import {
-  composePhone,
-  isValidContactPhone,
-  splitPhone,
-} from "@/lib/phone";
-import { formatMoney, cn } from "@/lib/utils";
-import {
-  APP_CURRENCIES,
-  type AppCurrency,
-  parseCurrency,
-  walletCents,
-} from "@/lib/money";
-import type { RailProvider } from "@/lib/payments/provider";
-import { CurrencyPicker } from "@/components/currency-picker";
 import { usePageBack } from "@/components/back-nav-context";
+import { CurrencyPicker } from "@/components/currency-picker";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
 import { PhoneField } from "@/components/phone-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authClient } from "@/lib/auth-client";
+import { fetchJson } from "@/lib/fetch-json";
 import {
-  clearPaymentIdempotencyKey,
-  fetchPaymentJson,
-  paymentIdempotencyKey,
+    APP_CURRENCIES,
+    parseCurrency,
+    walletCents,
+    type AppCurrency,
+} from "@/lib/money";
+import {
+    clearPaymentIdempotencyKey,
+    fetchPaymentJson,
+    paymentIdempotencyKey,
 } from "@/lib/payments/idempotency-client";
+import type { RailProvider } from "@/lib/payments/provider";
+import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
+import { cn, formatMoney } from "@/lib/utils";
 import { notifyWalletUpdated, WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
+import { Wallet } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 const PROVIDERS: {
   id: RailProvider;
   label: MessagePath;
   color: string;
 }[] = [
-  { id: "MPESA", label: "wallet.vodacom", color: "from-green-600 to-green-500" },
-  { id: "ORANGE", label: "wallet.orange", color: "from-orange-600 to-orange-400" },
+  {
+    id: "MPESA",
+    label: "wallet.vodacom",
+    color: "from-green-600 to-green-500",
+  },
+  {
+    id: "ORANGE",
+    label: "wallet.orange",
+    color: "from-orange-600 to-orange-400",
+  },
   { id: "AIRTEL", label: "wallet.airtel", color: "from-red-600 to-red-400" },
 ];
 
@@ -87,6 +91,9 @@ export default function WalletPage() {
     "BUYER" | "VENDOR" | "COURIER"
   >("BUYER");
   const [withdrawing, setWithdrawing] = useState(false);
+  const [payoutPhone, setPayoutPhone] = useState("");
+  const [payoutProvider, setPayoutProvider] = useState<RailProvider>("MPESA");
+  const [payoutEdited, setPayoutEdited] = useState(false);
   const [txns, setTxns] = useState<Txn[]>([]);
   const [contacts, setContacts] = useState<Record<RailProvider, string>>({
     MPESA: "",
@@ -112,18 +119,12 @@ export default function WalletPage() {
 
   const payIntent = useMemo(
     () =>
-      [
-        tab,
-        amount,
-        currency,
-        provider ?? "BAL",
-        picked?.id ?? "",
-      ].join("|"),
+      [tab, amount, currency, provider ?? "BAL", picked?.id ?? ""].join("|"),
     [tab, amount, currency, provider, picked?.id],
   );
 
   async function refresh() {
-    const res = await fetch("/api/wallet");
+    const res = await fetch("/api/wallet", { cache: "no-store" });
     if (!res.ok) return;
     const json = await res.json();
     const wallet = json.wallet ?? {};
@@ -163,6 +164,11 @@ export default function WalletPage() {
     if (isPending || !session) return;
     void refresh();
   }, [session, isPending]);
+
+  useEffect(() => {
+    if (payoutEdited) return;
+    setPayoutPhone(contacts[payoutProvider] || "");
+  }, [contacts, payoutProvider, payoutEdited]);
 
   useEffect(() => {
     const onUpdate = () => {
@@ -288,12 +294,13 @@ export default function WalletPage() {
       toast.message(json.ussdHint?.trim() || t("wallet.ussdHint"));
       return;
     }
-    if (json.status === "POSTED" || json.alreadyApplied || json.alreadyConfirmed) {
+    if (
+      json.status === "POSTED" ||
+      json.alreadyApplied ||
+      json.alreadyConfirmed
+    ) {
       paintOwnBalance(json);
-      const shown =
-        json.payerBalanceAfter ??
-        json.balanceCents ??
-        0;
+      const shown = json.payerBalanceAfter ?? json.balanceCents ?? 0;
       toast.success(
         json.beneficiaryUserId
           ? `${t("wallet.youRecharge")} · ${formatMoney(shown, json.currency ?? currency)}`
@@ -348,7 +355,10 @@ export default function WalletPage() {
           toast.error(data.error ?? "Transfert impossible");
           return;
         }
-        await applyPayResult({ ...data, status: data.status ?? "POSTED" }, "done");
+        await applyPayResult(
+          { ...data, status: data.status ?? "POSTED" },
+          "done",
+        );
       } catch (error) {
         setLoading(false);
         toast.message(t("wallet.connectionLost"));
@@ -389,12 +399,12 @@ export default function WalletPage() {
         },
       );
       setLoading(false);
-    if (!res.ok) {
-          clearPaymentIdempotencyKey(payIntent);
-          toast.error(data.error ?? "Demande impossible");
-          return;
-        }
-        await applyPayResult(data, "initiate");
+      if (!res.ok) {
+        clearPaymentIdempotencyKey(payIntent);
+        toast.error(data.error ?? "Demande impossible");
+        return;
+      }
+      await applyPayResult(data, "initiate");
     } catch (error) {
       setLoading(false);
       toast.message(t("wallet.connectionLost"));
@@ -443,7 +453,11 @@ export default function WalletPage() {
       setLoading(false);
       toast.message(t("wallet.connectionLost"));
       const found = await lookupPending();
-      if (found) await applyPayResult(found, found.status === "POSTED" ? "done" : "initiate");
+      if (found)
+        await applyPayResult(
+          found,
+          found.status === "POSTED" ? "done" : "initiate",
+        );
     }
   }
 
@@ -475,7 +489,34 @@ export default function WalletPage() {
         : t("wallet.txnSent");
     }
     if (row.type === "DEPOSIT") return t("wallet.forYou");
+    if (row.type === "WITHDRAWAL") {
+      const bucket = (row.metadata as { bucket?: string } | null)?.bucket;
+      const pot =
+        bucket === "VENDOR"
+          ? "ventes"
+          : bucket === "COURIER"
+            ? "courses"
+            : bucket === "BUYER"
+              ? "à dépenser"
+              : "";
+      const dest = row.phone?.trim();
+      const where = dest ? ` vers ${dest}` : "";
+      return pot ? `Retrait ${pot}${where}` : `Retrait${where}`;
+    }
+    if (row.type === "ESCROW_RELEASE") return "Vente encaissée";
     return row.type;
+  }
+
+  function txnOutgoing(row: Txn) {
+    if (row.amountCents < 0) return true;
+    return (
+      row.type === "PURCHASE" ||
+      row.type === "TRANSFER_OUT" ||
+      row.type === "WITHDRAWAL" ||
+      row.type === "PLATFORM_FEE" ||
+      row.type === "SHIPCASH_CLAWBACK" ||
+      row.type === "COURIER_PAYOUT"
+    );
   }
 
   function providerName(id: string) {
@@ -490,7 +531,7 @@ export default function WalletPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-6 pt-0">
-      <div className="rounded-3xl border border-border bg-gradient-to-br from-[#13131a] to-[#1c1c26] p-6">
+      <div className="rounded-3xl border border-border bg-card p-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Wallet className="size-4" />
           {t("wallet.title")}
@@ -502,7 +543,7 @@ export default function WalletPage() {
           {APP_CURRENCIES.map((code) => (
             <span
               key={code}
-              className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/80"
+              className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground"
             >
               {formatMoney(balances[code], code)}
             </span>
@@ -518,12 +559,14 @@ export default function WalletPage() {
             className={cn(
               "rounded-xl border px-1 py-2",
               withdrawBucket === "BUYER"
-                ? "border-primary bg-primary/10"
-                : "border-white/10",
+                ? "border-trust bg-trust/10"
+                : "border-border",
             )}
           >
             <p className="text-muted-foreground">À dépenser</p>
-            <p className="font-bold">{formatMoney(pots.BUYER, displayCurrency)}</p>
+            <p className="font-bold">
+              {formatMoney(pots.BUYER, displayCurrency)}
+            </p>
             <p className="text-[10px] text-amber-300">retrait 5 %</p>
           </button>
           <button
@@ -532,12 +575,14 @@ export default function WalletPage() {
             className={cn(
               "rounded-xl border px-1 py-2",
               withdrawBucket === "VENDOR"
-                ? "border-primary bg-primary/10"
-                : "border-white/10",
+                ? "border-trust bg-trust/10"
+                : "border-border",
             )}
           >
             <p className="text-muted-foreground">Ventes</p>
-            <p className="font-bold">{formatMoney(pots.VENDOR, displayCurrency)}</p>
+            <p className="font-bold">
+              {formatMoney(pots.VENDOR, displayCurrency)}
+            </p>
             <p className="text-[10px] text-trust">retrait 0 %</p>
           </button>
           <button
@@ -546,23 +591,58 @@ export default function WalletPage() {
             className={cn(
               "rounded-xl border px-1 py-2",
               withdrawBucket === "COURIER"
-                ? "border-primary bg-primary/10"
-                : "border-white/10",
+                ? "border-trust bg-trust/10"
+                : "border-border",
             )}
           >
             <p className="text-muted-foreground">Courses</p>
-            <p className="font-bold">{formatMoney(pots.COURIER, displayCurrency)}</p>
+            <p className="font-bold">
+              {formatMoney(pots.COURIER, displayCurrency)}
+            </p>
             <p className="text-[10px] text-amber-300">retrait 5 %</p>
           </button>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {PROVIDERS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                setPayoutProvider(p.id);
+                setPayoutEdited(false);
+              }}
+              className={cn(
+                "rounded-xl bg-gradient-to-br px-2 py-2 text-center text-[11px] font-bold",
+                p.color,
+                payoutProvider === p.id && "ring-2 ring-white",
+              )}
+            >
+              {t(p.label)}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3">
+          <PhoneField
+            id="payout-phone"
+            label="Numéro qui reçoit le retrait"
+            value={payoutPhone}
+            onChange={(value) => {
+              setPayoutEdited(true);
+              setPayoutPhone(value);
+            }}
+          />
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            CinetPay envoie la sortie sur le numéro enregistré. Vous pouvez en
+            saisir un autre.
+          </p>
         </div>
         <Button
           className="mt-3 w-full"
           disabled={withdrawing || pots[withdrawBucket] <= 0}
           onClick={async () => {
-            const phone =
-              contacts[provider ?? "MPESA"] || Object.values(contacts).find(Boolean);
-            if (!provider || !phone) {
-              toast.error("Choisissez un réseau et un numéro");
+            const phone = payoutPhone.trim();
+            if (!isValidContactPhone(phone)) {
+              toast.error("Saisissez le numéro qui reçoit le retrait");
               return;
             }
             setWithdrawing(true);
@@ -582,7 +662,7 @@ export default function WalletPage() {
                     bucket: withdrawBucket,
                     amountCents: gross,
                     currency: displayCurrency,
-                    provider,
+                    provider: payoutProvider,
                     phone,
                     idempotencyKey,
                   }),
@@ -594,8 +674,17 @@ export default function WalletPage() {
               }
               clearPaymentIdempotencyKey(intent);
               toast.success(
-                `Retrait ${formatMoney(gross - fee, displayCurrency)} (frais ${formatMoney(fee, displayCurrency)})`,
+                `Sortie -${formatMoney(gross - fee, displayCurrency)} vers ${phone}`,
               );
+              setPots((prev) => ({
+                ...prev,
+                [withdrawBucket]: Math.max(0, prev[withdrawBucket] - gross),
+              }));
+              setBalance((current) => Math.max(0, current - gross));
+              setBalances((prev) => ({
+                ...prev,
+                [displayCurrency]: Math.max(0, prev[displayCurrency] - gross),
+              }));
               notifyWalletUpdated();
               await refresh();
             } catch (error) {
@@ -608,12 +697,19 @@ export default function WalletPage() {
             }
           }}
         >
-          Retirer le pot {withdrawBucket === "BUYER" ? "à dépenser" : withdrawBucket === "VENDOR" ? "ventes" : "courses"}
+          Retirer le pot{" "}
+          {withdrawBucket === "BUYER"
+            ? "à dépenser"
+            : withdrawBucket === "VENDOR"
+              ? "ventes"
+              : "courses"}
         </Button>
       </div>
 
       <div className="mt-8 space-y-4">
-        <h2 className="font-heading text-sm font-bold">{t("wallet.topUpSimulated")}</h2>
+        <h2 className="font-heading text-sm font-bold">
+          {t("wallet.topUpSimulated")}
+        </h2>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -695,7 +791,12 @@ export default function WalletPage() {
           </div>
         ) : null}
 
-        <div className={cn("grid gap-2", tab === "someone" ? "grid-cols-2" : "grid-cols-3")}>
+        <div
+          className={cn(
+            "grid gap-2",
+            tab === "someone" ? "grid-cols-2" : "grid-cols-3",
+          )}
+        >
           {PROVIDERS.map((p) => (
             <button
               key={p.id}
@@ -732,10 +833,14 @@ export default function WalletPage() {
           ) : null}
         </div>
         {payFromBalance ? (
-          <p className="text-[11px] text-muted-foreground">{t("wallet.balanceHint")}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {t("wallet.balanceHint")}
+          </p>
         ) : (
           <>
-            <p className="text-[11px] text-muted-foreground">{t("wallet.emoneyPhone")}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {t("wallet.emoneyPhone")}
+            </p>
             {provider ? (
               <PhoneField
                 id="wallet-phone"
@@ -810,16 +915,16 @@ export default function WalletPage() {
       </div>
 
       <div className="mt-10 space-y-3">
-        <h2 className="font-heading text-sm font-bold">{t("wallet.myNumbers")}</h2>
+        <h2 className="font-heading text-sm font-bold">
+          {t("wallet.myNumbers")}
+        </h2>
         {PROVIDERS.map((p) => (
           <PhoneField
             key={p.id}
             id={`contact-${p.id}`}
             label={t(p.label)}
             value={contacts[p.id]}
-            onChange={(v) =>
-              setContacts((prev) => ({ ...prev, [p.id]: v }))
-            }
+            onChange={(v) => setContacts((prev) => ({ ...prev, [p.id]: v }))}
           />
         ))}
         <Button
@@ -834,39 +939,55 @@ export default function WalletPage() {
       </div>
 
       <div className="mt-10">
-        <h2 className="mb-3 font-heading text-sm font-bold">{t("wallet.history")}</h2>
+        <h2 className="mb-3 font-heading text-sm font-bold">
+          {t("wallet.history")}
+        </h2>
         <ul className="space-y-2">
-          {txns.map((row) => (
-            <li
-              key={row.id}
-              className="flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-3 text-sm"
-            >
-              <div>
-                <p className="font-medium">
-                  {txnLabel(row)} · {providerName(row.provider)}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {row.status} · {new Date(row.createdAt).toLocaleString("fr-FR")}
-                  {row.balanceAfterCents != null
-                    ? ` · ${formatMoney(row.balanceAfterCents, row.currency)}`
-                    : ""}
-                </p>
-              </div>
-              <span
-                className={cn(
-                  "font-heading font-bold",
-                  row.type === "PURCHASE" || row.type === "TRANSFER_OUT"
-                    ? "text-destructive"
-                    : "text-trust",
-                )}
+          {txns.map((row) => {
+            const failed = row.status === "FAILED" || row.status === "EXPIRED";
+            const pending = row.status === "PENDING";
+            const outgoing = txnOutgoing(row);
+            return (
+              <li
+                key={row.id}
+                className="flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-3 text-sm"
               >
-                {row.type === "PURCHASE" || row.type === "TRANSFER_OUT"
-                  ? "−"
-                  : "+"}
-                {formatMoney(Math.abs(row.amountCents), row.currency)}
-              </span>
-            </li>
-          ))}
+                <div>
+                  <p className="font-medium">
+                    {txnLabel(row)} · {providerName(row.provider)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {row.type === "WITHDRAWAL" && failed
+                      ? "Échoué — pot recrédité"
+                      : failed
+                        ? "Échoué — pot non débité"
+                        : pending
+                          ? "En attente — solde inchangé"
+                          : row.type === "WITHDRAWAL"
+                            ? "Sortie"
+                            : row.status}{" "}
+                    · {new Date(row.createdAt).toLocaleString("fr-FR")}
+                    {!pending && !failed && row.balanceAfterCents != null
+                      ? ` · ${formatMoney(row.balanceAfterCents, row.currency)}`
+                      : ""}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "font-heading font-bold",
+                    failed || pending
+                      ? "text-muted-foreground"
+                      : outgoing
+                        ? "text-destructive"
+                        : "text-trust",
+                  )}
+                >
+                  {outgoing ? "-" : "+"}
+                  {formatMoney(Math.abs(row.amountCents), row.currency)}
+                </span>
+              </li>
+            );
+          })}
           {txns.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
               {t("wallet.emptyHistory")}

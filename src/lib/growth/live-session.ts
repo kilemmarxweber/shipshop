@@ -28,8 +28,8 @@ export const LIVE_ENGAGEMENT_MIN_CHATS = 4;
 /** Max j'aime / viewer / minute (anti-spam serveur). */
 export const LIVE_LIKE_RATE_PER_MIN = 40;
 
-/** Poll room visible — assez frais sans saturer API / DB. */
-export const LIVE_POLL_MS = 4_000;
+/** Poll room visible — assez frais pour couper le live dès le Stop du host. */
+export const LIVE_POLL_MS = 1_200;
 /** Poll quand onglet en arrière-plan (scroll ailleurs / app switch). */
 export const LIVE_POLL_HIDDEN_MS = 20_000;
 
@@ -49,11 +49,7 @@ export const LIVE_HEARTBEAT_HIDDEN_MS = 45_000;
 
 export type LiveStatus = "LIVE" | "PAUSED" | "ENDED";
 export type LivePauseReason = "connection" | "host" | "system";
-export type LiveEndReason =
-  | "normal"
-  | "pause_timeout"
-  | "host"
-  | "connection";
+export type LiveEndReason = "normal" | "pause_timeout" | "host" | "connection";
 
 export function livePauseMessage(reason: string | null | undefined) {
   if (reason === "connection") {

@@ -1,18 +1,18 @@
-import { randomUUID } from "crypto";
-import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
 import { compressImageBuffer } from "@/lib/compress-image.server";
 import { compressVideoBuffer } from "@/lib/compress-video.server";
-import { extractVideoPosterJpeg } from "@/lib/video-poster.server";
 import { IMAGE_STORED_MAX_BYTES, VIDEO_STORED_MAX_BYTES } from "@/lib/media";
 import { enforceCatalogModeration } from "@/lib/moderation.server";
+import { getSession } from "@/lib/session";
 import {
-  MEDIA_MAX_BYTES,
-  detectMediaKind,
-  extForMedia,
-  uploadDirectoryError,
-  writeUploadBuffer,
+    MEDIA_MAX_BYTES,
+    detectMediaKind,
+    extForMedia,
+    uploadDirectoryError,
+    writeUploadBuffer,
 } from "@/lib/upload-file.server";
+import { extractVideoPosterJpeg } from "@/lib/video-poster.server";
+import { randomUUID } from "crypto";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -21,7 +21,18 @@ export async function POST(req: Request) {
   }
 
   try {
-    const form = await req.formData();
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "Envoi média illisible. Réessaie une photo JPEG/PNG ou une vidéo MP4.",
+        },
+        { status: 400 },
+      );
+    }
     const file = form.get("file");
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Fichier manquant" }, { status: 400 });
@@ -37,15 +48,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const kind = detectMediaKind(file);
+    const raw = Buffer.from(await file.arrayBuffer());
+    const kind = detectMediaKind(file, raw);
     if (!kind) {
       return NextResponse.json(
-        { error: "Formats acceptés : image ou vidéo" },
+        { error: "Formats acceptés : JPEG, PNG, WebP, HEIC, MP4, MOV" },
         { status: 400 },
       );
     }
-
-    const raw = Buffer.from(await file.arrayBuffer());
     let stored: Buffer = raw;
     let ext = extForMedia(file, kind);
     const variantRaw = String(form.get("variant") ?? "product");

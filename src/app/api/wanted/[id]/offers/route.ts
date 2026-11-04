@@ -1,13 +1,11 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
 import { composeAddress } from "@/lib/address";
+import { createAppNotice } from "@/lib/app-notice";
+import { assertKycApproved, resolveOfferShop } from "@/lib/occasion-shop";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
-import {
-  assertKycApproved,
-  resolveOfferShop,
-} from "@/lib/occasion-shop";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { NextResponse } from "next/server";
+import { z } from "zod";
 
 const offerSchema = z.object({
   priceCents: z.number().int().min(100),
@@ -60,19 +58,21 @@ export async function POST(
     );
   }
 
-  try {
-    await assertKycApproved(session.user.id);
-  } catch (error) {
-    if (error instanceof Error && error.message === "KYC_REQUIRED") {
-      return NextResponse.json(
-        {
-          error: "Validez votre KYC pour proposer un article",
-          code: "KYC_REQUIRED",
-        },
-        { status: 403 },
-      );
+  if (request.condition === "NEW_SHOP") {
+    try {
+      await assertKycApproved(session.user.id);
+    } catch (error) {
+      if (error instanceof Error && error.message === "KYC_REQUIRED") {
+        return NextResponse.json(
+          {
+            error: "Validez votre KYC pour proposer un article neuf",
+            code: "KYC_REQUIRED",
+          },
+          { status: 403 },
+        );
+      }
+      throw error;
     }
-    throw error;
   }
 
   const phoneParts = splitPhone(parsed.data.phone);
@@ -110,45 +110,63 @@ export async function POST(
     });
 
     const offer = await withDbRetry(() =>
-      prisma.wantedOffer.upsert({
-        where: {
-          requestId_sellerUserId: {
+      prisma.$transaction(async (tx) => {
+        const row = await tx.wantedOffer.upsert({
+          where: {
+            requestId_sellerUserId: {
+              requestId: id,
+              sellerUserId: session.user.id,
+            },
+          },
+          create: {
             requestId: id,
             sellerUserId: session.user.id,
+            shopId: shop.id,
+            message: parsed.data.message?.trim() || null,
+            priceCents: parsed.data.priceCents,
+            images: parsed.data.images,
+            condition: request.condition,
+            sellerPhone,
+            sellerAddress,
+            sellerCommune: parsed.data.commune?.trim() || null,
+            sellerQuartier: parsed.data.quartier?.trim() || null,
+            sellerAvenue: parsed.data.avenue?.trim() || null,
+            sellerLat: parsed.data.lat ?? shop.lat,
+            sellerLng: parsed.data.lng ?? shop.lng,
           },
-        },
-        create: {
-          requestId: id,
-          sellerUserId: session.user.id,
-          shopId: shop.id,
-          message: parsed.data.message?.trim() || null,
-          priceCents: parsed.data.priceCents,
-          images: parsed.data.images,
-          condition: request.condition,
-          sellerPhone,
-          sellerAddress,
-          sellerCommune: parsed.data.commune?.trim() || null,
-          sellerQuartier: parsed.data.quartier?.trim() || null,
-          sellerAvenue: parsed.data.avenue?.trim() || null,
-          sellerLat: parsed.data.lat ?? shop.lat,
-          sellerLng: parsed.data.lng ?? shop.lng,
-        },
-        update: {
-          shopId: shop.id,
-          message: parsed.data.message?.trim() || null,
-          priceCents: parsed.data.priceCents,
-          images: parsed.data.images,
-          sellerPhone,
-          sellerAddress,
-          sellerCommune: parsed.data.commune?.trim() || null,
-          sellerQuartier: parsed.data.quartier?.trim() || null,
-          sellerAvenue: parsed.data.avenue?.trim() || null,
-          sellerLat: parsed.data.lat ?? shop.lat,
-          sellerLng: parsed.data.lng ?? shop.lng,
-          status: "PENDING",
-        },
+          update: {
+            shopId: shop.id,
+            message: parsed.data.message?.trim() || null,
+            priceCents: parsed.data.priceCents,
+            images: parsed.data.images,
+            sellerPhone,
+            sellerAddress,
+            sellerCommune: parsed.data.commune?.trim() || null,
+            sellerQuartier: parsed.data.quartier?.trim() || null,
+            sellerAvenue: parsed.data.avenue?.trim() || null,
+            sellerLat: parsed.data.lat ?? shop.lat,
+            sellerLng: parsed.data.lng ?? shop.lng,
+            status: "PENDING",
+          },
+        });
+        await tx.wantedRequest.update({
+          where: { id },
+          data: { updatedAt: new Date() },
+        });
+        return row;
       }),
     );
+
+    try {
+      await createAppNotice({
+        userId: request.buyerId,
+        title: "Nouvelle offre sur votre recherche",
+        body: `${session.user.name ?? "Un membre"} a répondu à « ${request.title} ».`,
+        href: `/wanted/${id}`,
+      });
+    } catch (noticeError) {
+      console.error("[wanted offer notice]", noticeError);
+    }
 
     return NextResponse.json({ offer }, { status: 201 });
   } catch (error) {

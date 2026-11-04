@@ -1,7 +1,11 @@
-import fs from "fs/promises";
+import {
+    DEFAULT_UPLOAD_URL,
+    getPublicUploadUrl,
+    toPublicUploadPath,
+} from "@/lib/upload-url";
 import { constants as fsConstants } from "fs";
+import fs from "fs/promises";
 import path from "path";
-import { DEFAULT_UPLOAD_URL, getPublicUploadUrl, toPublicUploadPath } from "@/lib/upload-url";
 
 export const WINDOWS_UPLOAD_DIRECTORY = "C:\\chipshop-uploads";
 export const LINUX_UPLOAD_DIRECTORY = "/var/www/chipshop-uploads";
@@ -105,7 +109,12 @@ export function relativeUploadPathFromUrl(
 
   let normalized = raw.replace(/\\/g, "/").replace(/^https?:\/\/[^/]+/i, "");
   normalized = normalized.replace(/^\/+/, "");
-  for (const prefix of [`api/${publicPrefix}`, publicPrefix, `api/${defaultPrefix}`, defaultPrefix]) {
+  for (const prefix of [
+    `api/${publicPrefix}`,
+    publicPrefix,
+    `api/${defaultPrefix}`,
+    defaultPrefix,
+  ]) {
     if (normalized === prefix || normalized.startsWith(`${prefix}/`)) {
       normalized = normalized.slice(prefix.length).replace(/^\/+/, "");
       break;
@@ -210,6 +219,7 @@ const VIDEO_EXT = new Set([
 
 export function detectMediaKind(
   file: { name?: string; type?: string },
+  buffer?: Buffer,
 ): "image" | "video" | null {
   const mime = (file.type ?? "").toLowerCase();
   if (mime.startsWith("image/")) return "image";
@@ -217,6 +227,33 @@ export function detectMediaKind(
   const ext = path.extname(file.name ?? "").toLowerCase();
   if (IMAGE_EXT.has(ext)) return "image";
   if (VIDEO_EXT.has(ext)) return "video";
+  if (buffer && buffer.length >= 12) {
+    if (buffer[0] === 0xff && buffer[1] === 0xd8) return "image";
+    if (
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    ) {
+      return "image";
+    }
+    if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+      return "image";
+    }
+    if (buffer.slice(0, 4).toString("ascii") === "RIFF") return "image";
+    const brand = buffer.slice(4, 8).toString("ascii");
+    if (brand === "ftyp") {
+      const iso = buffer.slice(8, 12).toString("ascii").toLowerCase();
+      if (
+        iso.startsWith("heic") ||
+        iso.startsWith("heif") ||
+        iso.startsWith("mif1")
+      ) {
+        return "image";
+      }
+      return "video";
+    }
+  }
   return null;
 }
 

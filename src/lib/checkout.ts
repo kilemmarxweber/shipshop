@@ -1,55 +1,50 @@
-import type { Prisma, FulfillmentType } from "@/generated/prisma/client";
+import type { FulfillmentType, Prisma } from "@/generated/prisma/client";
 import { composeAddress } from "@/lib/address";
-import {
-  findBestCourier,
-  formatCourierAssignNote,
-} from "@/lib/courier-match";
+import { recordFunnelEvent } from "@/lib/commerce-funnel";
+import { findBestCourier, formatCourierAssignNote } from "@/lib/courier-match";
 import { buildHandoverQrPayload } from "@/lib/handover";
 import {
-  createShopHandover,
-  maybeCompleteShopHandover,
-} from "@/lib/shop-handover";
-import {
-  buildVendorCancelMessage,
-  CANCEL_REASONS,
-  type CancelReasonCode,
-  isOrderCancellable,
-} from "@/lib/order-cancel";
-import { quoteShipping } from "@/lib/shipping";
-import { lockWallet } from "@/lib/payments/ledger";
-import {
-  APP_CURRENCIES,
-  fromUsdCents,
-  parseCurrency,
-  shopFxRates,
-  toUsdCents,
-  usdCentsNeeded,
-  walletCents,
-  walletEquivalentCents,
-  type AppCurrency,
+    APP_CURRENCIES,
+    fromUsdCents,
+    parseCurrency,
+    shopFxRates,
+    toUsdCents,
+    usdCentsNeeded,
+    walletCents,
+    walletEquivalentCents,
+    type AppCurrency,
 } from "@/lib/money";
 import {
-  courierNetCents,
-  refundProductCents,
-  creatorFeeCents,
-  saleFeeBpsForMonthlyGmvUsd,
-  saleFeeCents,
-  shippingFeeCents,
-  shouldRefundShipping,
-  vendorNetCents,
+    buildVendorCancelMessage,
+    CANCEL_REASONS,
+    isOrderCancellable,
+    type CancelReasonCode,
+} from "@/lib/order-cancel";
+import { lockWallet } from "@/lib/payments/ledger";
+import { PURCHASE_PROVIDER } from "@/lib/payments/rails";
+import {
+    courierNetCents,
+    creatorFeeCents,
+    refundProductCents,
+    saleFeeBpsForMonthlyGmvUsd,
+    saleFeeCents,
+    shippingFeeCents,
+    shouldRefundShipping,
+    vendorNetCents,
 } from "@/lib/platform-fees";
-import { recordFunnelEvent } from "@/lib/commerce-funnel";
-import { shopMonthGmvUsdCents } from "@/lib/shop-volume";
-import {
-  clawbackShipRewards,
-  grantShipCashOnEscrow,
-  rewardFeeBps,
-} from "@/lib/shiprewards/grant";
 import { creditTreasury, reverseSaleFee } from "@/lib/platform-ledger";
+import { quoteShipping } from "@/lib/shipping";
 import {
-  applyBucketDelta,
-  drainBucketsData,
-} from "@/lib/wallet-buckets";
+    clawbackShipRewards,
+    grantShipCashOnEscrow,
+    rewardFeeBps,
+} from "@/lib/shiprewards/grant";
+import {
+    createShopHandover,
+    maybeCompleteShopHandover,
+} from "@/lib/shop-handover";
+import { shopMonthGmvUsdCents } from "@/lib/shop-volume";
+import { applyBucketDelta, drainBucketsData } from "@/lib/wallet-buckets";
 
 type Tx = Prisma.TransactionClient;
 
@@ -89,9 +84,11 @@ export type PurchaseOpts = {
   skipShippingQuote?: boolean;
   shippingCents?: number;
   attributedCreatorId?: string | null;
+  checkoutId?: string;
+  paymentRef?: string;
 };
 
-/** Charge wallet (product + shipping) and create order with fulfillment. */
+/** Débite le solde interne (jamais CinetPay) et crée la commande. */
 export async function purchaseProduct(
   tx: Tx,
   buyerId: string,
@@ -150,43 +147,43 @@ export async function purchaseProduct(
     if (opts?.skipShippingQuote) {
       shippingCents = opts.shippingCents ?? 0;
     } else {
-    const quote = await quoteShipping({
-      shopId: product.shopId,
-      city: deliveryCity,
-      commune: deliveryCommune,
-      lat: fulfillment.deliveryLat,
-      lng: fulfillment.deliveryLng,
-    });
-    shippingCents = quote.shippingCents;
-    distanceKm = quote.distanceKm;
-    zoneId = quote.zoneId;
-    deliveryLat = quote.destLat;
-    deliveryLng = quote.destLng;
-    if (!deliveryCommune && quote.commune) {
-      deliveryCommune = quote.commune;
-    }
+      const quote = await quoteShipping({
+        shopId: product.shopId,
+        city: deliveryCity,
+        commune: deliveryCommune,
+        lat: fulfillment.deliveryLat,
+        lng: fulfillment.deliveryLng,
+      });
+      shippingCents = quote.shippingCents;
+      distanceKm = quote.distanceKm;
+      zoneId = quote.zoneId;
+      deliveryLat = quote.destLat;
+      deliveryLng = quote.destLng;
+      if (!deliveryCommune && quote.commune) {
+        deliveryCommune = quote.commune;
+      }
 
-    // Auto-livreur : plus proche + disponible (boutique / plateforme)
-    const proposal = await findBestCourier({
-      destLat: deliveryLat,
-      destLng: deliveryLng,
-      commune: deliveryCommune,
-      remoteZone: quote.kind === "REMOTE",
-      shopId: product.shopId,
-      zoneId: quote.zoneId,
-    });
-    if (proposal) {
-      courierId = proposal.courier.id;
-      courierDistanceKm = proposal.eta.distanceKm;
-      etaMinutes = proposal.eta.etaMinutes;
-      etaAt = proposal.eta.etaAt;
-      initialStatus = "ASSIGNED";
-      autoCourierNote = formatCourierAssignNote(
-        proposal.courier,
-        proposal.eta,
-        proposal.reason,
-      );
-    }
+      // Auto-livreur : plus proche + disponible (boutique / plateforme)
+      const proposal = await findBestCourier({
+        destLat: deliveryLat,
+        destLng: deliveryLng,
+        commune: deliveryCommune,
+        remoteZone: quote.kind === "REMOTE",
+        shopId: product.shopId,
+        zoneId: quote.zoneId,
+      });
+      if (proposal) {
+        courierId = proposal.courier.id;
+        courierDistanceKm = proposal.eta.distanceKm;
+        etaMinutes = proposal.eta.etaMinutes;
+        etaAt = proposal.eta.etaAt;
+        initialStatus = "ASSIGNED";
+        autoCourierNote = formatCourierAssignNote(
+          proposal.courier,
+          proposal.eta,
+          proposal.reason,
+        );
+      }
     }
   } else {
     initialStatus = "READY_FOR_PICKUP";
@@ -204,15 +201,6 @@ export async function purchaseProduct(
   await lockWallet(tx, walletRow.id);
   const wallet = await tx.wallet.findUnique({ where: { id: walletRow.id } });
   if (!wallet) throw new Error("Portefeuille introuvable");
-
-  const equivalent = walletEquivalentCents(wallet, currency, shopFx);
-  if (equivalent < totalCents) {
-    const err = new Error("Solde insuffisant") as InsufficientFundsError;
-    err.code = "INSUFFICIENT_FUNDS";
-    err.needed = totalCents;
-    err.balance = equivalent;
-    throw err;
-  }
 
   const pockets: Record<AppCurrency, number> = {
     USD: walletCents(wallet, "USD"),
@@ -322,18 +310,28 @@ export async function purchaseProduct(
   for (const code of APP_CURRENCIES) {
     const delta = originalPockets[code] - pockets[code];
     if (delta > 0) {
-      bucketData = {
-        ...bucketData,
-        ...drainBucketsData(working, code, delta),
-      };
+      try {
+        bucketData = {
+          ...bucketData,
+          ...drainBucketsData(working, code, delta),
+        };
+      } catch {
+        const err = new Error("Solde insuffisant") as InsufficientFundsError;
+        err.code = "INSUFFICIENT_FUNDS";
+        err.needed = totalCents;
+        err.balance = walletEquivalentCents(wallet, currency, shopFx);
+        throw err;
+      }
       working = { ...working, ...bucketData };
     } else if (delta < 0) {
       const credit = applyBucketDelta(working, code, -delta, "BUYER");
       bucketData = {
         ...bucketData,
-        ...Object.fromEntries(
-          Object.entries(credit).filter(([, value]) => typeof value === "number"),
-        ) as Record<string, number>,
+        ...(Object.fromEntries(
+          Object.entries(credit).filter(
+            ([, value]) => typeof value === "number",
+          ),
+        ) as Record<string, number>),
       };
       working = { ...working, ...bucketData };
     }
@@ -350,16 +348,27 @@ export async function purchaseProduct(
     },
   });
 
-  await tx.walletTransaction.create({
+  const paymentRef =
+    opts?.paymentRef ??
+    (opts?.checkoutId
+      ? `PAY:${opts.checkoutId}:${product.id}:${Date.now()}`
+      : `ORD-${product.id.slice(0, 8)}`);
+  const alreadyPaid = await tx.walletTransaction.findFirst({
+    where: { reference: paymentRef, status: "SUCCESS", type: "PURCHASE" },
+  });
+  if (alreadyPaid) {
+    throw new Error("Paiement déjà enregistré");
+  }
+  const purchaseTxn = await tx.walletTransaction.create({
     data: {
       walletId: wallet.id,
       type: "PURCHASE",
       amountCents: -totalCents,
       currency,
       balanceAfterCents: newBalance,
-      provider: "INTERNAL",
+      provider: PURCHASE_PROVIDER,
       status: "SUCCESS",
-      reference: `ORD-${product.id.slice(0, 8)}`,
+      reference: paymentRef,
       metadata: {
         productId: product.id,
         shopId: product.shopId,
@@ -368,6 +377,7 @@ export async function purchaseProduct(
         currency,
         fulfillmentType: fulfillment.fulfillmentType,
         escrow: true,
+        checkoutId: opts?.checkoutId ?? null,
         optionColor: fulfillment.optionColor ?? null,
         optionSize: fulfillment.optionSize ?? null,
         fx: conversions,
@@ -377,10 +387,9 @@ export async function purchaseProduct(
     },
   });
 
-  const handover =
-    opts?.handoverId
-      ? await tx.shopHandover.findUnique({ where: { id: opts.handoverId } })
-      : await createShopHandover(tx, buyerId, product.shopId);
+  const handover = opts?.handoverId
+    ? await tx.shopHandover.findUnique({ where: { id: opts.handoverId } })
+    : await createShopHandover(tx, buyerId, product.shopId);
   if (!handover || handover.shopId !== product.shopId) {
     throw new Error("QR boutique introuvable");
   }
@@ -416,7 +425,7 @@ export async function purchaseProduct(
       status: initialStatus,
       paidAt: new Date(),
       attributedCreatorId: opts?.attributedCreatorId || null,
-      promoId: product.activePromoId,
+      promoId: product.activePromoId || null,
       promoPercent: product.promoPercent ?? 0,
       promoTier: product.promoTier,
       compareAtCents: product.compareAtCents,
@@ -426,6 +435,29 @@ export async function purchaseProduct(
       shop: { select: { id: true, name: true, slug: true } },
       courier: true,
       pickupReceipt: true,
+    },
+  });
+
+  await tx.walletTransaction.update({
+    where: { id: purchaseTxn.id },
+    data: {
+      reference: `PAY:${opts?.checkoutId ?? "x"}:${order.id}`,
+      metadata: {
+        productId: product.id,
+        shopId: product.shopId,
+        productCents,
+        shippingCents,
+        currency,
+        fulfillmentType: fulfillment.fulfillmentType,
+        escrow: true,
+        checkoutId: opts?.checkoutId ?? null,
+        orderId: order.id,
+        optionColor: fulfillment.optionColor ?? null,
+        optionSize: fulfillment.optionSize ?? null,
+        fx: conversions,
+        cdfPerUsd: shopFx.cdfPerUsd,
+        kwPerUsd: shopFx.kwPerUsd,
+      },
     },
   });
 
@@ -475,14 +507,16 @@ export async function purchaseProduct(
     },
   });
 
-  if (nextQty <= 0) {
-    await tx.cartItem.deleteMany({
-      where: { productId: product.id },
-    });
-  } else {
-    await tx.cartItem.deleteMany({
-      where: { productId: product.id, userId: buyerId },
-    });
+  if (!opts?.handoverId) {
+    if (nextQty <= 0) {
+      await tx.cartItem.deleteMany({
+        where: { productId: product.id },
+      });
+    } else {
+      await tx.cartItem.deleteMany({
+        where: { productId: product.id, userId: buyerId },
+      });
+    }
   }
 
   const full = await tx.order.findUnique({
@@ -516,7 +550,9 @@ async function refundOrderInternal(
     where: { id: orderId },
     include: {
       product: true,
-      shop: { select: { id: true, name: true, slug: true, organizationId: true } },
+      shop: {
+        select: { id: true, name: true, slug: true, organizationId: true },
+      },
       pickupReceipt: true,
     },
   });
@@ -679,6 +715,21 @@ async function refundOrderInternal(
     refundCents,
     shop: order.shop,
   };
+}
+
+/** Doublon de paiement : remboursement + restock. */
+export async function refundDuplicatePurchase(
+  tx: Tx,
+  buyerId: string,
+  orderId: string,
+) {
+  return refundOrderInternal(tx, orderId, {
+    buyerId,
+    actorUserId: buyerId,
+    toStatus: "REFUNDED",
+    note: "Remboursement auto — paiement en double synchronisé",
+    restoreStock: true,
+  });
 }
 
 /** Annulation client : remboursement + restore stock. */
@@ -934,7 +985,12 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
   if (order.productCents <= 0) {
     await tx.order.update({
       where: { id: order.id },
-      data: { escrowReleasedAt: new Date(), saleFeeCents: 0, saleFeeBps: feeBps, creatorFeeCents: 0 },
+      data: {
+        escrowReleasedAt: new Date(),
+        saleFeeCents: 0,
+        saleFeeBps: feeBps,
+        creatorFeeCents: 0,
+      },
     });
     await releaseShippingToCourier(tx, order.id);
     return { credited: 0 };
@@ -990,11 +1046,17 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
   if (creatorFee > 0 && order.attributedCreatorId) {
     const creatorWallet = await tx.wallet.upsert({
       where: { userId: order.attributedCreatorId },
-      create: { userId: order.attributedCreatorId, balanceCents: 0, currency: "USD" },
+      create: {
+        userId: order.attributedCreatorId,
+        balanceCents: 0,
+        currency: "USD",
+      },
       update: {},
     });
     await lockWallet(tx, creatorWallet.id);
-    const creatorLocked = await tx.wallet.findUnique({ where: { id: creatorWallet.id } });
+    const creatorLocked = await tx.wallet.findUnique({
+      where: { id: creatorWallet.id },
+    });
     if (creatorLocked) {
       const creatorBalance = walletCents(creatorLocked, currency) + creatorFee;
       await tx.wallet.update({

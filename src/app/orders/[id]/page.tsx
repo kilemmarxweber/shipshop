@@ -19,6 +19,10 @@ import { ISSUE_TYPE_LABELS, qrImageUrl } from "@/lib/handover";
 import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fees";
 import { formatMoney, cn } from "@/lib/utils";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
+import {
+  ORDER_UPDATED_EVENT,
+  ORDER_UPDATED_STORAGE_KEY,
+} from "@/lib/order-events";
 import { usePageBack } from "@/components/back-nav-context";
 import { useI18n } from "@/components/i18n-provider";
 import { PageLoader } from "@/components/page-loader";
@@ -157,6 +161,23 @@ function OrderInner() {
 
   useEffect(() => {
     if (session) load();
+  }, [session, id]);
+
+  useEffect(() => {
+    if (!session) return;
+    const refresh = () => {
+      void load();
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== ORDER_UPDATED_STORAGE_KEY || !event.newValue) return;
+      refresh();
+    };
+    window.addEventListener(ORDER_UPDATED_EVENT, refresh);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(ORDER_UPDATED_EVENT, refresh);
+      window.removeEventListener("storage", onStorage);
+    };
   }, [session, id]);
 
   async function confirmReceipt() {

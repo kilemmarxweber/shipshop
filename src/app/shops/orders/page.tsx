@@ -18,6 +18,11 @@ import { formatMoney, cn } from "@/lib/utils";
 import { orderStatusLabel } from "@/lib/order-status-label";
 import { useI18n } from "@/components/i18n-provider";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
+import {
+  ORDER_UPDATED_EVENT,
+  ORDER_UPDATED_STORAGE_KEY,
+  notifyOrdersChanged,
+} from "@/lib/order-events";
 import { ShopHoursNotice } from "@/components/shop-hours-notice";
 import type { ShopHoursFields } from "@/lib/shop-hours";
 import { ShopPicker } from "@/components/shop-picker";
@@ -111,6 +116,7 @@ export default function VendorOrdersPage() {
   async function loadOrders(id: string) {
     const { data } = await fetchJson<{ orders?: Order[] }>(
       `/api/orders?shopId=${id}&status=all`,
+      { cache: "no-store" },
     );
     setOrders(data?.orders ?? []);
   }
@@ -125,7 +131,32 @@ export default function VendorOrdersPage() {
   }, [session]);
 
   useEffect(() => {
-    if (shopId) loadOrders(shopId);
+    if (!shopId) return;
+    void loadOrders(shopId);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void loadOrders(shopId);
+    }, 4000);
+    const onShow = () => {
+      if (document.visibilityState === "visible") void loadOrders(shopId);
+    };
+    const onOrders = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadOrders(shopId);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== ORDER_UPDATED_STORAGE_KEY || !event.newValue) return;
+      onOrders();
+    };
+    document.addEventListener("visibilitychange", onShow);
+    window.addEventListener(ORDER_UPDATED_EVENT, onOrders);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener(ORDER_UPDATED_EVENT, onOrders);
+      window.removeEventListener("storage", onStorage);
+    };
   }, [shopId]);
 
   useEffect(() => {
@@ -154,6 +185,15 @@ export default function VendorOrdersPage() {
       needsItem?: boolean;
       handoverId?: string;
       items?: { id: string; title: string; images: string[] }[];
+      order?: {
+        id: string;
+        status: string;
+        pickupReceipt?: {
+          code?: string;
+          scannedAt?: string | null;
+          redeemedAt?: string | null;
+        } | null;
+      };
     }>("/api/orders/confirm-handover", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -177,7 +217,31 @@ export default function VendorOrdersPage() {
     setScanInput("");
     setScannerOpen(false);
     setPickItems(null);
-    if (shopId) loadOrders(shopId);
+    const scanned = data?.order;
+    if (scanned?.id) {
+      setOrders((prev) =>
+        prev.map((row) =>
+          row.id === scanned.id
+            ? {
+                ...row,
+                status: scanned.status || "AWAITING_CONFIRM",
+                pickupReceipt: {
+                  code:
+                    scanned.pickupReceipt?.code ??
+                    row.pickupReceipt?.code ??
+                    "",
+                  scannedAt:
+                    scanned.pickupReceipt?.scannedAt ??
+                    new Date().toISOString(),
+                  redeemedAt: scanned.pickupReceipt?.redeemedAt ?? null,
+                },
+              }
+            : row,
+        ),
+      );
+    }
+    notifyOrdersChanged(scanned?.id ?? input.orderId);
+    if (shopId) await loadOrders(shopId);
   }
 
   async function applyScannedValue(raw: string) {

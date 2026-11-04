@@ -43,6 +43,7 @@ export type GrowthSurface = {
     id: string;
     title: string;
     status?: string;
+    viewerPeak?: number;
     followedByMe?: boolean;
     user: { id?: string; name: string; image?: string | null };
     product?: {

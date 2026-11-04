@@ -1,9 +1,14 @@
-import { createHash } from "crypto";
 import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
 import { parseIdempotencyKey } from "@/lib/payments/ledger";
+import { prisma } from "@/lib/prisma";
+import { createHash } from "crypto";
 
-export type IdempotencyScope = "WITHDRAW" | "CHECKOUT" | "ORDER" | "GIFT";
+export type IdempotencyScope =
+  | "WITHDRAW"
+  | "CHECKOUT"
+  | "ORDER"
+  | "GIFT"
+  | "TICKET";
 
 type Tx = Prisma.TransactionClient;
 
@@ -44,27 +49,40 @@ export async function findIdempotentOp(input: {
   });
 }
 
+const STALE_PENDING_MS = 20_000;
+
 export function replayIfComplete(
   row: {
     status: string;
     requestHash: string;
     httpStatus: number;
     response: Prisma.JsonValue | null;
+    updatedAt?: Date;
   } | null,
   requestHash: string,
+  opts?: { allowHashMismatch?: boolean },
 ) {
   if (!row) return null;
-  if (row.requestHash !== requestHash) {
-    throw new Error("Clé d’idempotence déjà utilisée pour une autre opération");
-  }
   if (row.status === "COMPLETED") {
+    if (!opts?.allowHashMismatch && row.requestHash !== requestHash) {
+      throw new Error(
+        "Clé d’idempotence déjà utilisée pour une autre opération",
+      );
+    }
     return {
       httpStatus: row.httpStatus || 200,
       response: row.response,
     };
   }
   if (row.status === "PENDING") {
-    throw new Error("Opération déjà en cours — réessayez dans un instant");
+    const updated = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+    if (Date.now() - updated < STALE_PENDING_MS) {
+      throw new Error("Paiement déjà en cours — une seule commande est créée");
+    }
+    return null;
+  }
+  if (!opts?.allowHashMismatch && row.requestHash !== requestHash) {
+    throw new Error("Clé d’idempotence déjà utilisée pour une autre opération");
   }
   return null;
 }
@@ -76,6 +94,7 @@ export async function beginIdempotentInTx(
     scope: IdempotencyScope;
     key: string;
     requestHash: string;
+    allowHashMismatch?: boolean;
   },
 ) {
   const clientKey = parseIdempotencyKey(input.key);
@@ -88,7 +107,9 @@ export async function beginIdempotentInTx(
       },
     },
   });
-  const replay = replayIfComplete(existing, input.requestHash);
+  const replay = replayIfComplete(existing, input.requestHash, {
+    allowHashMismatch: input.allowHashMismatch,
+  });
   if (replay) return { replayed: true as const, replay };
   if (existing) {
     await tx.idempotentOperation.update({

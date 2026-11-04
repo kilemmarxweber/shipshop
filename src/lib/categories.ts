@@ -1,12 +1,37 @@
 export const CATEGORIES = [
-  { id: "Tech", label: "Tech", gradient: "from-blue-600 to-violet-600" },
-  { id: "Mode", label: "Mode", gradient: "from-pink-500 to-amber-500" },
-  { id: "Maison", label: "Maison", gradient: "from-emerald-500 to-cyan-500" },
-  { id: "Gaming", label: "Gaming", gradient: "from-red-500 to-violet-600" },
-  { id: "Beauté", label: "Beauté", gradient: "from-pink-400 to-rose-400" },
-  { id: "Auto", label: "Auto", gradient: "from-slate-500 to-slate-700" },
-  { id: "Livres", label: "Livres", gradient: "from-amber-400 to-orange-500" },
-  { id: "Sport", label: "Sport", gradient: "from-emerald-500 to-lime-400" },
+  { id: "Tech", label: "Tech", fill: "bg-[#0A84FF]", gradient: "bg-[#0A84FF]" },
+  { id: "Mode", label: "Mode", fill: "bg-[#FF375F]", gradient: "bg-[#FF375F]" },
+  {
+    id: "Maison",
+    label: "Maison",
+    fill: "bg-[#64D2FF]",
+    gradient: "bg-[#64D2FF]",
+  },
+  {
+    id: "Gaming",
+    label: "Gaming",
+    fill: "bg-[#5E5CE6]",
+    gradient: "bg-[#5E5CE6]",
+  },
+  {
+    id: "Beauté",
+    label: "Beauté",
+    fill: "bg-[#BF5AF2]",
+    gradient: "bg-[#BF5AF2]",
+  },
+  { id: "Auto", label: "Auto", fill: "bg-[#636366]", gradient: "bg-[#636366]" },
+  {
+    id: "Livres",
+    label: "Livres",
+    fill: "bg-[#FF9F0A]",
+    gradient: "bg-[#FF9F0A]",
+  },
+  {
+    id: "Sport",
+    label: "Sport",
+    fill: "bg-[#30D158]",
+    gradient: "bg-[#30D158]",
+  },
 ] as const;
 
 export type CategoryId = (typeof CATEGORIES)[number]["id"];

@@ -13,6 +13,10 @@ import {
   NEW_LISTING_EVENT,
   NEW_LISTING_STORAGE_KEY,
 } from "@/lib/new-listing-events";
+import {
+  WANTED_UPDATED_EVENT,
+  WANTED_UPDATED_STORAGE_KEY,
+} from "@/lib/wanted-list-events";
 
 type ExtractPage<T> = {
   items: T[];
@@ -210,13 +214,34 @@ export function usePaginatedList<T extends { id: string }>(options: {
       if (event.key !== NEW_LISTING_STORAGE_KEY || !event.newValue) return;
       refresh();
     }
+    function onWantedStorage(event: StorageEvent) {
+      if (event.key !== WANTED_UPDATED_STORAGE_KEY || !event.newValue) return;
+      const key = cacheKeyRef.current ?? "";
+      if (!key.startsWith("wanted")) return;
+      refresh();
+    }
+    function onWantedUpdated() {
+      const key = cacheKeyRef.current ?? "";
+      if (!key.startsWith("wanted")) return;
+      refresh();
+    }
     window.addEventListener(NEW_LISTING_EVENT, refresh);
     window.addEventListener("storage", onStorage);
+    window.addEventListener("storage", onWantedStorage);
+    window.addEventListener(WANTED_UPDATED_EVENT, onWantedUpdated);
     return () => {
       window.removeEventListener(NEW_LISTING_EVENT, refresh);
       window.removeEventListener("storage", onStorage);
+      window.removeEventListener("storage", onWantedStorage);
+      window.removeEventListener(WANTED_UPDATED_EVENT, onWantedUpdated);
     };
   }, [enabled, load]);
+
+  const reload = useCallback(() => {
+    pagesLoadedRef.current = 0;
+    userScrolledRef.current = false;
+    void load(null, false, { soft: itemsRef.current.length > 0 });
+  }, [load]);
 
   const loadMore = useCallback(() => {
     const cursor = nextCursorRef.current;
@@ -237,6 +262,7 @@ export function usePaginatedList<T extends { id: string }>(options: {
     loadingMore,
     hasMore,
     loadMore,
+    reload,
     noteUserScroll,
     prefetchRemaining,
     pageSize: PUBLIC_PAGE_SIZE,

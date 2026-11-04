@@ -7,6 +7,7 @@ import { AlertTriangle, Bell, MessageCircle, Radio } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { subscribeNotices } from "@/lib/notices-client";
 import { notifyInboxSeen } from "@/lib/inbox-events";
 import {
   useInboxUnread,
@@ -91,29 +92,20 @@ export function NotificationsBell({
 
   useEffect(() => {
     if (!userId) return;
-    const refreshNotices = () => {
-      fetch("/api/notices")
-        .then((r) => r.json())
-        .then((json) => {
-          setNotices(json.notices ?? []);
-        })
-        .catch(() => undefined);
-    };
-    refreshNotices();
-    const timer = setInterval(refreshNotices, 4000);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        refreshNotices();
-      }
-    };
-    const onFocus = () => refreshNotices();
-    window.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onFocus);
-    };
+    return subscribeNotices((next) => {
+      setNotices((prev) => {
+        if (
+          prev.length === next.length &&
+          prev.every(
+            (row, index) =>
+              row.id === next[index]?.id && row.readAt === next[index]?.readAt,
+          )
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    });
   }, [userId]);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"messages" | "comments">("messages");

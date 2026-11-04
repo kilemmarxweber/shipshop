@@ -1,22 +1,22 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import { dictionaries, type Messages } from "@/lib/i18n/dictionaries";
 import { authClient } from "@/lib/auth-client";
+import { dictionaries, type Messages } from "@/lib/i18n/dictionaries";
 import {
-  intlLocaleFromUserLocale,
-  readUserLocalePreference,
-  writeUserLocalePreference,
-  type UserLocale,
+    intlLocaleFromUserLocale,
+    readUserLocalePreference,
+    writeUserLocalePreference,
+    type UserLocale,
 } from "@/lib/user-locale";
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
+} from "react";
 
 export type MessagePath =
   | `nav.${keyof Messages["nav"]}`
@@ -41,7 +41,8 @@ export type MessagePath =
   | `montage.${keyof Messages["montage"]}`
   | `publish.${keyof Messages["publish"]}`
   | `orderStatus.${keyof Messages["orderStatus"]}`
-  | `hours.${keyof Messages["hours"]}`;
+  | `hours.${keyof Messages["hours"]}`
+  | `tickets.${keyof Messages["tickets"]}`;
 
 type I18nContextValue = {
   locale: UserLocale;

@@ -24,11 +24,12 @@ export async function creditTreasury(
   input: {
     amountCents: number;
     currency: string;
-    kind: "SALE" | "SHIPPING" | "WITHDRAWAL";
+    kind: "SALE" | "SHIPPING" | "WITHDRAWAL" | "TICKET";
     orderId?: string | null;
     withdrawalId?: string | null;
     shopId?: string | null;
     courierId?: string | null;
+    ticketId?: string | null;
     actorUserId?: string | null;
     fx?: ReturnType<typeof shopFxRates>;
   },
@@ -52,6 +53,7 @@ export async function creditTreasury(
       withdrawalId: input.withdrawalId ?? null,
       shopId: input.shopId ?? null,
       courierId: input.courierId ?? null,
+      ticketId: input.ticketId ?? null,
     },
   });
   await tx.paymentAudit.create({
@@ -65,10 +67,73 @@ export async function creditTreasury(
         currency,
         orderId: input.orderId ?? null,
         withdrawalId: input.withdrawalId ?? null,
+        ticketId: input.ticketId ?? null,
       },
     },
   });
   return { fee, treasury: row };
+}
+
+export async function debitTreasury(
+  tx: Tx,
+  input: {
+    amountCents: number;
+    currency: string;
+    actorUserId?: string | null;
+    action?: string;
+    detail?: Record<string, unknown>;
+  },
+) {
+  if (input.amountCents <= 0) return null;
+  const currency = parseCurrency(input.currency);
+  await ensureTreasury(tx);
+  const row = await tx.platformTreasury.update({
+    where: { id: "chipshop" },
+    data: { [treasuryKey(currency)]: { decrement: input.amountCents } },
+  });
+  await tx.paymentAudit.create({
+    data: {
+      actorUserId: input.actorUserId ?? null,
+      actorType: "SYSTEM",
+      action: input.action ?? "TREASURY_DEBIT",
+      detail: {
+        amountCents: input.amountCents,
+        currency,
+        ...(input.detail ?? {}),
+      },
+    },
+  });
+  return row;
+}
+
+export async function reverseTicketFee(tx: Tx, ticketId: string) {
+  const fee = await tx.platformFee.findUnique({
+    where: { ticketId_kind: { ticketId, kind: "TICKET" } },
+  });
+  if (!fee || fee.reversedAt) return null;
+  const currency = parseCurrency(fee.currency);
+  await ensureTreasury(tx);
+  await tx.platformTreasury.update({
+    where: { id: "chipshop" },
+    data: { [treasuryKey(currency)]: { decrement: fee.amountCents } },
+  });
+  await tx.platformFee.update({
+    where: { id: fee.id },
+    data: { reversedAt: new Date() },
+  });
+  await tx.paymentAudit.create({
+    data: {
+      actorType: "SYSTEM",
+      action: "PLATFORM_FEE_TICKET_REVERSE",
+      detail: {
+        feeId: fee.id,
+        ticketId,
+        amountCents: fee.amountCents,
+        currency,
+      },
+    },
+  });
+  return fee;
 }
 
 export async function reverseSaleFee(tx: Tx, orderId: string) {
@@ -90,7 +155,12 @@ export async function reverseSaleFee(tx: Tx, orderId: string) {
     data: {
       actorType: "SYSTEM",
       action: "PLATFORM_FEE_SALE_REVERSE",
-      detail: { feeId: fee.id, orderId, amountCents: fee.amountCents, currency },
+      detail: {
+        feeId: fee.id,
+        orderId,
+        amountCents: fee.amountCents,
+        currency,
+      },
     },
   });
   return fee;

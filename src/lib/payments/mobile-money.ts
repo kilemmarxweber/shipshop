@@ -1,43 +1,39 @@
 import { Prisma } from "@/generated/prisma/client";
+import { getAppName } from "@/lib/app-name";
+import { parseCurrency, walletCents, type AppCurrency } from "@/lib/money";
+import {
+    assertCinetPayAmount,
+    checkCinetPayPayment,
+    cinetPayAccepted,
+    CinetPayApiError,
+    cinetPayPhone,
+    cinetPayRefused,
+    initiateCinetPayPayment,
+    isCinetPayConfigured,
+    newCinetPayTransactionId,
+    verifyCinetPayNotifyToken,
+} from "@/lib/payments/cinetpay";
+import {
+    asCurrency,
+    creditWalletLocked,
+    debitWalletLocked,
+    enqueueWalletOutbox,
+    expireStaleMovements,
+    lockMovement,
+    MOVEMENT_TTL_MS,
+    parseIdempotencyKey,
+    publicMovement,
+    scheduleOutboxFlush,
+    writeAudit,
+    type AuditCtx,
+} from "@/lib/payments/ledger";
+import {
+    createCollectionSession,
+    merchantMsisdn,
+    type RailProvider,
+} from "@/lib/payments/provider";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateWallet } from "@/lib/session";
-import {
-  parseCurrency,
-  type AppCurrency,
-  walletCents,
-} from "@/lib/money";
-import {
-  createCollectionSession,
-  merchantMsisdn,
-  type RailProvider,
-} from "@/lib/payments/provider";
-import {
-  assertCinetPayAmount,
-  checkCinetPayPayment,
-  cinetPayAccepted,
-  cinetPayPhone,
-  cinetPayRefused,
-  CinetPayApiError,
-  initiateCinetPayPayment,
-  isCinetPayConfigured,
-  newCinetPayTransactionId,
-  verifyCinetPayNotifyToken,
-} from "@/lib/payments/cinetpay";
-import { getAppName } from "@/lib/app-name";
-import {
-  type AuditCtx,
-  asCurrency,
-  creditWalletLocked,
-  debitWalletLocked,
-  enqueueWalletOutbox,
-  expireStaleMovements,
-  lockMovement,
-  MOVEMENT_TTL_MS,
-  parseIdempotencyKey,
-  publicMovement,
-  scheduleOutboxFlush,
-  writeAudit,
-} from "@/lib/payments/ledger";
 
 export type DepositInput = {
   userId: string;
@@ -137,7 +133,9 @@ export async function initiateDeposit(input: DepositInput) {
 
   const beneficiaryId = input.beneficiaryUserId?.trim() || null;
   if (beneficiaryId && beneficiaryId === input.userId) {
-    throw new Error("Choisissez un autre bénéficiaire, ou rechargez votre compte");
+    throw new Error(
+      "Choisissez un autre bénéficiaire, ou rechargez votre compte",
+    );
   }
   if (beneficiaryId) {
     const exists = await prisma.user.findUnique({
@@ -145,7 +143,9 @@ export async function initiateDeposit(input: DepositInput) {
       select: { id: true, name: true },
     });
     if (!exists) {
-      throw new Error("Bénéficiaire introuvable — il doit avoir un compte ShipShop");
+      throw new Error(
+        "Bénéficiaire introuvable — il doit avoir un compte ShipShop",
+      );
     }
   }
 
@@ -158,10 +158,7 @@ export async function initiateDeposit(input: DepositInput) {
       throw new Error("Clé d’idempotence déjà utilisée");
     }
     const existingMeta = asMeta(existing.metadata);
-    if (
-      existing.status === "AWAITING_FUNDS" &&
-      !existingMeta.paymentUrl
-    ) {
+    if (existing.status === "AWAITING_FUNDS" && !existingMeta.paymentUrl) {
       if (live && existingMeta.simulated !== true) {
         return openCinetPay(existing.id, input, amountMajor, currency);
       }
@@ -292,7 +289,10 @@ async function openCinetPay(
     where: { id: input.userId },
     select: { name: true, email: true },
   });
-  const parts = (payer?.name ?? getAppName()).trim().split(/\s+/).filter(Boolean);
+  const parts = (payer?.name ?? getAppName())
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   const given = parts[0] ?? "Client";
   const surname = parts.slice(1).join(" ") || given;
   if (currency !== "CDF" && currency !== "USD") {
@@ -575,12 +575,8 @@ export async function postAwaitingMovement(
         movement,
         currency,
         balanceCents: credited ? walletCents(credited, currency) : 0,
-        payerBalanceAfter: payerWallet
-          ? walletCents(payerWallet, currency)
-          : 0,
-        beneficiaryBalanceAfter: credited
-          ? walletCents(credited, currency)
-          : 0,
+        payerBalanceAfter: payerWallet ? walletCents(payerWallet, currency) : 0,
+        beneficiaryBalanceAfter: credited ? walletCents(credited, currency) : 0,
         payerTxn: movement.transactions.find(
           (t) => t.type === "DEPOSIT" || t.type === "TRANSFER_OUT",
         ),
@@ -618,7 +614,11 @@ export async function postAwaitingMovement(
       where: { userId: movement.payerUserId },
     });
     if (!payerWallet) throw new Error("Portefeuille introuvable");
-    await tx.$queryRaw`SELECT id FROM "wallet" WHERE id = ${payerWallet.id} FOR UPDATE`;
+    await tx.wallet.update({
+      where: { id: payerWallet.id },
+      data: { updatedAt: new Date() },
+      select: { id: true },
+    });
 
     const credited = await creditWalletLocked(
       tx,
@@ -778,7 +778,9 @@ export async function transferFromBalance(input: {
     select: { id: true, name: true },
   });
   if (!beneficiary) {
-    throw new Error("Bénéficiaire introuvable — il doit avoir un compte ShipShop");
+    throw new Error(
+      "Bénéficiaire introuvable — il doit avoir un compte ShipShop",
+    );
   }
 
   try {
@@ -797,7 +799,11 @@ export async function transferFromBalance(input: {
           ? [payerWallet.id, creditWallet.id]
           : [creditWallet.id, payerWallet.id];
       for (const id of lockOrder) {
-        await tx.$queryRaw`SELECT id FROM "wallet" WHERE id = ${id} FOR UPDATE`;
+        await tx.wallet.update({
+          where: { id },
+          data: { updatedAt: new Date() },
+          select: { id: true },
+        });
       }
 
       const payerDebit = await debitWalletLocked(
@@ -928,7 +934,9 @@ export async function transferFromBalance(input: {
           balanceCents: payerW ? walletCents(payerW, ccy) : 0,
           payerBalanceAfter: payerW ? walletCents(payerW, ccy) : 0,
           beneficiaryBalanceAfter: creditW ? walletCents(creditW, ccy) : 0,
-          transaction: again.transactions.find((t) => t.type === "TRANSFER_OUT"),
+          transaction: again.transactions.find(
+            (t) => t.type === "TRANSFER_OUT",
+          ),
         });
       }
     }
@@ -981,7 +989,9 @@ export async function rejectOrExpireMovement(
 ) {
   await prisma.$transaction(async (tx) => {
     await lockMovement(tx, movementId);
-    const row = await tx.moneyMovement.findUnique({ where: { id: movementId } });
+    const row = await tx.moneyMovement.findUnique({
+      where: { id: movementId },
+    });
     if (!row) throw new Error("Mouvement introuvable");
     if (row.status === "POSTED") {
       throw new Error("Déjà crédité — utiliser un reverse (P1)");

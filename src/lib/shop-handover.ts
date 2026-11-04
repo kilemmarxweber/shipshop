@@ -17,30 +17,50 @@ function pickupCode() {
   return `CS-${part}`;
 }
 
+function isUniqueConflict(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === "P2002"
+  );
+}
+
 export async function createShopHandover(
   tx: Tx,
   buyerId: string,
   shopId: string,
 ) {
-  const code = pickupCode();
-  const created = await tx.shopHandover.create({
-    data: {
-      buyerId,
-      shopId,
-      code,
-      qrPayload: "{}",
-    },
-  });
-  const qrPayload = JSON.stringify({
-    v: 2,
-    g: created.id,
-    c: code,
-    s: shopId,
-  });
-  return tx.shopHandover.update({
-    where: { id: created.id },
-    data: { qrPayload },
-  });
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const code = pickupCode();
+    try {
+      const created = await tx.shopHandover.create({
+        data: {
+          buyerId,
+          shopId,
+          code,
+          qrPayload: "{}",
+        },
+      });
+      const qrPayload = JSON.stringify({
+        v: 2,
+        g: created.id,
+        c: code,
+        s: shopId,
+      });
+      return tx.shopHandover.update({
+        where: { id: created.id },
+        data: { qrPayload },
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isUniqueConflict(error)) throw error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Impossible de créer le reçu boutique");
 }
 
 export async function maybeCompleteShopHandover(
@@ -66,7 +86,12 @@ export async function maybeCompleteShopHandover(
 export async function ensureOrderItemQr(input: {
   orderId: string;
   shopId: string;
-  pickupReceipt: { id: string; code: string; qrPayload: string; scannedAt: Date | null } | null;
+  pickupReceipt: {
+    id: string;
+    code: string;
+    qrPayload: string;
+    scannedAt: Date | null;
+  } | null;
 }) {
   const rec = input.pickupReceipt;
   if (!rec || rec.scannedAt) return rec;

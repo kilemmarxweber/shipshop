@@ -1,39 +1,42 @@
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 53;
+const PRISMA_SCHEMA_REV = 54;
 const CHALLENGE_HAS_PRODUCT =
   Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
 
 /** Forces a reload if the generated client predates cart_item.quantity. */
-const CART_ITEM_HAS_QUANTITY = Prisma.CartItemScalarFieldEnum.quantity === "quantity";
+const CART_ITEM_HAS_QUANTITY =
+  Prisma.CartItemScalarFieldEnum.quantity === "quantity";
 const SHOP_HAS_HOURS = Prisma.ShopScalarFieldEnum.alwaysOpen === "alwaysOpen";
-const COURIER_HAS_ARCHIVE = Prisma.CourierScalarFieldEnum.archivedAt === "archivedAt";
+const COURIER_HAS_ARCHIVE =
+  Prisma.CourierScalarFieldEnum.archivedAt === "archivedAt";
 const SHOP_HAS_PRO_UNTIL = Prisma.ShopScalarFieldEnum.proUntil === "proUntil";
 const PRODUCT_HAS_CREATOR_BPS =
   Prisma.ProductScalarFieldEnum.creatorCommissionBps === "creatorCommissionBps";
-const ORDER_HAS_FEE_BPS = Prisma.OrderScalarFieldEnum.saleFeeBps === "saleFeeBps";
+const ORDER_HAS_FEE_BPS =
+  Prisma.OrderScalarFieldEnum.saleFeeBps === "saleFeeBps";
 const SHOP_BOOST_HAS_TARGET_CITY =
   Prisma.ShopBoostScalarFieldEnum.targetCity === "targetCity";
-const LIVE_GUEST_HAS_MIC =
-  Prisma.LiveGuestScalarFieldEnum.micOn === "micOn";
+const LIVE_GUEST_HAS_MIC = Prisma.LiveGuestScalarFieldEnum.micOn === "micOn";
 const CREATOR_LIVE_HAS_MIC =
   Prisma.CreatorLiveScalarFieldEnum.micOn === "micOn";
 const CREATOR_LIVE_HAS_LIKE =
   Prisma.CreatorLiveScalarFieldEnum.likeCount === "likeCount";
 const CREATOR_LIVE_HAS_BACKDROP =
   Prisma.CreatorLiveScalarFieldEnum.backdropPreset === "backdropPreset";
-const LIVE_HAS_RTC_SIGNAL =
-  Prisma.ModelName.LiveRtcSignal === "LiveRtcSignal";
+const LIVE_HAS_RTC_SIGNAL = Prisma.ModelName.LiveRtcSignal === "LiveRtcSignal";
 const PRODUCT_HAS_COMPARE_AT =
   Prisma.ProductScalarFieldEnum.compareAtCents === "compareAtCents";
 const HAS_SHOP_REWARD_STATE =
   Prisma.ModelName.ShopRewardState === "ShopRewardState";
+const HAS_EVENT_TICKETS = Prisma.ModelName.Event === "Event";
 
 export const PRISMA_FEATURES = {
   shopBoostZoneTargeting: SHOP_BOOST_HAS_TARGET_CITY,
+  eventTickets: HAS_EVENT_TICKETS,
 } as const;
 
 const globalForPrisma = globalThis as unknown as {
@@ -47,10 +50,11 @@ function createPrismaClient() {
     globalForPrisma.pgPool ??
     new Pool({
       connectionString: process.env.DATABASE_URL!,
-      // Prisma local Postgres recommends keeping the pool small.
       max: 10,
       connectionTimeoutMillis: 10_000,
       idleTimeoutMillis: 30_000,
+      statement_timeout: 60_000,
+      allowExitOnIdle: true,
     });
 
   if (process.env.NODE_ENV !== "production") {
