@@ -13,6 +13,7 @@ import {
     fetchPaymentJson,
     paymentIdempotencyKey,
 } from "@/lib/payments/idempotency-client";
+import { eventPosterUrl } from "@/lib/tickets/posters";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -120,22 +121,33 @@ export default function EventPage() {
   }
 
   const onSale = event.status === "ON_SALE";
+  const poster = eventPosterUrl(event.imageUrl, event.id);
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
-      {event.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
+      <div className="relative mb-4 overflow-hidden rounded-2xl">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={event.imageUrl}
+          src={poster}
           alt=""
-          className="mb-4 aspect-[16/10] w-full rounded-2xl object-cover"
+          className="aspect-[16/10] w-full object-cover"
         />
-      ) : null}
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-white/70">
+            {event.organizerKind === "ARTIST" ? "Artiste" : "Organisation"} ·{" "}
+            {event.organizerName}
+          </p>
+          <h1 className="font-heading text-2xl font-bold text-white">
+            {event.title}
+          </h1>
+        </div>
+      </div>
+      <p className="sr-only">
         {event.organizerKind === "ARTIST" ? "Artiste" : "Organisation"} ·{" "}
         {event.organizerName}
       </p>
-      <h1 className="font-heading text-2xl font-bold">{event.title}</h1>
+      <h1 className="sr-only">{event.title}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         {event.venue}, {event.city}
       </p>

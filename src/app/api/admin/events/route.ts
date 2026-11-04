@@ -1,4 +1,4 @@
-import { parseCurrency } from "@/lib/money";
+import { DEFAULT_FX, parseCurrency, parseFxRate } from "@/lib/money";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { requirePlatformSession } from "@/lib/tickets/auth";
 import { adminEvent } from "@/lib/tickets/serialize";
@@ -20,6 +20,8 @@ const createSchema = z
     venue: z.string().trim().min(2).max(160),
     city: z.string().trim().min(2).max(80),
     currency: z.enum(["USD", "CDF", "KW"]).optional(),
+    fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
+    fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
     capacity: z.number().int().min(1).max(1_000_000).optional().nullable(),
     accessNote: z.string().trim().max(500).optional().nullable(),
     organizerKind: z.enum(["ARTIST", "ORGANIZATION"]),
@@ -111,6 +113,8 @@ export async function POST(req: Request) {
     if (organizer) organizerId = organizer.id;
   }
 
+  const fxCdfPerUsd = parseFxRate(body.fxCdfPerUsd, DEFAULT_FX.cdfPerUsd);
+  const fxKwPerUsd = parseFxRate(body.fxKwPerUsd, DEFAULT_FX.kwPerUsd);
   const event = await prisma.event.create({
     data: {
       title: body.title,
@@ -119,6 +123,9 @@ export async function POST(req: Request) {
       venue: body.venue,
       city: body.city,
       currency: parseCurrency(body.currency),
+      fxCdfPerUsd,
+      fxKwPerUsd,
+      fxRateUpdatedAt: new Date(),
       capacity: body.capacity ?? null,
       accessNote: body.accessNote?.trim() || null,
       organizerKind: body.organizerKind,

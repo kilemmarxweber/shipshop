@@ -1280,6 +1280,9 @@ model DailyChallenge {
   productTeaser      Json?
   /// Média hero du challenge : { url, kind: image|video, posterUrl? } — jpg/png/webp/mp4/webm
   spotlight          Json?
+  /// Événement billetterie lié — « Je relève » ouvre la fiche Event
+  eventId            String?
+  event              Event?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
   sponsorCampaignId  String?
   sponsorCampaign    BrandCampaign? @relation(fields: [sponsorCampaignId], references: [id], onDelete: SetNull)
   completions        Int       @default(0)
@@ -1289,6 +1292,7 @@ model DailyChallenge {
 
   @@index([startsAt, endsAt])
   @@index([productId])
+  @@index([eventId])
   @@map("daily_challenge")
 }
 
@@ -1786,6 +1790,11 @@ model Event {
   venue              String
   city               String
   currency           String               @default("USD")
+  /// Taux du jour figé à la création : 1 $US = N CDF
+  fxCdfPerUsd        Int                  @default(2400)
+  /// Taux du jour figé à la création : 1 $US = N KW
+  fxKwPerUsd         Int                  @default(1)
+  fxRateUpdatedAt    DateTime?
   capacity           Int?
   accessNote         String?
   status             EventStatus          @default(DRAFT)
@@ -1810,6 +1819,7 @@ model Event {
   ticketTypes        TicketType[]
   tickets            Ticket[]
   campaigns          BrandCampaign[]
+  challenges         DailyChallenge[]
 
   @@index([status, startsAt])
   @@index([organizerUserId])

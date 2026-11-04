@@ -36,6 +36,7 @@ import { firstVisualUrl } from "@/lib/growth/challenge-look";
 import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { mediaCoverUrl } from "@/lib/media";
+import { eventPosterUrl } from "@/lib/tickets/posters";
 import {
     disableFeedSound,
     enableFeedSound,
@@ -132,6 +133,7 @@ export default function DiscoverPage() {
       id: string;
       title: string;
       organizerName: string;
+      organizerKind?: string;
       imageUrl: string | null;
     }[]
   >([]);
@@ -471,26 +473,34 @@ export default function DiscoverPage() {
             {t("tickets.events")}
           </h2>
           <HScroll className="gap-2.5">
-            {liveEvents.map((event) => (
-              <Link
-                key={event.id}
-                href={`/events/${event.id}`}
-                className="w-40 shrink-0 rounded-2xl border border-border bg-surface p-2 no-underline"
-              >
-                <div
-                  className="mb-2 aspect-[16/10] rounded-xl bg-muted bg-cover bg-center"
-                  style={
-                    event.imageUrl
-                      ? { backgroundImage: `url(${event.imageUrl})` }
-                      : undefined
-                  }
-                />
-                <p className="truncate text-sm font-semibold">{event.title}</p>
-                <p className="truncate text-[11px] text-muted-foreground">
-                  {event.organizerName}
-                </p>
-              </Link>
-            ))}
+            {liveEvents.map((event) => {
+              const poster = eventPosterUrl(event.imageUrl, event.id);
+              return (
+                <Link
+                  key={event.id}
+                  href={`/events/${event.id}`}
+                  className="w-44 shrink-0 overflow-hidden rounded-2xl border border-border bg-surface no-underline"
+                >
+                  <div
+                    className="relative aspect-[3/4] bg-cover bg-center"
+                    style={{ backgroundImage: `url(${poster})` }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                    <span className="absolute left-2 top-2 rounded-full bg-[#ff4d8d] px-2 py-0.5 text-[10px] font-extrabold text-white">
+                      {event.organizerKind === "ORGANIZATION" ? "ORG" : "LIVE"}
+                    </span>
+                    <div className="absolute inset-x-0 bottom-0 p-2.5">
+                      <p className="line-clamp-2 text-sm font-extrabold text-white">
+                        {event.title}
+                      </p>
+                      <p className="truncate text-[11px] text-white/70">
+                        {event.organizerName}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </HScroll>
         </section>
       ) : null}

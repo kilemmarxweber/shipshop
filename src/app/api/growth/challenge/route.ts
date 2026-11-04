@@ -6,6 +6,7 @@ import {
   ensureActiveChallenges,
 } from "@/lib/growth/challenge";
 import { recordUserActivity } from "@/lib/growth/activity";
+import { prisma, withDbRetry } from "@/lib/prisma";
 
 const schema = z.object({
   challengeId: z.string().min(1),
@@ -28,9 +29,26 @@ export async function POST(req: Request) {
       body.challengeId,
     );
     await recordUserActivity(session.user.id, "challenge");
+    const linked = await withDbRetry(() =>
+      prisma.dailyChallenge.findUnique({
+        where: { id: body.challengeId },
+        select: {
+          eventId: true,
+          event: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+            },
+          },
+        },
+      }),
+    );
     return NextResponse.json({
       ok: true,
       reference: completion.reference,
+      eventId: linked?.eventId ?? null,
+      event: linked?.event ?? null,
     });
   } catch {
     return NextResponse.json({ error: "Challenge impossible" }, { status: 400 });

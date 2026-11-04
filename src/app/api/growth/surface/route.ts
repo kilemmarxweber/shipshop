@@ -270,6 +270,25 @@ export async function GET() {
       ...productCovers,
       ...fallbackCovers,
     ]).slice(0, 4);
+    const linked =
+      "event" in challenge && challenge.event
+        ? (challenge.event as {
+            id: string;
+            title: string;
+            imageUrl: string | null;
+            currency: string;
+            fxCdfPerUsd: number;
+            fxKwPerUsd: number;
+            organizerName: string;
+            organizerKind: string;
+            status: string;
+            ticketTypes: { priceCents: number; name: string }[];
+          })
+        : null;
+    const fromPriceCents =
+      linked && linked.ticketTypes.length
+        ? Math.min(...linked.ticketTypes.map((type) => type.priceCents))
+        : null;
     return {
       id: challenge.id,
       title: challenge.title,
@@ -283,6 +302,20 @@ export async function GET() {
       spotlight,
       participants: facesByChallenge.get(challenge.id) ?? [],
       product: cue,
+      event: linked
+        ? {
+            id: linked.id,
+            title: linked.title,
+            imageUrl: linked.imageUrl,
+            currency: linked.currency,
+            fxCdfPerUsd: linked.fxCdfPerUsd,
+            fxKwPerUsd: linked.fxKwPerUsd,
+            organizerName: linked.organizerName,
+            organizerKind: linked.organizerKind,
+            status: linked.status,
+            fromPriceCents,
+          }
+        : null,
     };
   });
 

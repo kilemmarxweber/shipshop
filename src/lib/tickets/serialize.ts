@@ -6,6 +6,9 @@ export function publicEvent(event: {
   venue: string;
   city: string;
   currency: string;
+  fxCdfPerUsd?: number | null;
+  fxKwPerUsd?: number | null;
+  fxRateUpdatedAt?: Date | null;
   capacity: number | null;
   accessNote: string | null;
   status: string;
@@ -27,6 +30,11 @@ export function publicEvent(event: {
     sortOrder: number;
   }[];
 }) {
+  const types = event.ticketTypes ?? [];
+  const fromPriceCents =
+    types.length > 0
+      ? Math.min(...types.map((type) => type.priceCents))
+      : null;
   return {
     id: event.id,
     title: event.title,
@@ -35,6 +43,10 @@ export function publicEvent(event: {
     venue: event.venue,
     city: event.city,
     currency: event.currency,
+    fxCdfPerUsd: event.fxCdfPerUsd ?? 2400,
+    fxKwPerUsd: event.fxKwPerUsd ?? 1,
+    fxRateUpdatedAt: event.fxRateUpdatedAt?.toISOString() ?? null,
+    fromPriceCents,
     capacity: event.capacity,
     accessNote: event.accessNote,
     status: event.status,
@@ -46,7 +58,7 @@ export function publicEvent(event: {
     salesEndsAt: event.salesEndsAt?.toISOString() ?? null,
     accessStartsAt: event.accessStartsAt?.toISOString() ?? null,
     accessEndsAt: event.accessEndsAt?.toISOString() ?? null,
-    ticketTypes: (event.ticketTypes ?? []).map((type) => ({
+    ticketTypes: types.map((type) => ({
       id: type.id,
       name: type.name,
       description: type.description,

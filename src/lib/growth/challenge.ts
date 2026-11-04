@@ -50,6 +50,27 @@ const challengeProductSelect = {
   shop: { select: { name: true } },
 } as const;
 
+const challengeEventSelect = {
+  id: true,
+  title: true,
+  imageUrl: true,
+  currency: true,
+  fxCdfPerUsd: true,
+  fxKwPerUsd: true,
+  organizerName: true,
+  organizerKind: true,
+  status: true,
+  ticketTypes: {
+    orderBy: { sortOrder: "asc" as const },
+    select: { priceCents: true, name: true },
+  },
+} as const;
+
+export const challengeInclude = {
+  product: { select: challengeProductSelect },
+  event: { select: challengeEventSelect },
+} as const;
+
 export async function ensureActiveChallenges() {
   const start = utcDay();
   const end = utcDay(daysAgo(-1));
@@ -58,7 +79,7 @@ export async function ensureActiveChallenges() {
       where: { startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
       // Plus récents / réactivés d’abord → mise en avant feed & Découvrir
       orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }],
-      include: { product: { select: challengeProductSelect } },
+      include: challengeInclude,
     }),
   );
   const have = new Set(existing.map((row) => row.title));
@@ -76,7 +97,7 @@ export async function ensureActiveChallenges() {
             startsAt: start,
             endsAt: end,
           },
-          include: { product: { select: challengeProductSelect } },
+          include: challengeInclude,
         }),
       ),
     );

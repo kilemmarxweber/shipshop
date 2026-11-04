@@ -1,6 +1,7 @@
 import { getAppConfig, setScrollAdCampaign } from "@/lib/content-source";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { parseScrollAdVideos, SCROLL_AD_MAX_VIDEOS } from "@/lib/scroll-ad";
+import { eventPosterUrl } from "@/lib/tickets/posters";
 
 export async function promoteEvent(input: {
   eventId: string;
@@ -15,6 +16,7 @@ export async function promoteEvent(input: {
   }
 
   const ctaUrl = `/events/${event.id}`;
+  const cover = eventPosterUrl(event.imageUrl, event.id);
   const campaign = await withDbRetry(() =>
     prisma.brandCampaign.create({
       data: {
@@ -26,7 +28,7 @@ export async function promoteEvent(input: {
           0,
           280,
         ),
-        mediaUrl: event.imageUrl,
+        mediaUrl: cover,
         ctaUrl,
         eventId: event.id,
         ownerUserId: input.ownerUserId,
@@ -35,8 +37,6 @@ export async function promoteEvent(input: {
       },
     }),
   );
-
-  const cover = event.imageUrl?.trim();
   if (cover) {
     const cfg = await getAppConfig();
     const existing = parseScrollAdVideos(cfg.scrollAd.videos, false);

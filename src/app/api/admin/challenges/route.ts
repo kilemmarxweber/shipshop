@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { getSession } from "@/lib/session";
 import {
   CHALLENGE_CATALOG,
+  challengeInclude,
   ensureActiveChallenges,
 } from "@/lib/growth/challenge";
 import {
@@ -20,6 +21,7 @@ function endsInHours(hours: number) {
 }
 
 const productInclude = {
+  ...challengeInclude,
   product: {
     select: {
       id: true,
@@ -101,6 +103,7 @@ const createSchema = z.object({
   productId: z.string().optional().nullable(),
   productTeaser: challengeTeaserSchema.optional().nullable(),
   spotlight: challengeSpotlightSchema.optional().nullable(),
+  eventId: z.string().optional().nullable(),
   sponsorCampaignId: z.string().optional().nullable(),
 });
 
@@ -114,10 +117,24 @@ const patchSchema = z.object({
   productId: z.string().optional().nullable(),
   productTeaser: challengeTeaserSchema.optional().nullable(),
   spotlight: challengeSpotlightSchema.optional().nullable(),
+  eventId: z.string().optional().nullable(),
   endNow: z.boolean().optional(),
   reactivate: z.boolean().optional(),
   hours: z.number().int().min(1).max(168).optional(),
 });
+
+async function resolveEventId(eventId: string | null | undefined) {
+  if (eventId === undefined) return undefined;
+  if (!eventId) return null;
+  const event = await withDbRetry(() =>
+    prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    }),
+  );
+  if (!event) return { error: "Événement billet introuvable" as const };
+  return event.id;
+}
 
 async function resolveFocusPayload(input: {
   productFocus?: ChallengeProductFocus;
@@ -284,6 +301,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const eventResolved = await resolveEventId(parsed.eventId);
+  if (eventResolved && typeof eventResolved === "object" && "error" in eventResolved) {
+    return NextResponse.json({ error: eventResolved.error }, { status: 400 });
+  }
+
   const hours = parsed.hours ?? 24;
   const challenge = await withDbRetry(() =>
     prisma.dailyChallenge.create({
@@ -306,6 +328,7 @@ export async function POST(req: Request) {
             : parsed.spotlight === undefined
               ? undefined
               : parsed.spotlight,
+        eventId: eventResolved === undefined ? null : eventResolved,
         sponsorCampaignId: parsed.sponsorCampaignId || null,
       },
       include: productInclude,
@@ -335,6 +358,7 @@ export async function PATCH(req: Request) {
     productId?: string | null;
     productTeaser?: Prisma.InputJsonValue | typeof Prisma.DbNull;
     spotlight?: Prisma.InputJsonValue | typeof Prisma.DbNull;
+    eventId?: string | null;
     startsAt?: Date;
     endsAt?: Date;
   } = {};
@@ -342,6 +366,17 @@ export async function PATCH(req: Request) {
   if (body.spotlight !== undefined) {
     data.spotlight =
       body.spotlight === null ? Prisma.DbNull : body.spotlight;
+  }
+  if (body.eventId !== undefined) {
+    const eventResolved = await resolveEventId(body.eventId);
+    if (
+      eventResolved &&
+      typeof eventResolved === "object" &&
+      "error" in eventResolved
+    ) {
+      return NextResponse.json({ error: eventResolved.error }, { status: 400 });
+    }
+    data.eventId = eventResolved === undefined ? null : eventResolved;
   }
 
   const touchFocus =

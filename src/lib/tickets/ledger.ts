@@ -5,6 +5,7 @@ import {
     writeAudit,
     type AuditCtx,
 } from "@/lib/payments/ledger";
+import { debitWalletWithFx } from "@/lib/payments/fx-wallet";
 import { PURCHASE_PROVIDER } from "@/lib/payments/rails";
 import {
     creditTreasury,
@@ -126,11 +127,24 @@ export async function purchaseTickets(input: {
     const total = lockedType.priceCents * qty;
     let debit;
     try {
-      debit = await debitWalletLocked(tx, input.buyerUserId, currency, total);
+      debit = await debitWalletWithFx(
+        tx,
+        input.buyerUserId,
+        currency,
+        total,
+        {
+          fxCdfPerUsd: event.fxCdfPerUsd,
+          fxKwPerUsd: event.fxKwPerUsd,
+        },
+        `TIX-FX-${event.id.slice(0, 8)}`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("Solde insuffisant")) {
-        throw new TicketError(402, "Solde insuffisant");
+        throw new TicketError(
+          402,
+          "Solde insuffisant — convertis ou recharge dans la devise du billet (taux de l’événement appliqué)",
+        );
       }
       throw new TicketError(400, message || "Paiement impossible");
     }

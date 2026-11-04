@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchJson } from "@/lib/fetch-json";
-import { formatMoney } from "@/lib/money";
+import { DEFAULT_FX, formatMoney } from "@/lib/money";
+import { EVENT_POSTERS, eventPosterUrl } from "@/lib/tickets/posters";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -28,6 +29,8 @@ type EventRow = {
   platformFeeBps: number;
   platformFeeCents: number;
   currency: string;
+  fxCdfPerUsd?: number;
+  fxKwPerUsd?: number;
   venue: string;
   city: string;
   description: string;
@@ -133,6 +136,8 @@ export function EventTicketSettings() {
   const [venue, setVenue] = useState("");
   const [city, setCity] = useState("");
   const [currency, setCurrency] = useState("USD");
+  const [fxCdf, setFxCdf] = useState(String(DEFAULT_FX.cdfPerUsd));
+  const [fxConfirmed, setFxConfirmed] = useState(false);
   const [organizerKind, setOrganizerKind] = useState<"ARTIST" | "ORGANIZATION">(
     "ARTIST",
   );
@@ -217,6 +222,8 @@ export function EventTicketSettings() {
     setVenue(event.venue);
     setCity(event.city);
     setCurrency(event.currency);
+    setFxCdf(String(event.fxCdfPerUsd ?? DEFAULT_FX.cdfPerUsd));
+    setFxConfirmed(true);
     setOrganizerKind(event.organizerKind as "ARTIST" | "ORGANIZATION");
     setOrganizerName(event.organizerName);
     setOrganizerUserId(event.organizerUserId);
@@ -239,6 +246,8 @@ export function EventTicketSettings() {
     setVenue("");
     setCity("");
     setCurrency("USD");
+    setFxCdf(String(DEFAULT_FX.cdfPerUsd));
+    setFxConfirmed(false);
     setOrganizerKind("ARTIST");
     setOrganizerName("");
     setOrganizerUserId("");
@@ -264,15 +273,22 @@ export function EventTicketSettings() {
       );
       return;
     }
+    if (selectedId === "new" && !fxConfirmed) {
+      toast.error("Valide le taux de change du jour");
+      return;
+    }
     setBusy(true);
     const userId = pickedIdRef.current || organizerUserId || undefined;
     const payload = {
       title,
       description,
-      imageUrl: imageUrl || null,
+      imageUrl:
+        imageUrl.trim() ||
+        eventPosterUrl(null, `${title}|${organizerName}|${Date.now()}`),
       venue,
       city,
       currency,
+      fxCdfPerUsd: Number.parseInt(fxCdf, 10) || DEFAULT_FX.cdfPerUsd,
       organizerKind,
       organizerName: typed,
       ...(userId ? { organizerUserId: userId } : {}),
@@ -532,11 +548,49 @@ export function EventTicketSettings() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          <Input
-            placeholder="Visuel (URL)"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-          />
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">Affiche</p>
+            <div
+              className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-cover bg-center"
+              style={{
+                backgroundImage: `url(${eventPosterUrl(imageUrl || null, selectedId === "new" ? title || "new" : (selectedId ?? "new"))})`,
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-3">
+                <p className="text-sm font-extrabold text-white">
+                  {title || "Aperçu"}
+                </p>
+                <p className="text-[11px] text-white/70">
+                  {organizerName || "—"}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {EVENT_POSTERS.map((url) => (
+                <button
+                  key={url}
+                  type="button"
+                  onClick={() => setImageUrl(url)}
+                  className={`h-20 w-14 shrink-0 overflow-hidden rounded-lg border-2 ${
+                    imageUrl === url ? "border-primary" : "border-transparent"
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+            <Input
+              placeholder="Ou colle une URL d’affiche"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+            />
+          </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Input
               placeholder="Lieu"
@@ -571,6 +625,32 @@ export function EventTicketSettings() {
               <option value="CDF">CDF</option>
               <option value="KW">KW</option>
             </select>
+            <Input
+              className="w-36"
+              type="number"
+              min={1}
+              value={fxCdf}
+              disabled={selectedId !== "new"}
+              onChange={(e) => {
+                setFxCdf(e.target.value);
+                setFxConfirmed(false);
+              }}
+              placeholder="Taux CDF / $US"
+            />
+            {selectedId === "new" ? (
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={fxConfirmed}
+                  onChange={(e) => setFxConfirmed(e.target.checked)}
+                />
+                Je valide le taux du jour
+              </label>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Taux figé · 1 $US = {fxCdf} CDF
+              </span>
+            )}
             <Button
               type="button"
               variant={feeMode === "PERCENT" ? "default" : "outline"}
