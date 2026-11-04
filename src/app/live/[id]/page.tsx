@@ -125,16 +125,7 @@ type LiveDetail = {
   presentedProductId?: string | null;
   catalogScrollY?: number;
   lastGiftBurst?: { id: string; amountCents: number } | null;
-  catalogProducts?: {
-    id: string;
-    title: string;
-    description: string | null;
-    images: string[];
-    priceCents: number;
-    currency?: string;
-    category?: string;
-    shop?: { id?: string; name?: string; slug?: string };
-  }[];
+  catalogProducts?: LiveCatalogProduct[];
   guests?: LiveGuestCard[];
   myGuest?: LiveGuestCard | null;
   publishers?: LivePublisherPeer[];
