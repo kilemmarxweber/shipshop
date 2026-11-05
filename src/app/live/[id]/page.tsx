@@ -233,6 +233,7 @@ export default function LiveRoomPage({
   const guestCameraOnRef = useRef(false);
   const guestMicOnRef = useRef(false);
   const remoteHostVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteHostCameraPipRef = useRef<HTMLVideoElement | null>(null);
   const sessionUserIdRef = useRef<string | null>(null);
   liveIdRef.current = id;
   endedRef.current = live?.status === "ENDED";
@@ -887,18 +888,29 @@ export default function LiveRoomPage({
     reconnectKey: rtcNonce,
   });
   const remoteStreams = sfuEnabled ? sfu.remoteStreams : mesh.remoteStreams;
-  const hostRemoteStream = live?.user?.id
+  const remoteScreenStreams = sfuEnabled ? sfu.remoteScreenStreams : {};
+  const hostRemoteCameraStream = live?.user?.id
     ? (remoteStreams[live.user.id] ?? null)
     : null;
+  const hostRemoteScreenStream = live?.user?.id
+    ? (remoteScreenStreams[live.user.id] ?? null)
+    : null;
+  const hostRemoteStream = hostRemoteScreenStream ?? hostRemoteCameraStream;
   const hostRemoteTrackKey = hostRemoteStream
     ? hostRemoteStream
         .getTracks()
         .map((t) => `${t.kind}:${t.id}:${t.readyState}:${t.enabled}`)
         .join("|")
     : "";
+  const hostRemoteCameraTrackKey = hostRemoteCameraStream
+    ? hostRemoteCameraStream
+        .getTracks()
+        .map((t) => `${t.kind}:${t.id}:${t.readyState}:${t.enabled}`)
+        .join("|")
+    : "";
   const hostRemoteAudioRef = useRemoteLiveAudio(
-    hostRemoteStream,
-    Boolean(!isHost && hostRemoteStream),
+    hostRemoteCameraStream ?? hostRemoteScreenStream,
+    Boolean(!isHost && (hostRemoteCameraStream || hostRemoteScreenStream)),
   );
 
   // Sync host remote video (toujours muted — le son passe par <audio>)
@@ -914,6 +926,29 @@ export default function LiveRoomPage({
     if (el.srcObject !== hostRemoteStream) el.srcObject = hostRemoteStream;
     void el.play().catch(() => undefined);
   }, [hostRemoteStream, hostRemoteTrackKey, isHost]);
+
+  // Caméra host en PiP quand le ScreenShare est la scène principale
+  useEffect(() => {
+    if (isHost) return;
+    const el = remoteHostCameraPipRef.current;
+    if (!el) return;
+    const pipStream =
+      hostRemoteScreenStream && hostRemoteCameraStream
+        ? hostRemoteCameraStream
+        : null;
+    if (!pipStream) {
+      el.srcObject = null;
+      return;
+    }
+    el.muted = true;
+    if (el.srcObject !== pipStream) el.srcObject = pipStream;
+    void el.play().catch(() => undefined);
+  }, [
+    hostRemoteCameraStream,
+    hostRemoteCameraTrackKey,
+    hostRemoteScreenStream,
+    isHost,
+  ]);
 
   useEffect(() => {
     if (isHost || !live || live.status !== "LIVE") {
@@ -1427,9 +1462,19 @@ export default function LiveRoomPage({
   const showHostLocalVideo =
     isHost && localCameraOn && !ended && Boolean(hostStream);
   const hostRemote = hostRemoteStream;
-  // Viewer : plein écran dès qu’un flux distant existe et cam host ON
+  const hostScreenOn = Boolean(hostRemoteScreenStream);
+  // Viewer : plein écran dès qu’un flux distant existe (écran ou cam)
   const showHostRemoteVideo =
-    !isHost && !ended && Boolean(hostRemote) && live.cameraOn !== false;
+    !isHost &&
+    !ended &&
+    Boolean(hostRemote) &&
+    (hostScreenOn || live.cameraOn !== false);
+  const showHostCameraPip =
+    !isHost &&
+    !ended &&
+    hostScreenOn &&
+    Boolean(hostRemoteCameraStream) &&
+    live.cameraOn !== false;
   const viewerWaitingForMedia = !isHost && !ended && !paused && !hostRemote;
   const selected = overlays.find((o) => o.id === selectedOverlayId);
   const chats = live.chats ?? [];
@@ -1552,12 +1597,30 @@ export default function LiveRoomPage({
                   autoPlay
                   {...iosInlineVideo}
                   disablePictureInPicture
-                  style={showHostRemoteVideo ? videoFilterStyle : undefined}
+                  style={
+                    showHostRemoteVideo && !hostScreenOn
+                      ? videoFilterStyle
+                      : undefined
+                  }
                   className={
                     showHostRemoteVideo
-                      ? hostMediaFill
+                      ? hostScreenOn
+                        ? "absolute inset-0 size-full object-contain bg-black"
+                        : hostMediaFill
                       : "pointer-events-none absolute h-px w-px opacity-0"
                   }
+                />
+              ) : null}
+
+              {showHostCameraPip ? (
+                <video
+                  ref={remoteHostCameraPipRef}
+                  muted
+                  autoPlay
+                  {...iosInlineVideo}
+                  disablePictureInPicture
+                  style={videoFilterStyle}
+                  className="absolute bottom-28 left-3 z-[6] h-36 w-28 rounded-2xl border border-white/30 object-cover shadow-lg [-webkit-transform:scaleX(-1)] [transform:scaleX(-1)]"
                 />
               ) : null}
 

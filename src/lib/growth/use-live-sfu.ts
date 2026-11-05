@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-  ConnectionState,
-  Room,
-  RoomEvent,
-  Track,
-  type RemoteTrack,
-  type RemoteTrackPublication,
-  type RemoteParticipant,
-  type LocalTrackPublication,
-} from "livekit-client";
 import { fetchJson } from "@/lib/fetch-json";
+import {
+    ConnectionState,
+    Room,
+    RoomEvent,
+    Track,
+    type LocalTrackPublication,
+    type RemoteParticipant,
+    type RemoteTrack,
+    type RemoteTrackPublication,
+} from "livekit-client";
+import { useEffect, useRef, useState } from "react";
 
 type RemoteStreamMap = Record<string, MediaStream>;
 
@@ -60,6 +60,13 @@ function removeRemoteTrack(
   return { ...prev, [identity]: existing };
 }
 
+function isScreenShareSource(source: Track.Source) {
+  return (
+    source === Track.Source.ScreenShare ||
+    source === Track.Source.ScreenShareAudio
+  );
+}
+
 /**
  * LiveKit SFU — host/guests publient une fois ; viewers s’abonnent.
  * Même contrat que useLiveRtc : remoteStreams[userId] = MediaStream.
@@ -82,6 +89,8 @@ export function useLiveSfu(opts: {
     reconnectKey = 0,
   } = opts;
   const [remoteStreams, setRemoteStreams] = useState<RemoteStreamMap>({});
+  const [remoteScreenStreams, setRemoteScreenStreams] =
+    useState<RemoteStreamMap>({});
   const [failed, setFailed] = useState(false);
 
   const roomRef = useRef<Room | null>(null);
@@ -118,7 +127,7 @@ export function useLiveSfu(opts: {
 
     const onSubscribed = (
       track: RemoteTrack,
-      _pub: RemoteTrackPublication,
+      pub: RemoteTrackPublication,
       participant: RemoteParticipant,
     ) => {
       if (track.kind !== Track.Kind.Audio && track.kind !== Track.Kind.Video) {
@@ -126,25 +135,33 @@ export function useLiveSfu(opts: {
       }
       const media = track.mediaStreamTrack;
       if (!media) return;
-      setRemoteStreams((prev) =>
-        addRemoteTrack(prev, participant.identity, media),
-      );
+      const setter = isScreenShareSource(pub.source)
+        ? setRemoteScreenStreams
+        : setRemoteStreams;
+      setter((prev) => addRemoteTrack(prev, participant.identity, media));
     };
 
     const onUnsubscribed = (
       track: RemoteTrack,
-      _pub: RemoteTrackPublication,
+      pub: RemoteTrackPublication,
       participant: RemoteParticipant,
     ) => {
       const media = track.mediaStreamTrack;
       if (!media) return;
-      setRemoteStreams((prev) =>
-        removeRemoteTrack(prev, participant.identity, media),
-      );
+      const setter = isScreenShareSource(pub.source)
+        ? setRemoteScreenStreams
+        : setRemoteStreams;
+      setter((prev) => removeRemoteTrack(prev, participant.identity, media));
     };
 
     const onParticipantDisconnected = (participant: RemoteParticipant) => {
       setRemoteStreams((prev) => {
+        if (!prev[participant.identity]) return prev;
+        const next = { ...prev };
+        delete next[participant.identity];
+        return next;
+      });
+      setRemoteScreenStreams((prev) => {
         if (!prev[participant.identity]) return prev;
         const next = { ...prev };
         delete next[participant.identity];
@@ -294,6 +311,7 @@ export function useLiveSfu(opts: {
       room.removeAllListeners();
       publishedIdsRef.current.clear();
       setRemoteStreams({});
+      setRemoteScreenStreams({});
       void room.disconnect();
       if (roomRef.current === room) roomRef.current = null;
     };
@@ -378,5 +396,5 @@ export function useLiveSfu(opts: {
     };
   }, [enabled, isPublisher, localStream]);
 
-  return { remoteStreams, failed };
+  return { remoteStreams, remoteScreenStreams, failed };
 }
