@@ -74,6 +74,7 @@ model User {
   giftsReceived     CreatorGift[]         @relation("GiftsReceived")
   idempotentOps     IdempotentOperation[]
   liveChats         LiveChatMessage[]
+  liveViewerPresence LiveViewerPresence[]
   challengeDone     ChallengeCompletion[]
   campaignInfluencer BrandCampaign[]      @relation("CampaignInfluencer")
   eventsCreated      Event[]              @relation("EventCreator")
@@ -1357,10 +1358,34 @@ model CreatorLive {
   chats    LiveChatMessage[]
   guests   LiveGuest[]
   rtcSignals LiveRtcSignal[]
+  viewers  LiveViewerPresence[]
 
   @@index([status, startedAt])
   @@index([userId, status])
   @@map("creator_live")
+}
+
+/// Présence viewers (heartbeat) — compte exact + liste host
+model LiveViewerPresence {
+  id          String      @id @default(cuid())
+  liveId      String
+  live        CreatorLive @relation(fields: [liveId], references: [id], onDelete: Cascade)
+  /// userId connecté ou clé anonyme `anon:…`
+  peerKey     String
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  displayName String
+  imageUrl    String?
+  joinedAt    DateTime    @default(now())
+  lastSeenAt  DateTime    @default(now())
+  /// Atteint dès qu’un viewer a suivi ≥ 1 minute
+  qualifiedAt DateTime?
+  leftAt      DateTime?
+
+  @@unique([liveId, peerKey])
+  @@index([liveId, lastSeenAt])
+  @@index([liveId, qualifiedAt])
+  @@map("live_viewer_presence")
 }
 
 /// Follower / invité live (demande viewer OU invitation host)

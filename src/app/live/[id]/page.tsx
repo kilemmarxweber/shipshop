@@ -109,6 +109,19 @@ type LiveDetail = {
   cameraOn?: boolean;
   micOn?: boolean;
   viewerPeak?: number;
+  viewerCount?: number;
+  qualifiedViewerCount?: number;
+  viewers?: Array<{
+    peerKey: string;
+    userId?: string | null;
+    name: string;
+    image?: string | null;
+    joinedAt: string;
+    lastSeenAt: string;
+    qualified: boolean;
+    online: boolean;
+    watchedSeconds: number;
+  }>;
   pauseTimeoutMs?: number;
   /** Fond CSS temporaire (aurora, sunset, …) */
   backdropPreset?: string | null;
@@ -185,6 +198,12 @@ export default function LiveRoomPage({
   const [filterPickerOpen, setFilterPickerOpen] = useState(false);
   const [layoutPickerOpen, setLayoutPickerOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [presenceViewers, setPresenceViewers] = useState<
+    NonNullable<LiveDetail["viewers"]>
+  >([]);
+  const [presenceCount, setPresenceCount] = useState<number | null>(null);
+  const [qualifiedCount, setQualifiedCount] = useState(0);
   const [giftCustomOpen, setGiftCustomOpen] = useState(false);
   const [giftCustomAmount, setGiftCustomAmount] = useState("150");
   /** Afficher / masquer le fil de commentaires (local, bas-gauche) */
@@ -377,6 +396,8 @@ export default function LiveRoomPage({
         prev.plannedMinutes === next.plannedMinutes &&
         prev.pausedAt === next.pausedAt &&
         prev.viewerPeak === next.viewerPeak &&
+        prev.viewerCount === next.viewerCount &&
+        prev.qualifiedViewerCount === next.qualifiedViewerCount &&
         prev.statusMessage === next.statusMessage &&
         prev.user?.id === user?.id &&
         prev.product?.id === product?.id &&
@@ -622,6 +643,58 @@ export default function LiveRoomPage({
       setLiveRefreshing(false);
     }
   }
+
+  // Présence spectateurs (compte exact + liste host)
+  useEffect(() => {
+    if (!live || live.status === "ENDED") return;
+    let cancelled = false;
+    const peerKey =
+      session?.user?.id ??
+      `anon:${
+        typeof window !== "undefined"
+          ? (window.sessionStorage.getItem("ss-live-peer") ??
+            (() => {
+              const id = `anon:${crypto.randomUUID()}`;
+              window.sessionStorage.setItem("ss-live-peer", id);
+              return id;
+            })())
+          : "anon:ssr"
+      }`;
+
+    async function ping() {
+      const { res, data } = await fetchJson<{
+        viewerCount?: number;
+        qualifiedViewerCount?: number;
+        viewers?: NonNullable<LiveDetail["viewers"]>;
+      }>(`/api/growth/lives/${id}/presence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          peerKey,
+          displayName: session?.user?.name ?? "Viewer",
+        }),
+      });
+      if (cancelled || !res.ok || !data) return;
+      if (typeof data.viewerCount === "number")
+        setPresenceCount(data.viewerCount);
+      if (typeof data.qualifiedViewerCount === "number") {
+        setQualifiedCount(data.qualifiedViewerCount);
+      }
+      if (data.viewers) setPresenceViewers(data.viewers);
+    }
+
+    void ping();
+    const timer = window.setInterval(() => void ping(), 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      void fetchJson(`/api/growth/lives/${id}/presence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "leave", peerKey }),
+      });
+    };
+  }, [id, live?.status, session?.user?.id, session?.user?.name]);
 
   async function guestAction(action: string, extra?: Record<string, unknown>) {
     const { res, data } = await fetchJson<{
@@ -1936,12 +2009,108 @@ export default function LiveRoomPage({
               <Clock className="size-3" />
               {formatLiveClock(elapsedSec)}
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-black/45 px-2 py-1 text-[11px] font-bold tabular-nums backdrop-blur-sm">
+            <button
+              type="button"
+              data-no-like
+              onClick={() => setViewersOpen(true)}
+              className="inline-flex items-center gap-1 rounded-full bg-black/45 px-2 py-1 text-[11px] font-bold tabular-nums backdrop-blur-sm transition-transform active:scale-95"
+              aria-label="Voir les spectateurs"
+            >
               <Eye className="size-3" />
-              {compactCount(live.viewerPeak ?? 0)}
-            </span>
+              {compactCount(
+                presenceCount ?? live.viewerCount ?? live.viewerPeak ?? 0,
+              )}
+            </button>
           </div>
         </div>
+
+        {viewersOpen ? (
+          <div
+            data-no-like
+            className="pointer-events-auto absolute inset-0 z-[60] flex items-end justify-center bg-black/55 p-3 sm:items-center"
+            onClick={() => setViewersOpen(false)}
+          >
+            <div
+              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#12121A] shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-emerald-500/15">
+                  <Eye className="size-4 text-emerald-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-extrabold text-white">
+                    Spectateurs
+                  </p>
+                  <p className="text-[11px] font-semibold text-white/55">
+                    {compactCount(presenceCount ?? live.viewerCount ?? 0)} en
+                    direct
+                    {(qualifiedCount || live.qualifiedViewerCount || 0) > 0
+                      ? ` · ${compactCount(qualifiedCount || live.qualifiedViewerCount || 0)} ≥ 1 min`
+                      : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white"
+                  onClick={() => setViewersOpen(false)}
+                >
+                  Fermer
+                </button>
+              </div>
+              <div className="max-h-[55vh] space-y-2 overflow-y-auto px-3 py-3">
+                {(presenceViewers.length
+                  ? presenceViewers
+                  : (live.viewers ?? [])
+                ).length === 0 ? (
+                  <p className="px-2 py-8 text-center text-sm text-white/60">
+                    Personne n’est encore connecté sur ce live.
+                  </p>
+                ) : (
+                  (presenceViewers.length
+                    ? presenceViewers
+                    : (live.viewers ?? [])
+                  ).map((row) => (
+                    <div
+                      key={row.peerKey}
+                      className={cn(
+                        "flex items-center gap-3 rounded-2xl border border-white/8 bg-white/5 px-3 py-2.5",
+                        !row.online && "opacity-70",
+                      )}
+                    >
+                      {row.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={row.image}
+                          alt=""
+                          className="size-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-10 items-center justify-center rounded-full bg-[#FF4D8D] text-sm font-extrabold text-white">
+                          {(row.name || "?").slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-extrabold text-white">
+                          {row.name}
+                        </p>
+                        <p className="text-[11px] font-semibold text-white/50">
+                          {row.online ? "En ligne" : "Parti"}
+                          {" · "}
+                          {Math.max(0, Math.floor(row.watchedSeconds / 60))} min
+                          {row.qualified ? " · ≥1 min" : ""}
+                        </p>
+                      </div>
+                      {row.online ? (
+                        <span className="size-2 rounded-full bg-emerald-400" />
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Cœurs flottants (double-tap / j’aime) */}
         <LiveStageBurst bursts={stageBursts} />

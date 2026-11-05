@@ -46,6 +46,11 @@ import {
 } from "@/lib/growth/live-session";
 import { isLiveSfuConfigured } from "@/lib/growth/live-sfu";
 import {
+    leaveLiveViewer,
+    listLiveViewers,
+    pingLiveViewer,
+} from "@/lib/growth/live-viewers";
+import {
     isLiveStageLayoutId,
     normalizeStageLayout,
 } from "@/lib/growth/live-stage-layout";
@@ -345,10 +350,15 @@ export async function GET(
   const catalogProducts = catalog.catalogOpen
     ? (await listLiveCatalogProducts(live.userId)).products
     : [];
+  const presence = await listLiveViewers(id);
   return NextResponse.json({
     live: publicLive({
       ...liveWithoutGifts,
       likeCount,
+      viewerCount: presence.viewerCount,
+      viewerPeak: Math.max(live.viewerPeak ?? 0, presence.viewerCount),
+      qualifiedViewerCount: presence.qualifiedCount,
+      ...(isHostViewer ? { viewers: presence.viewers } : {}),
       backdropPreset,
       backdropUrl,
       videoFilter:
@@ -411,6 +421,7 @@ export async function POST(
     userId?: string;
     userIds?: string[];
     peerId?: string;
+    peerKey?: string;
     toPeerId?: string;
     payload?: unknown;
     preset?: string | null;
@@ -452,6 +463,38 @@ export async function POST(
       }),
     );
     return NextResponse.json({ live: publicLive(updated) });
+  }
+
+  if (json.action === "presence") {
+    if (live.status === "ENDED") {
+      return NextResponse.json({ error: "Live terminé" }, { status: 400 });
+    }
+    const peerKey =
+      typeof json.peerKey === "string" && json.peerKey.trim()
+        ? json.peerKey.trim().slice(0, 80)
+        : session.user.id;
+    const presence = await pingLiveViewer({
+      liveId: id,
+      peerKey,
+      userId: session.user.id,
+      displayName: session.user.name ?? "Viewer",
+      imageUrl: session.user.image ?? null,
+      isHost,
+    });
+    return NextResponse.json({
+      viewerCount: presence?.viewerCount ?? 0,
+      qualifiedViewerCount: presence?.qualifiedCount ?? 0,
+      ...(isHost ? { viewers: presence?.viewers ?? [] } : {}),
+    });
+  }
+
+  if (json.action === "presence_leave") {
+    const peerKey =
+      typeof json.peerKey === "string" && json.peerKey.trim()
+        ? json.peerKey.trim().slice(0, 80)
+        : session.user.id;
+    await leaveLiveViewer({ liveId: id, peerKey });
+    return NextResponse.json({ ok: true });
   }
 
   if (json.action === "pause") {
