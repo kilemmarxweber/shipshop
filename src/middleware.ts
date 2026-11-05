@@ -2,6 +2,14 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 function originAllowed(origin: string) {
+  if (
+    origin === "shipshop://" ||
+    origin.startsWith("shipshop://") ||
+    origin === "exp://" ||
+    origin.startsWith("exp://")
+  ) {
+    return true;
+  }
   let url: URL;
   try {
     url = new URL(origin);

@@ -25,6 +25,7 @@ function trustedOrigins() {
       "http://localhost:3000",
       "http://localhost:8081",
       "shipshop://",
+      "shipshop://app",
       "exp://",
       "exp://**",
       ...extra,
