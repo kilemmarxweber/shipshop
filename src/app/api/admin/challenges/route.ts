@@ -103,6 +103,7 @@ const createSchema = z.object({
   productId: z.string().optional().nullable(),
   productTeaser: challengeTeaserSchema.optional().nullable(),
   spotlight: challengeSpotlightSchema.optional().nullable(),
+  eventId: z.string().optional().nullable(),
   sponsorCampaignId: z.string().optional().nullable(),
 });
 
@@ -116,10 +117,24 @@ const patchSchema = z.object({
   productId: z.string().optional().nullable(),
   productTeaser: challengeTeaserSchema.optional().nullable(),
   spotlight: challengeSpotlightSchema.optional().nullable(),
+  eventId: z.string().optional().nullable(),
   endNow: z.boolean().optional(),
   reactivate: z.boolean().optional(),
   hours: z.number().int().min(1).max(168).optional(),
 });
+
+async function resolveEventId(eventId: string | null | undefined) {
+  if (eventId === undefined) return undefined;
+  if (!eventId) return null;
+  const event = await withDbRetry(() =>
+    prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    }),
+  );
+  if (!event) return { error: "Événement billet introuvable" as const };
+  return event.id;
+}
 
 async function resolveFocusPayload(input: {
   productFocus?: ChallengeProductFocus;
@@ -286,21 +301,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const hours = parsed.hours ?? 24;
-  const challenge = await withDbRetry(() =>
-    prisma.dailyChallenge.create({
-      data: {
-        title,
-        body,
-        category,
-        city: parsed.city?.trim() || "Kinshasa",
-        startsAt: new Date(),
-        endsAt: endsInHours(hours),
-        productFocus: resolved.focus,
-        productId: resolved.productId,
-        productTeaser:
-          resolved.productTeaser === null
-            ? Prisma.DbNull
   const eventResolved = await resolveEventId(parsed.eventId);
   if (eventResolved && typeof eventResolved === "object" && "error" in eventResolved) {
     return NextResponse.json({ error: eventResolved.error }, { status: 400 });
@@ -329,6 +329,21 @@ export async function POST(req: Request) {
               ? undefined
               : parsed.spotlight,
         eventId: eventResolved === undefined ? null : eventResolved,
+        sponsorCampaignId: parsed.sponsorCampaignId || null,
+      },
+      include: productInclude,
+    }),
+  );
+  return NextResponse.json({ challenge });
+}
+
+export async function PATCH(req: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+  const { isOwner } = await assertChipShopOwner(session.user.id);
+  if (!isOwner) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
@@ -343,21 +358,6 @@ export async function POST(req: Request) {
     productId?: string | null;
     productTeaser?: Prisma.InputJsonValue | typeof Prisma.DbNull;
     spotlight?: Prisma.InputJsonValue | typeof Prisma.DbNull;
-    startsAt?: Date;
-    endsAt?: Date;
-  } = {};
-
-  if (body.spotlight !== undefined) {
-    data.spotlight =
-      body.spotlight === null ? Prisma.DbNull : body.spotlight;
-  }
-
-  const touchFocus =
-    body.productFocus !== undefined ||
-    body.productId !== undefined ||
-    body.productTeaser !== undefined;
-
-  if (touchFocus) {
     eventId?: string | null;
     startsAt?: Date;
     endsAt?: Date;
@@ -377,6 +377,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: eventResolved.error }, { status: 400 });
     }
     data.eventId = eventResolved === undefined ? null : eventResolved;
+  }
+
+  const touchFocus =
+    body.productFocus !== undefined ||
+    body.productId !== undefined ||
+    body.productTeaser !== undefined;
+
+  if (touchFocus) {
+    const existing = await withDbRetry(() =>
+      prisma.dailyChallenge.findUnique({
+        where: { id: body.id },
+        select: {
+          productFocus: true,
+          productId: true,
+          productTeaser: true,
         },
       }),
     );
