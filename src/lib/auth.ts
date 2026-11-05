@@ -1,12 +1,12 @@
-import { betterAuth } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { bearer, organization } from "better-auth/plugins";
-import { isPlatformRole, orgAccessControl, orgRoles } from "@/lib/org-access";
 import { emailFromPhone, isPhoneBackedEmail } from "@/lib/auth-register";
+import { isPlatformRole, orgAccessControl, orgRoles } from "@/lib/org-access";
 import { looksLikeEmail, normalizeAccountPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { ensureMembership } from "@/lib/system-org";
+import { betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { bearer, organization } from "better-auth/plugins";
 
 function trustedOrigins() {
   const base = (process.env.BETTER_AUTH_URL ?? "http://localhost:3000").replace(
@@ -69,7 +69,9 @@ export const auth = betterAuth({
             code: "PHONE_TAKEN",
           });
         }
-        const emailRaw = String(ctx.body?.email ?? "").trim().toLowerCase();
+        const emailRaw = String(ctx.body?.email ?? "")
+          .trim()
+          .toLowerCase();
         let email = emailRaw;
         if (!email || isPhoneBackedEmail(email)) {
           email = emailFromPhone(phone);
