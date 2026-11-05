@@ -38,7 +38,7 @@ function corsHeaders(origin: string) {
   };
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const origin = request.headers.get("origin");
   const allowed = Boolean(origin && originAllowed(origin));
   if (request.method === "OPTIONS") {
