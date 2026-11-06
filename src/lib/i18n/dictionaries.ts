@@ -199,6 +199,9 @@ export type Messages = {
     interestedIn: string;
     messageFailed: string;
     discoverShop: string;
+    seeShop: string;
+    seeMore: string;
+    seeLess: string;
   };
   product: {
     payFromWallet: string;
@@ -698,6 +701,9 @@ const fr: Messages = {
     interestedIn: "Bonjour, je suis intéressé par",
     messageFailed: "Message impossible",
     discoverShop: "Découvrez",
+    seeShop: "Voir la boutique",
+    seeMore: "Voir plus",
+    seeLess: "Voir moins",
   },
   product: {
     payFromWallet: "Payer au téléphone — argent bloqué jusqu’à la réception",
@@ -1210,6 +1216,9 @@ const en: Messages = {
     interestedIn: "Hi, I'm interested in",
     messageFailed: "Could not send message",
     discoverShop: "Discover",
+    seeShop: "View shop",
+    seeMore: "See more",
+    seeLess: "See less",
   },
   product: {
     payFromWallet: "Pay from prepaid balance",
@@ -1719,6 +1728,9 @@ const pt: Messages = {
     interestedIn: "Olá, estou interessado em",
     messageFailed: "Não foi possível enviar a mensagem",
     discoverShop: "Descubra",
+    seeShop: "Ver a loja",
+    seeMore: "Ver mais",
+    seeLess: "Ver menos",
   },
   product: {
     payFromWallet: "Pagamento a partir do saldo pré-pago",

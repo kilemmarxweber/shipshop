@@ -44,13 +44,18 @@ export type GrowthSurface = {
     title: string;
     status?: string;
     viewerPeak?: number;
+    viewerCount?: number;
     followedByMe?: boolean;
+    hostKind?: "OWNER" | "ADMIN" | "INFLUENCER" | "CREATOR";
+    hostLabel?: string;
+    shop?: { name: string; slug?: string; logoUrl?: string | null } | null;
     user: { id?: string; name: string; image?: string | null };
     product?: {
       id: string;
       title: string;
       images: string[];
       priceCents: number;
+      shop?: { name: string; slug?: string; logoUrl?: string | null } | null;
     } | null;
   }[];
 };

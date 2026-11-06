@@ -1404,6 +1404,15 @@ html[data-tabbar-open] .feed-actions-rail {
     box-shadow: 0 0 0 7px rgba(225, 29, 72, 0);
   }
 }
+@keyframes ss-shop-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--trust) 70%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--trust) 0%, transparent);
+  }
+}
 @keyframes ss-shop-live-face {
   0%,
   42% {
@@ -1439,6 +1448,9 @@ html[data-tabbar-open] .feed-actions-rail {
 .ss-shop-live {
   animation: ss-shop-live-pulse 1.2s ease-out infinite;
 }
+.ss-shop-pulse {
+  animation: ss-shop-pulse 1.2s ease-out infinite;
+}
 .ss-shop-live-face {
   animation: ss-shop-live-face 2.6s ease-in-out infinite;
 }
@@ -1447,6 +1459,7 @@ html[data-tabbar-open] .feed-actions-rail {
 }
 @media (prefers-reduced-motion: reduce) {
   .ss-shop-live,
+  .ss-shop-pulse,
   .ss-shop-live-face,
   .ss-shop-live-label {
     animation: none;

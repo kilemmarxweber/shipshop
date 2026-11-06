@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { hasActiveBadge, refreshAccountBadges } from "@/lib/growth/badges";
 import { assertChipShopOwner } from "@/lib/kyc";
+import { enrichLiveTeasers } from "@/lib/growth/enrich-live-teasers";
 import { notifySubscribersLiveStarted } from "@/lib/growth/live-notify";
 import { endActiveLivesForHost } from "@/lib/growth/live-backdrop-purge";
 
@@ -34,12 +35,16 @@ export async function GET() {
             images: true,
             priceCents: true,
             currency: true,
+            shop: {
+              select: { name: true, slug: true, logoUrl: true },
+            },
           },
         },
       },
     }),
   );
-  return NextResponse.json({ lives });
+  const enriched = await enrichLiveTeasers(lives);
+  return NextResponse.json({ lives: enriched });
 }
 
 export async function POST(req: Request) {

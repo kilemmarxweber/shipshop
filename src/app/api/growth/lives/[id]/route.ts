@@ -350,15 +350,10 @@ export async function GET(
   const catalogProducts = catalog.catalogOpen
     ? (await listLiveCatalogProducts(live.userId)).products
     : [];
-  const presence = await listLiveViewers(id);
   return NextResponse.json({
     live: publicLive({
       ...liveWithoutGifts,
       likeCount,
-      viewerCount: presence.viewerCount,
-      viewerPeak: Math.max(live.viewerPeak ?? 0, presence.viewerCount),
-      qualifiedViewerCount: presence.qualifiedCount,
-      ...(isHostViewer ? { viewers: presence.viewers } : {}),
       backdropPreset,
       backdropUrl,
       videoFilter:
@@ -373,7 +368,7 @@ export async function GET(
       lastGiftBurst: readLastGiftBurst(overlaysRaw),
       chats: [...live.chats].reverse(),
       guests,
-      myGuest,
+      catalogScrollY: catalog.scrollY,
       publishers,
       ...(isHostViewer ? { giftCents, engagement } : {}),
       // Signaling uniquement SSE `/rtc` (poll ne doit pas consumer les signaux)
@@ -421,12 +416,12 @@ export async function POST(
     userId?: string;
     userIds?: string[];
     peerId?: string;
-    peerKey?: string;
     toPeerId?: string;
     payload?: unknown;
     preset?: string | null;
     url?: string | null;
     filter?: string | null;
+    peerKey?: string;
     layout?: string | null;
     locked?: boolean;
     open?: boolean;
@@ -465,6 +460,11 @@ export async function POST(
     return NextResponse.json({ live: publicLive(updated) });
   }
 
+  if (json.action === "pause") {
+    if (!isHost) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+    if (live.status === "ENDED") {
   if (json.action === "presence") {
     if (live.status === "ENDED") {
       return NextResponse.json({ error: "Live terminé" }, { status: 400 });
@@ -497,11 +497,6 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
 
-  if (json.action === "pause") {
-    if (!isHost) {
-      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
-    }
-    if (live.status === "ENDED") {
       return NextResponse.json({ error: "Live terminé" }, { status: 400 });
     }
     const reason =

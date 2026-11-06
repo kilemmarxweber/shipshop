@@ -9,6 +9,7 @@ import {
   parseChallengeSpotlight,
   spotlightCoverCandidates,
 } from "@/lib/growth/challenge-spotlight";
+import { enrichLiveTeasers } from "@/lib/growth/enrich-live-teasers";
 
 type HighlightProduct = {
   id: string;
@@ -124,7 +125,15 @@ export async function GET() {
           giftCents: true,
           user: { select: { id: true, name: true, image: true } },
           product: {
-            select: { id: true, title: true, images: true, priceCents: true },
+            select: {
+              id: true,
+              title: true,
+              images: true,
+              priceCents: true,
+              shop: {
+                select: { name: true, slug: true, logoUrl: true },
+              },
+            },
           },
         },
       }),
@@ -204,7 +213,8 @@ export async function GET() {
         .filter((id): id is string => Boolean(id)),
     ]);
   }
-  const publicLives = lives.map((row) => ({
+  const enrichedLives = await enrichLiveTeasers(lives);
+  const publicLives = enrichedLives.map((row) => ({
     ...row,
     followedByMe: followedHostIds.has(row.user.id),
   }));

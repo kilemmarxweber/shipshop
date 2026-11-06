@@ -1,32 +1,32 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { Archive, CheckCircle2, Eye, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
-import { parseCurrency } from "@/lib/money";
-import { formatMoney, cn } from "@/lib/utils";
 import { CurrencyPicker } from "@/components/currency-picker";
+import { MediaUploader } from "@/components/media-uploader";
+import { PageLoader } from "@/components/page-loader";
+import { ShipRewardsDashboard } from "@/components/shiprewards-dashboard";
+import { ShopPicker } from "@/components/shop-picker";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { MediaUploader } from "@/components/media-uploader";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { PageLoader } from "@/components/page-loader";
-import { ShopPicker } from "@/components/shop-picker";
 import { useConfirmDialog } from "@/components/use-confirm-dialog";
-import { ShipRewardsDashboard } from "@/components/shiprewards-dashboard";
+import { authClient } from "@/lib/auth-client";
+import { fetchJson } from "@/lib/fetch-json";
+import { parseCurrency } from "@/lib/money";
+import { cn, formatMoney } from "@/lib/utils";
+import { Archive, CheckCircle2, Eye, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 type Product = {
   id: string;
@@ -169,9 +169,7 @@ function SellerProductsInner() {
 
   async function remove(p: Product) {
     if (!p.canDelete) {
-      toast.error(
-        "Lié à un paiement — archivez-le plutôt que de le supprimer",
-      );
+      toast.error("Lié à un paiement — archivez-le plutôt que de le supprimer");
       return;
     }
     const ok = await confirm({
@@ -579,6 +577,7 @@ function SellerProductsInner() {
                 <Label>Médias</Label>
                 <MediaUploader
                   urls={editing.images}
+                  category={editing.category}
                   onChange={(images) => setEditing({ ...editing, images })}
                 />
               </div>

@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Radio, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
+import { formatLiveHostLabel } from "@/lib/growth/live-host-label";
 import { authClient } from "@/lib/auth-client";
 
 const DISMISS_KEY = "ss:live-teaser-dismiss";
@@ -31,15 +33,15 @@ function persistDismiss(id: string) {
 }
 
 /**
- * Bulle live pendant le scroll feed :
- * — abonnés : forte (LIVE + Rejoindre)
- * — connectés non-abonnés : info douce
+ * Alerte live au scroll (Pour toi / Abonnements) :
+ * visible même sans abonnement ; disparait au X ; jamais si déjà dans ce live.
  */
 export function LiveScrollTeaser({
   scrollRootSelector = ".feed-snap.feed-product-list",
 }: {
   scrollRootSelector?: string;
 }) {
+  const pathname = usePathname();
   const { data: session } = authClient.useSession();
   const { surface } = useGrowthSurface();
   const lives = surface?.lives ?? [];
@@ -50,27 +52,52 @@ export function LiveScrollTeaser({
     setDismissed(dismissedIds());
   }, []);
 
+  const currentLiveId = pathname?.startsWith("/live/")
+    ? pathname.split("/")[2] ?? null
+    : null;
+
   const pick = useMemo(() => {
     const open = lives.filter(
       (row) =>
         row.status !== "ENDED" &&
         !dismissed.has(row.id) &&
-        row.user?.id !== session?.user?.id,
+        row.user?.id !== session?.user?.id &&
+        row.id !== currentLiveId,
     );
     if (!open.length) return null;
     const followed = open.find((row) => row.followedByMe);
-    return followed ?? open[0] ?? null;
-  }, [lives, dismissed, session?.user?.id]);
+    const featured = open.find(
+      (row) =>
+        (row as { hostKind?: string }).hostKind === "OWNER" ||
+        (row as { hostKind?: string }).hostKind === "ADMIN" ||
+        (row as { hostKind?: string }).hostKind === "INFLUENCER",
+    );
+    return followed ?? featured ?? open[0] ?? null;
+  }, [lives, dismissed, session?.user?.id, currentLiveId]);
 
-  const strong = Boolean(pick?.followedByMe && session?.user);
+  const strong = Boolean(
+    pick &&
+      (pick.followedByMe ||
+        (pick as { hostKind?: string }).hostKind === "OWNER" ||
+        (pick as { hostKind?: string }).hostKind === "ADMIN" ||
+        (pick as { hostKind?: string }).hostKind === "INFLUENCER"),
+  );
+
+  const hostLabel = pick
+    ? formatLiveHostLabel({
+        hostLabel: (pick as { hostLabel?: string }).hostLabel,
+        userName: pick.user?.name,
+        shopName: (pick as { shop?: { name?: string } | null }).shop?.name,
+      })
+    : "";
 
   useEffect(() => {
-    if (!pick) {
+    if (!pick || currentLiveId === pick.id) {
       setVisible(false);
       return;
     }
-    // Abonnés : visible assez tôt ; autres : après un peu de scroll
-    const minScroll = strong ? 40 : 180;
+    // Visible pour tout le monde (abonné ou non) dès un léger scroll
+    const minScroll = strong ? 24 : 80;
     const root =
       document.querySelector(scrollRootSelector) ??
       document.querySelector(".app-main");
@@ -92,9 +119,9 @@ export function LiveScrollTeaser({
       target.removeEventListener("scroll", onScroll);
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [pick, strong, scrollRootSelector]);
+  }, [pick, strong, scrollRootSelector, currentLiveId]);
 
-  if (!pick || !visible) return null;
+  if (!pick || !visible || currentLiveId === pick.id) return null;
 
   return (
     <div
@@ -121,10 +148,16 @@ export function LiveScrollTeaser({
               strong ? "ring-2 ring-destructive" : "ring-1 ring-white/25",
             )}
           >
-            {pick.user?.image ? (
+            {pick.user?.image ||
+            (pick as { shop?: { logoUrl?: string | null } }).shop?.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={pick.user.image}
+                src={
+                  pick.user?.image ||
+                  (pick as { shop?: { logoUrl?: string | null } }).shop
+                    ?.logoUrl ||
+                  ""
+                }
                 alt=""
                 className="size-full object-cover"
               />
@@ -140,12 +173,10 @@ export function LiveScrollTeaser({
               <span className="rounded bg-destructive px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide text-white">
                 LIVE
               </span>
-              <span className="truncate text-[12px] font-bold">
-                {pick.user?.name ?? "Créateur"}
-              </span>
+              <span className="truncate text-[12px] font-bold">{hostLabel}</span>
             </span>
             <span className="mt-0.5 block truncate text-[11px] text-white/70">
-              {strong
+              {pick.followedByMe
                 ? pick.title || "Ton abonnement est en live — rejoins"
                 : pick.title || "Live shopping en cours — jette un œil"}
             </span>
@@ -153,9 +184,7 @@ export function LiveScrollTeaser({
           <span
             className={cn(
               "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold",
-              strong
-                ? "bg-destructive text-white"
-                : "bg-white/15 text-white",
+              strong ? "bg-destructive text-white" : "bg-white/15 text-white",
             )}
           >
             Voir

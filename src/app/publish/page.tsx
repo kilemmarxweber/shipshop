@@ -521,6 +521,7 @@ function PublishInner() {
             <Label>{t("publish.media")}</Label>
             <MediaUploader
               urls={images}
+              category={category}
               onChange={(urls) => {
                 setImages(urls);
                 setImageMotions(

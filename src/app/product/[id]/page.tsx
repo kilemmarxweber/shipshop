@@ -1,8 +1,49 @@
 "use client";
 
-import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { AuthInline } from "@/components/auth-inline";
+import { usePageBack } from "@/components/back-nav-context";
+import { CurrencyPicker } from "@/components/currency-picker";
+import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
+import { FoxDispatchOverlay } from "@/components/fox-dispatch-overlay";
+import { FulfillmentForm } from "@/components/fulfillment-form";
+import { useI18n } from "@/components/i18n-provider";
+import { InsufficientFundsSheet } from "@/components/insufficient-funds-sheet";
+import { MediaUploader } from "@/components/media-uploader";
+import { PageLoader } from "@/components/page-loader";
+import { ProductCommentsSheet } from "@/components/product-comments-sheet";
+import { ProductCommerceTools } from "@/components/product-commerce-tools";
+import { ProductImageCarousel } from "@/components/product-image-carousel";
+import { ProductImageZoom } from "@/components/product-image-zoom";
+import { ProductPriceTag } from "@/components/product-price-tag";
+import { ShareMenu } from "@/components/share-menu";
+import { ShopBrand } from "@/components/shop-brand";
+import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
+import { DEFAULT_VIDEO_SOUND } from "@/components/video-sound-button";
+import { authClient } from "@/lib/auth-client";
+import { CART_UPDATED_EVENT, notifyCartUpdated } from "@/lib/cart-events";
+import {
+  readCreatorAttribution,
+  rememberCreatorAttribution,
+} from "@/lib/creator-attribution";
+import { fetchJson } from "@/lib/fetch-json";
+import { parseCurrency } from "@/lib/money";
+import {
+  clearPaymentIdempotencyKey,
+  fetchPaymentJson,
+  paymentIdempotencyKey,
+} from "@/lib/payments/idempotency-client";
+import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
+import { colorHex } from "@/lib/product-options";
+import type { ShopHoursFields } from "@/lib/shop-hours";
+import { useAppConfig } from "@/lib/use-app-config";
+import { useProductDwell } from "@/lib/use-product-dwell";
+import { cn, formatMoney } from "@/lib/utils";
+import { notifyWalletUpdated } from "@/lib/wallet-events";
 import {
   Archive,
   Heart,
@@ -14,51 +55,9 @@ import {
   ShoppingCart,
   Trash2,
 } from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
-import {
-  clearPaymentIdempotencyKey,
-  fetchPaymentJson,
-  paymentIdempotencyKey,
-} from "@/lib/payments/idempotency-client";
-import { useAppConfig } from "@/lib/use-app-config";
-import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
-import { parseCurrency } from "@/lib/money";
-import { CART_UPDATED_EVENT, notifyCartUpdated } from "@/lib/cart-events";
-import { notifyWalletUpdated } from "@/lib/wallet-events";
-import { formatMoney, cn } from "@/lib/utils";
-import { ProductPriceTag } from "@/components/product-price-tag";
-import { CurrencyPicker } from "@/components/currency-picker";
-import { colorHex } from "@/lib/product-options";
-import { usePageBack } from "@/components/back-nav-context";
-import { useI18n } from "@/components/i18n-provider";
-import { PageLoader } from "@/components/page-loader";
-import { ProductCommentsSheet } from "@/components/product-comments-sheet";
-import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
-import { ProductImageCarousel } from "@/components/product-image-carousel";
-import { ProductImageZoom } from "@/components/product-image-zoom";
-import { DEFAULT_VIDEO_SOUND } from "@/components/video-sound-button";
-import { ShopBrand } from "@/components/shop-brand";
-import { ShopHoursNotice } from "@/components/shop-hours-notice";
-import { useProductDwell } from "@/lib/use-product-dwell";
-import type { ShopHoursFields } from "@/lib/shop-hours";
-import { AuthInline } from "@/components/auth-inline";
-import {
-  readCreatorAttribution,
-  rememberCreatorAttribution,
-} from "@/lib/creator-attribution";
-import { ProductCommerceTools } from "@/components/product-commerce-tools";
-import { FulfillmentForm } from "@/components/fulfillment-form";
-import { InsufficientFundsSheet } from "@/components/insufficient-funds-sheet";
-import { FoxDispatchOverlay } from "@/components/fox-dispatch-overlay";
-import { MediaUploader } from "@/components/media-uploader";
-import { ShareMenu } from "@/components/share-menu";
-import { useConfirmDialog } from "@/components/use-confirm-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 type Product = {
   id: string;
@@ -195,7 +194,10 @@ function ProductInner() {
         const phone = data?.user?.phone ?? "";
         setProfilePhone(phone);
         if (phone) {
-          setFulfillment((f) => ({ ...f, contactPhone: f.contactPhone || phone }));
+          setFulfillment((f) => ({
+            ...f,
+            contactPhone: f.contactPhone || phone,
+          }));
         }
       })
       .catch(() => undefined);
@@ -456,8 +458,7 @@ function ProductInner() {
     if (res.status === 402) {
       toast.error(json?.error ?? t("product.insufficientTitle"));
       setNeeded(
-        json?.needed ??
-          (product?.priceCents ?? 0) + fulfillment.shippingCents,
+        json?.needed ?? (product?.priceCents ?? 0) + fulfillment.shippingCents,
       );
       setBalance(json?.balance ?? 0);
       setShowTopUp(true);
@@ -479,9 +480,7 @@ function ProductInner() {
   }
 
   if (!product) {
-    return (
-      <PageLoader />
-    );
+    return <PageLoader />;
   }
 
   return (
@@ -565,7 +564,8 @@ function ProductInner() {
             key={product.images.join("|")}
             images={product.images}
             eager
-            className="aspect-[4/5] w-full max-h-[min(78dvh,720px)]"
+            fit="contain"
+            className="aspect-[4/5] w-full max-h-[min(78dvh,720px)] bg-[#0E0E14]"
             intervalMs={2800}
             hasSoundtrack={Boolean(product.soundtrack?.audioUrl)}
             clipMs={product.soundtrack?.audioUrl ? appConfig.clipMs : undefined}
@@ -574,6 +574,9 @@ function ProductInner() {
               if (!product.likedByMe) void toggleLike();
             }}
           />
+          <p className="pointer-events-none absolute top-3 left-3 z-20 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-bold text-white">
+            Contain · proportions gardées
+          </p>
           <ProductImageZoom
             images={product.images}
             alt={product.title}
@@ -791,7 +794,9 @@ function ProductInner() {
                     disabled={loading !== null || cartHasItems}
                     className="h-12 w-full cursor-pointer text-base font-bold"
                   >
-                    {loading === "buy" ? t("product.processing") : t("buy.payPhone")}
+                    {loading === "buy"
+                      ? t("product.processing")
+                      : t("buy.payPhone")}
                   </Button>
                   {cartHasItems ? (
                     <p className="text-center text-[11px] text-muted-foreground">
@@ -934,6 +939,7 @@ function ProductInner() {
                 <Label>Médias</Label>
                 <MediaUploader
                   urls={editing.images}
+                  category={editing.category}
                   onChange={(images) => setEditing({ ...editing, images })}
                 />
               </div>

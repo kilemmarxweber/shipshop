@@ -13,10 +13,17 @@ import {
     looksLikeVideoFile,
     PRODUCT_VIDEO_MAX_SECONDS,
 } from "@/lib/media";
+import {
+    formatRatio,
+    probeImageFile,
+    probeImageUrl,
+    recommendedRatioLabel,
+    type ImageProbe,
+} from "@/lib/product-image-intel";
 import { useAppConfig } from "@/lib/use-app-config";
 import { cn } from "@/lib/utils";
-import { Film, ImageIcon, Loader2, Plus, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { Film, ImageIcon, Loader2, Plus, Scan, Star, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const ACCEPT = "image/*,video/*";
@@ -26,17 +33,56 @@ type Props = {
   onChange: (urls: string[]) => void;
   max?: number;
   onBusyChange?: (busy: boolean) => void;
+  /** Catégorie produit pour recommandations de ratio */
+  category?: string;
 };
 
-export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
+export function MediaUploader({
+  urls,
+  onChange,
+  max,
+  onBusyChange,
+  category = "divers",
+}: Props) {
   const { t } = useI18n();
   const cfg = useAppConfig();
   const cap = max ?? cfg.maxImages;
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [probes, setProbes] = useState<Record<string, ImageProbe>>({});
+  const [active, setActive] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const next: Record<string, ImageProbe> = { ...probes };
+      for (const url of urls) {
+        if (isVideoUrl(url) || next[url]) continue;
+        try {
+          next[url] = await probeImageUrl(url, category);
+        } catch {
+          /* ignore */
+        }
+      }
+      if (alive) setProbes(next);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- urls/category drive re-probe
+  }, [urls.join("|"), category]);
 
   function removeAt(index: number) {
     onChange(urls.filter((_, i) => i !== index));
+  }
+
+  function setPrimary(index: number) {
+    if (index <= 0) return;
+    const next = [...urls];
+    const [item] = next.splice(index, 1);
+    next.unshift(item);
+    onChange(next);
+    toast.success("Photo principale définie");
   }
 
   async function onFiles(files: FileList | null) {
@@ -50,7 +96,7 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
     const list = Array.from(files).slice(0, remaining);
     setUploading(true);
     onBusyChange?.(true);
-    toast.message("Média en cours d’envoi — patiente un instant.");
+    toast.message("Analyse + envoi des médias…");
     const next = [...urls];
     let succeededFiles = 0;
     let warnedRecommendedSize = false;
@@ -60,6 +106,16 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
         if (!looksLikeImageFile(file) && !looksLikeVideoFile(file)) {
           toast.error(`${file.name} : image ou vidéo uniquement`);
           continue;
+        }
+
+        if (looksLikeImageFile(file)) {
+          try {
+            const probe = await probeImageFile(file, category);
+            if (probe.warning) toast.warning(probe.warning);
+            else toast.message(probe.tip);
+          } catch {
+            /* ignore */
+          }
         }
 
         if (!warnedRecommendedSize && exceedsRecommendedVideoSize(file)) {
@@ -94,8 +150,20 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
     onChange(next);
   }
 
+  const activeProbe = active ? probes[active] : null;
+
   return (
     <div className="relative space-y-2">
+      <div className="flex items-start gap-2 rounded-xl border border-trust/30 bg-trust/10 px-3 py-2.5 text-[12px] leading-snug text-foreground">
+        <Scan className="mt-0.5 size-4 shrink-0 text-trust" />
+        <p>
+          Fiche produit en <strong>contain</strong> — ta photo n’est jamais
+          forcée ni coupée. Conseil ratio&nbsp;: ~
+          {recommendedRatioLabel(category)}. Recadrage optionnel côté mobile ;
+          ici l’app s’adapte à l’image.
+        </p>
+      </div>
+
       {uploading ? (
         <div
           role="status"
@@ -137,7 +205,7 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
       <p className="text-[11px] text-muted-foreground">
         {urls.length}/{cap}
         {urls.length > 0
-          ? " — touchez × pour retirer. La 1re image est la couverture."
+          ? " — 1re = couverture. Touchez une vignette pour détails · ★ pour principale."
           : " — au moins une image pour publier."}
       </p>
 
@@ -145,38 +213,69 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
         <ul className="grid grid-cols-3 gap-2 pt-1">
           {urls.map((src, index) => {
             const video = isVideoUrl(src);
+            const probe = probes[src];
             return (
               <li
                 key={`${src}-${index}`}
                 className="relative aspect-square overflow-hidden rounded-xl bg-surface-2 ring-1 ring-border"
               >
-                {video ? (
-                  <div className="relative size-full bg-black">
-                    <video
-                      src={src}
-                      className="pointer-events-none size-full object-cover"
-                      muted
-                      {...iosInlineVideo}
-                      preload="metadata"
-                    />
-                    <Film className="pointer-events-none absolute bottom-1.5 left-1.5 size-4 text-white drop-shadow" />
-                  </div>
-                ) : (
-                  <div className="size-full">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="size-full object-cover"
-                    />
-                    <ImageIcon className="sr-only" />
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className="size-full text-left"
+                  onClick={() => setActive(src)}
+                >
+                  {video ? (
+                    <div className="relative size-full bg-black">
+                      <video
+                        src={src}
+                        className="pointer-events-none size-full object-cover"
+                        muted
+                        {...iosInlineVideo}
+                        preload="metadata"
+                      />
+                      <Film className="pointer-events-none absolute bottom-1.5 left-1.5 size-4 text-white drop-shadow" />
+                    </div>
+                  ) : (
+                    <div className="size-full">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="size-full object-cover"
+                      />
+                      <ImageIcon className="sr-only" />
+                    </div>
+                  )}
+                </button>
                 {index === 0 ? (
-                  <span className="pointer-events-none absolute bottom-1.5 left-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                  <span className="pointer-events-none absolute bottom-1.5 left-1.5 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#04281c]">
                     Couverture
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={uploading}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPrimary(index);
+                    }}
+                    className="absolute bottom-1.5 left-1.5 z-20 grid size-7 place-items-center rounded-full bg-black/75 text-amber-300"
+                    aria-label="Définir comme principale"
+                  >
+                    <Star className="size-3.5" />
+                  </button>
+                )}
+                {probe && !video ? (
+                  <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                    {formatRatio(probe.ratio)}
+                  </span>
+                ) : null}
+                {probe?.warning ? (
+                  <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-amber-400 px-1.5 text-[9px] font-bold text-black">
+                    !
                   </span>
                 ) : null}
                 <button
@@ -198,11 +297,42 @@ export function MediaUploader({ urls, onChange, max, onBusyChange }: Props) {
             );
           })}
         </ul>
-      ) : (
-        <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-          Aucun média. Ajoutez une photo ou une vidéo.
-        </p>
-      )}
+      ) : null}
+
+      {active && activeProbe ? (
+        <div className="space-y-2 rounded-xl border border-border bg-surface-2 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-bold">Aperçu · contain</p>
+              <p className="text-[11px] text-muted-foreground">
+                {activeProbe.width}×{activeProbe.height} ·{" "}
+                {formatRatio(activeProbe.ratio)}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted-foreground"
+              onClick={() => setActive(null)}
+            >
+              Fermer
+            </button>
+          </div>
+          {activeProbe.warning ? (
+            <p className="rounded-lg bg-amber-500/15 px-2 py-1.5 text-[11px] text-amber-200">
+              {activeProbe.warning}
+            </p>
+          ) : null}
+          <p className="text-[11px] text-muted-foreground">{activeProbe.tip}</p>
+          <div className="flex h-36 items-center justify-center overflow-hidden rounded-xl bg-black/80">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={active}
+              alt=""
+              className="max-h-full max-w-full object-contain"
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

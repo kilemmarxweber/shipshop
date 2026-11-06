@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 export function ShopLiveAvatar({
   name,
@@ -15,8 +15,10 @@ export function ShopLiveAvatar({
   return (
     <span
       className={cn(
-        "relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-trust text-xs font-bold text-white ring-2 ring-white/20",
-        live && "ss-shop-live overflow-visible ring-[#E11D48]",
+        "relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-trust text-xs font-bold text-white ring-2",
+        live
+          ? "ss-shop-live overflow-visible ring-[#E11D48]"
+          : "ss-shop-pulse overflow-visible ring-trust",
         className,
       )}
     >
@@ -51,6 +53,8 @@ type Props = {
   avatarClassName?: string;
   nameClassName?: string;
   showAt?: boolean;
+  /** Sans live : ouvre une preview (sheet) au lieu de la page boutique. */
+  onPreview?: (e: React.MouseEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
 };
 
@@ -63,6 +67,7 @@ export function ShopBrand({
   avatarClassName,
   nameClassName,
   showAt = true,
+  onPreview,
   onClick,
 }: Props) {
   const live = Boolean(liveId);
@@ -80,23 +85,45 @@ export function ShopBrand({
     </>
   );
 
-  const href = liveId ? `/live/${liveId}` : slug ? `/shop/${slug}#produits` : null;
+  const classNames = cn("flex min-w-0 items-center gap-2", className);
 
-  if (href) {
+  if (liveId) {
+    return (
+      <Link href={`/live/${liveId}`} onClick={onClick} className={classNames}>
+        {inner}
+      </Link>
+    );
+  }
+
+  if (onPreview) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          onClick?.(e);
+          onPreview(e);
+        }}
+        className={cn(
+          classNames,
+          "cursor-pointer border-0 bg-transparent p-0 text-left",
+        )}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  if (slug) {
     return (
       <Link
-        href={href}
+        href={`/shop/${slug}#produits`}
         onClick={onClick}
-        className={cn("flex min-w-0 items-center gap-2", className)}
+        className={classNames}
       >
         {inner}
       </Link>
     );
   }
 
-  return (
-    <span className={cn("flex min-w-0 items-center gap-2", className)}>
-      {inner}
-    </span>
-  );
+  return <span className={classNames}>{inner}</span>;
 }

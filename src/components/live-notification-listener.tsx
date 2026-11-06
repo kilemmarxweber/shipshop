@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { subscribeNotices } from "@/lib/notices-client";
@@ -10,8 +10,11 @@ export function LiveNotificationListener() {
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
   const router = useRouter();
+  const pathname = usePathname();
   const seenNoticeIds = useRef<Set<string>>(new Set());
   const initialFetchDone = useRef(false);
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
 
   const routerRef = useRef(router);
   routerRef.current = router;
@@ -37,6 +40,16 @@ export function LiveNotificationListener() {
         if (!isLive) continue;
 
         const href = n.href;
+        // Déjà connecté à ce live → ne plus proposer l’alerte
+        if (
+          href &&
+          pathnameRef.current?.startsWith("/live/") &&
+          pathnameRef.current.includes(href.replace(/^\/live\//, "").split("?")[0])
+        ) {
+          continue;
+        }
+        if (href && pathnameRef.current === href) continue;
+
         toast.info(n.title, {
           description: n.body,
           duration: 10000,

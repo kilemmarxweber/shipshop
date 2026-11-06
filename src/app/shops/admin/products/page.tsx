@@ -1,20 +1,20 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { Archive, Eye, Pencil, Search, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
-import { formatMoney, cn } from "@/lib/utils";
+import { MediaUploader } from "@/components/media-uploader";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { MediaUploader } from "@/components/media-uploader";
 import { useConfirmDialog } from "@/components/use-confirm-dialog";
+import { authClient } from "@/lib/auth-client";
+import { fetchJson } from "@/lib/fetch-json";
+import { cn, formatMoney } from "@/lib/utils";
+import { Archive, Eye, Pencil, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 type Product = {
   id: string;
@@ -478,6 +478,7 @@ function AdminProductsInner() {
                 <Label>Médias</Label>
                 <MediaUploader
                   urls={editing.images}
+                  category={editing.category}
                   onChange={(images) => setEditing({ ...editing, images })}
                 />
               </div>

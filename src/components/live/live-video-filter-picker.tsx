@@ -1,12 +1,12 @@
 "use client";
 
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
-  LIVE_VIDEO_FILTERS,
-  type LiveVideoFilterId,
+    LIVE_VIDEO_FILTERS,
+    type LiveVideoFilterId,
 } from "@/lib/growth/live-video-filters";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 type Props = {
   open: boolean;
@@ -37,9 +37,9 @@ export function LiveVideoFilterPicker({
       <div className="absolute inset-x-3 z-40 rounded-2xl border border-white/15 bg-[#121218]/95 p-3 shadow-xl backdrop-blur-md bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+4.75rem))] sm:bottom-24">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-bold text-white">Filtre vidéo</p>
+            <p className="text-sm font-bold text-white">Filtres Live</p>
             <p className="text-[11px] text-white/50">
-              Naturel par défaut · HD et looks studio
+              Aucun · beauté · couleurs · chapeau · lunettes · emojis
             </p>
           </div>
           <Button
@@ -53,7 +53,7 @@ export function LiveVideoFilterPicker({
           </Button>
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {LIVE_VIDEO_FILTERS.map((f) => {
             const selected = active === f.id;
             return (
@@ -67,7 +67,7 @@ export function LiveVideoFilterPicker({
                     if (ok) {
                       toast.success(
                         f.id === "natural"
-                          ? "Filtre retiré (naturel)"
+                          ? "Filtres désactivés"
                           : `Filtre « ${f.label} »`,
                       );
                       onClose();
@@ -75,17 +75,19 @@ export function LiveVideoFilterPicker({
                   })();
                 }}
                 className={cn(
-                  "overflow-hidden rounded-xl border text-left transition active:scale-[0.98]",
+                  "w-[4.5rem] shrink-0 overflow-hidden rounded-xl border text-center transition active:scale-[0.98]",
                   selected
                     ? "border-[#7dffb3] ring-1 ring-[#7dffb3]/60"
                     : "border-white/15",
                 )}
               >
                 <div
-                  className="aspect-square w-full"
+                  className="grid aspect-square w-full place-items-center text-2xl"
                   style={{ backgroundImage: f.swatch }}
-                />
-                <div className="bg-black/45 px-1.5 py-1">
+                >
+                  {f.emoji ?? ""}
+                </div>
+                <div className="bg-black/45 px-1 py-1">
                   <p className="truncate text-[10px] font-bold text-white">
                     {f.label}
                   </p>

@@ -467,6 +467,59 @@ export default function DiscoverPage() {
         />
       </div>
 
+      {(surface?.lives?.filter((row) => row.status !== "ENDED")?.length ?? 0) >
+      0 ? (
+        <section className="mb-6">
+          <h2 className="mb-3.5 font-heading text-[1.05rem] font-bold tracking-tight">
+            Lives shopping
+          </h2>
+          <HScroll className="gap-2.5">
+            {surface!
+              .lives!.filter((row) => row.status !== "ENDED")
+              .slice(0, 12)
+              .map((live) => {
+                const cover =
+                  live.product?.images?.[0] ||
+                  live.shop?.logoUrl ||
+                  live.user?.image ||
+                  "";
+                const host =
+                  live.hostLabel ||
+                  (live.shop?.name && live.user?.name
+                    ? `${live.shop.name} · ${live.user.name}`
+                    : live.shop?.name || live.user?.name || "Créateur");
+                return (
+                  <Link
+                    key={live.id}
+                    href={`/live/${live.id}`}
+                    className="w-44 shrink-0 overflow-hidden rounded-2xl border border-border bg-surface no-underline"
+                  >
+                    <div
+                      className="relative aspect-[3/4] bg-cover bg-center bg-[#16161f]"
+                      style={
+                        cover ? { backgroundImage: `url(${cover})` } : undefined
+                      }
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                      <span className="absolute left-2 top-2 rounded-full bg-[#e11d48] px-2 py-0.5 text-[10px] font-extrabold text-white">
+                        LIVE
+                      </span>
+                      <div className="absolute inset-x-0 bottom-0 p-2.5">
+                        <p className="line-clamp-2 text-sm font-extrabold text-white">
+                          {live.title || "Live shopping"}
+                        </p>
+                        <p className="truncate text-[11px] text-white/70">
+                          {host}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+          </HScroll>
+        </section>
+      ) : null}
+
       {liveEvents.length ? (
         <section className="mb-6">
           <h2 className="mb-3.5 font-heading text-[1.05rem] font-bold tracking-tight">

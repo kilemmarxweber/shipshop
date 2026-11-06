@@ -4,7 +4,7 @@ import { AuthInline } from "@/components/auth-inline";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { DwellArticle } from "@/components/dwell-article";
 import { FeedBuyCard } from "@/components/feed-buy-card";
-import { matchOpenLive } from "@/components/feed-live-badge";
+import { FeedLiveBadge, matchOpenLive } from "@/components/feed-live-badge";
 import {
     FeedLoadSentinel,
     FeedLoadTrigger,
@@ -21,6 +21,10 @@ import { ProductCommentsSheet } from "@/components/product-comments-sheet";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
 import { ShopBrand } from "@/components/shop-brand";
+import {
+    ShopProfileSheet,
+    type ShopProfileTarget,
+} from "@/components/shop-profile-sheet";
 import {
     Sheet,
     SheetContent,
@@ -69,10 +73,10 @@ import { useAppConfig } from "@/lib/use-app-config";
 import { usePaginatedList } from "@/lib/use-paginated-list";
 import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
 import { cn, formatMoney } from "@/lib/utils";
+import { peekWantedNavigation } from "@/lib/wanted-list-events";
 import { Heart, MessageCircle, Share2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { peekWantedNavigation } from "@/lib/wanted-list-events";
 import { toast } from "sonner";
 
 type Product = {
@@ -176,6 +180,9 @@ export default function FeedPage() {
       .catch(() => undefined);
   }, []);
   const [buyProduct, setBuyProduct] = useState<Product | null>(null);
+  const [previewShop, setPreviewShop] = useState<ShopProfileTarget | null>(
+    null,
+  );
   const [authOpen, setAuthOpen] = useState(false);
   const productFeed = usePaginatedList<Product>({
     enabled: tab !== "wanted" && !(tab === "following" && !session),
@@ -827,6 +834,9 @@ export default function FeedPage() {
                   </span>
                 )}
               </div>
+              {live ? (
+                <FeedLiveBadge live={live} locale={locale} />
+              ) : null}
 
               <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
                 <FollowShopButton
@@ -903,7 +913,12 @@ export default function FeedPage() {
                 <div className="mb-2 flex items-center gap-2">
                   <div className="min-w-0 flex-1">
                     <ShopBrand
-                      name={p.shop.name}
+                      name={
+                        live?.hostLabel ||
+                        (live?.user?.name
+                          ? `${p.shop.name} · ${live.user.name}`
+                          : p.shop.name)
+                      }
                       slug={p.shop.slug}
                       logoUrl={p.shop.logoUrl}
                       liveId={live?.id}
@@ -911,6 +926,18 @@ export default function FeedPage() {
                       className="min-w-0"
                       nameClassName="text-sm text-white underline-offset-2 hover:underline"
                       onClick={(e) => e.stopPropagation()}
+                      onPreview={(e) => {
+                        e.stopPropagation();
+                        setPreviewShop({
+                          id: p.shop.id,
+                          name: p.shop.name,
+                          slug: p.shop.slug,
+                          logoUrl: p.shop.logoUrl,
+                          ownerUserId: p.shop.ownerUserId,
+                          followedByMe: p.shop.followedByMe,
+                          followersCount: p.shop.followersCount,
+                        });
+                      }}
                     />
                     <p className="pl-10 text-[11px] text-white/70">
                       {compactCount(p.viewsCount || p.likesCount || 0, locale)}{" "}
@@ -984,6 +1011,16 @@ export default function FeedPage() {
         onOpenChange={(open) => {
           if (!open) setBuyProduct(null);
         }}
+      />
+      <ShopProfileSheet
+        shop={previewShop}
+        open={Boolean(previewShop)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewShop(null);
+        }}
+        onFollowChange={(shopId, followed, followersCount) =>
+          setShopFollowed(shopId, followed, followersCount)
+        }
       />
       <Sheet open={authOpen} onOpenChange={setAuthOpen}>
         <SheetContent side="bottom" className="rounded-t-3xl bg-surface">
