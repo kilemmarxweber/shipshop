@@ -368,7 +368,6 @@ export async function GET(
       lastGiftBurst: readLastGiftBurst(overlaysRaw),
       chats: [...live.chats].reverse(),
       guests,
-      catalogScrollY: catalog.scrollY,
       publishers,
       ...(isHostViewer ? { giftCents, engagement } : {}),
       // Signaling uniquement SSE `/rtc` (poll ne doit pas consumer les signaux)
@@ -460,11 +459,6 @@ export async function POST(
     return NextResponse.json({ live: publicLive(updated) });
   }
 
-  if (json.action === "pause") {
-    if (!isHost) {
-      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
-    }
-    if (live.status === "ENDED") {
   if (json.action === "presence") {
     if (live.status === "ENDED") {
       return NextResponse.json({ error: "Live terminé" }, { status: 400 });
@@ -497,6 +491,11 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
 
+  if (json.action === "pause") {
+    if (!isHost) {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+    if (live.status === "ENDED") {
       return NextResponse.json({ error: "Live terminé" }, { status: 400 });
     }
     const reason =
