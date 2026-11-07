@@ -301,6 +301,8 @@ model ContentSourceConfig {
   scrollAdStartsAt      DateTime?
   scrollAdEndsAt        DateTime?
   scrollAdVideos        Json      @default("[\"/renard.mp4\"]")
+  /// Challenges feed/Découvrir — owner/admin uniquement (pas à la pub produit)
+  challengesEnabled     Boolean   @default(false)
   updatedAt             DateTime  @updatedAt
 
   @@map("content_source_config")
@@ -1272,6 +1274,8 @@ model DailyChallenge {
   city               String?
   startsAt           DateTime
   endsAt             DateTime
+  /// true = publié / programmé par owner-admin (seul type affiché feed)
+  programmed         Boolean   @default(true)
   /// none | catalog | teaser — ancrage produit du challenge
   productFocus       String    @default("none")
   /// Produit publié (focus=catalog) → CTA fiche
@@ -1292,6 +1296,7 @@ model DailyChallenge {
   done ChallengeCompletion[]
 
   @@index([startsAt, endsAt])
+  @@index([programmed, startsAt, endsAt])
   @@index([productId])
   @@index([eventId])
   @@map("daily_challenge")
@@ -1345,8 +1350,8 @@ model CreatorLive {
   videoFilter      String?
   /// Disposition scène multi-invités : rail | split | board
   stageLayout      String    @default("rail")
-  /// true = personne ne peut demander à monter
-  guestJoinLocked  Boolean   @default(false)
+  /// true = live host-only : viewers ne peuvent pas demander à monter
+  guestJoinLocked  Boolean   @default(true)
   /// Stickers texte + cartes produit (x/y/scale %) visibles par les viewers
   overlays         Json      @default("[]")
   /// Diffuseur a ouvert le catalogue — viewers voient la même liste

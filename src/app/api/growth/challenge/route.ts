@@ -1,19 +1,19 @@
+import { recordUserActivity } from "@/lib/growth/activity";
+import {
+    completeChallenge,
+    listActiveChallenges,
+} from "@/lib/growth/challenge";
+import { prisma, withDbRetry } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSession } from "@/lib/session";
-import {
-  completeChallenge,
-  ensureActiveChallenges,
-} from "@/lib/growth/challenge";
-import { recordUserActivity } from "@/lib/growth/activity";
-import { prisma, withDbRetry } from "@/lib/prisma";
 
 const schema = z.object({
   challengeId: z.string().min(1),
 });
 
 export async function GET() {
-  const challenges = await ensureActiveChallenges();
+  const challenges = await listActiveChallenges();
   return NextResponse.json({ challenges, challenge: challenges[0] ?? null });
 }
 
@@ -51,6 +51,9 @@ export async function POST(req: Request) {
       event: linked?.event ?? null,
     });
   } catch {
-    return NextResponse.json({ error: "Challenge impossible" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Challenge impossible" },
+      { status: 400 },
+    );
   }
 }

@@ -1,16 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
-import { toast } from "sonner";
 import {
-  emptyWeaveMemory,
-  weaveChallenges,
-  type ChallengeCardModel,
-  type ChallengeSurface,
-  type ChallengeWeaveMemory,
+    emptyWeaveMemory,
+    weaveChallenges,
+    type ChallengeCardModel,
+    type ChallengeSurface,
+    type ChallengeWeaveMemory,
 } from "@/lib/growth/challenge-place";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 export type GrowthSurface = {
   challenges?: ChallengeCardModel[];
@@ -156,7 +156,7 @@ export function useGrowthSurface() {
   const seed = daySeed(session?.user?.id ?? "anon");
 
   const placeChallenges = useCallback(
-    <T,>(
+    <T>(
       surfaceKind: ChallengeSurface,
       items: T[],
       itemKey: (item: T, index: number) => string,
@@ -177,10 +177,14 @@ export function useGrowthSurface() {
       toast.error("Connectez-vous pour participer");
       return;
     }
+    const linkedEventId =
+      challenges.find((row) => row.id === challengeId)?.event?.id ?? null;
     setBusyId(challengeId);
     const { res, data } = await fetchJson<{
       ok?: boolean;
       reference?: string;
+      eventId?: string | null;
+      event?: { id: string } | null;
     }>("/api/growth/challenge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -204,6 +208,10 @@ export function useGrowthSurface() {
         ? `Challenge relevé · réf. ${data.reference}`
         : "Challenge relevé",
     );
+    const eventId = data.eventId ?? data.event?.id ?? linkedEventId;
+    if (eventId && typeof window !== "undefined") {
+      window.location.href = `/events/${eventId}`;
+    }
   }
 
   return {

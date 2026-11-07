@@ -75,14 +75,50 @@ const eventInclude = {
 export async function GET() {
   const auth = await requirePlatformSession();
   if (auth.error) return auth.error;
-  const events = await withDbRetry(() =>
-    prisma.event.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 80,
-      include: eventInclude,
-    }),
-  );
-  return NextResponse.json({ events: events.map(adminEvent) });
+  try {
+    const events = await withDbRetry(() =>
+      prisma.event.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 80,
+        include: eventInclude,
+      }),
+    );
+    return NextResponse.json({ events: events.map(adminEvent) });
+  } catch (cause) {
+    console.error("[admin/events] GET failed", cause);
+    // Fallback léger pour les pickers (challenges / billets) si include organizer plante
+    try {
+      const events = await withDbRetry(() =>
+        prisma.event.findMany({
+          orderBy: { createdAt: "desc" },
+          take: 80,
+          include: {
+            ticketTypes: { orderBy: { sortOrder: "asc" as const } },
+          },
+        }),
+      );
+      return NextResponse.json({
+        events: events.map((event) =>
+          adminEvent({
+            ...event,
+            organizerUserId: event.organizerUserId,
+            createdByUserId: event.createdByUserId,
+            platformFeeMode: event.platformFeeMode,
+            platformFeeBps: event.platformFeeBps,
+            platformFeeCents: event.platformFeeCents,
+            settledAt: event.settledAt,
+            organizer: undefined,
+          }),
+        ),
+      });
+    } catch (fallbackError) {
+      console.error("[admin/events] fallback failed", fallbackError);
+      return NextResponse.json(
+        { error: "Impossible de charger les events", events: [] },
+        { status: 500 },
+      );
+    }
+  }
 }
 
 export async function POST(req: Request) {

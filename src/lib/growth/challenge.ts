@@ -1,5 +1,45 @@
+import { daysAgo, utcDay } from "@/lib/growth/constants";
 import { prisma, withDbRetry } from "@/lib/prisma";
-import { utcDay, daysAgo } from "@/lib/growth/constants";
+
+/** Interrupteur owner : challenges visibles feed / Découvrir. */
+export async function isChallengesEnabled() {
+  try {
+    const row = await withDbRetry(() =>
+      prisma.contentSourceConfig.findUnique({
+        where: { id: "default" },
+        select: { challengesEnabled: true },
+      }),
+    );
+    return Boolean(row?.challengesEnabled);
+  } catch {
+    // Colonne absente avant migration — traiter comme off
+    return false;
+  }
+}
+
+export async function setChallengesEnabled(enabled: boolean) {
+  try {
+    return await withDbRetry(() =>
+      prisma.contentSourceConfig.upsert({
+        where: { id: "default" },
+        create: { id: "default", challengesEnabled: enabled },
+        update: { challengesEnabled: enabled },
+      }),
+    );
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    if (
+      /challengesEnabled|Unknown column|does not exist|P2022/i.test(message)
+    ) {
+      throw new Error(
+        "Colonne challengesEnabled absente — lance la migration DB",
+      );
+    }
+    throw cause instanceof Error
+      ? cause
+      : new Error("Activation challenges impossible");
+  }
+}
 
 export const CHALLENGE_CATALOG = [
   {
@@ -71,15 +111,67 @@ export const challengeInclude = {
   event: { select: challengeEventSelect },
 } as const;
 
+/**
+ * Challenges actifs programmés dans les paramètres owner/admin.
+ * (interrupteur on + fenêtre startsAt/endsAt + programmed=true)
+ */
+export async function listActiveChallenges() {
+  if (!(await isChallengesEnabled())) return [];
+  return withDbRetry(() =>
+    prisma.dailyChallenge.findMany({
+      where: {
+        programmed: true,
+        startsAt: { lte: new Date() },
+        endsAt: { gt: new Date() },
+      },
+      orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }],
+      include: challengeInclude,
+    }),
+  );
+}
+
+/** @deprecated alias — plus de seed implicite */
 export async function ensureActiveChallenges() {
+  return listActiveChallenges();
+}
+
+/**
+ * Anciennes lignes catalogue auto : ne plus les afficher.
+ * (titres du catalogue type, sans ancrage produit)
+ */
+export async function demoteLegacyCatalogChallenges() {
+  const titles = CHALLENGE_CATALOG.map((row) => row.title);
+  try {
+    await withDbRetry(() =>
+      prisma.dailyChallenge.updateMany({
+        where: {
+          title: { in: [...titles] },
+          productFocus: "none",
+          productId: null,
+          programmed: true,
+        },
+        data: { programmed: false },
+      }),
+    );
+  } catch {
+    /* colonne absente avant migration */
+  }
+}
+
+/** Seed catalogue = brouillons non affichés (programmed=false). Feed = pub admin only. */
+export async function seedCatalogChallenges() {
+  if (!(await isChallengesEnabled())) {
+    throw new Error(
+      "Activez d’abord les challenges dans les paramètres (owner)",
+    );
+  }
+  await demoteLegacyCatalogChallenges();
   const start = utcDay();
   const end = utcDay(daysAgo(-1));
   const existing = await withDbRetry(() =>
     prisma.dailyChallenge.findMany({
-      where: { startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
-      // Plus récents / réactivés d’abord → mise en avant feed & Découvrir
-      orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }],
-      include: challengeInclude,
+      where: { title: { in: CHALLENGE_CATALOG.map((row) => row.title) } },
+      select: { title: true },
     }),
   );
   const have = new Set(existing.map((row) => row.title));
@@ -96,24 +188,19 @@ export async function ensureActiveChallenges() {
             city: "Kinshasa",
             startsAt: start,
             endsAt: end,
+            programmed: false,
           },
           include: challengeInclude,
         }),
       ),
     );
   }
-  // Ne plus dédupliquer par titre à la lecture : un challenge admin
-  // publié ne doit jamais être masqué par le catalogue auto.
-  return [...created, ...existing].sort(
-    (a, b) =>
-      b.startsAt.getTime() - a.startsAt.getTime() ||
-      b.createdAt.getTime() - a.createdAt.getTime(),
-  );
+  return created;
 }
 
 export async function ensureTodayChallenge() {
-  const all = await ensureActiveChallenges();
-  return all[0]!;
+  const all = await listActiveChallenges();
+  return all[0] ?? null;
 }
 
 const REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -128,6 +215,22 @@ export function newChallengeParticipationRef() {
 }
 
 export async function completeChallenge(userId: string, challengeId: string) {
+  if (!(await isChallengesEnabled())) {
+    throw new Error("Challenges désactivés");
+  }
+  const challenge = await withDbRetry(() =>
+    prisma.dailyChallenge.findFirst({
+      where: {
+        id: challengeId,
+        programmed: true,
+        startsAt: { lte: new Date() },
+        endsAt: { gt: new Date() },
+      },
+      select: { id: true },
+    }),
+  );
+  if (!challenge) throw new Error("Challenge inactif");
+
   const existing = await withDbRetry(() =>
     prisma.challengeCompletion.findUnique({
       where: { challengeId_userId: { challengeId, userId } },

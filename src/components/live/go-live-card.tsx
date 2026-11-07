@@ -1,15 +1,15 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { Radio } from "lucide-react";
-import { toast } from "sonner";
+import type { BadgeRow } from "@/components/growth/account-badges";
+import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { INFLUENCER_FOLLOWERS } from "@/lib/growth/constants";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
-import type { BadgeRow } from "@/components/growth/account-badges";
+import { Radio } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 type GrowthMe = {
   badges?: BadgeRow[];
@@ -35,6 +35,8 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
   const [me, setMe] = useState<GrowthMe | null>(null);
   const [ready, setReady] = useState(false);
   const [title, setTitle] = useState("Live shopping");
+  /** Défaut off = live host-only (viewers ne montent pas sans accord). */
+  const [allowGuests, setAllowGuests] = useState(false);
   const [busy, setBusy] = useState(false);
   const [activeLive, setActiveLive] = useState<LiveRow | null>(null);
 
@@ -80,7 +82,10 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
     }>("/api/growth/lives", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title.trim() || "Live shopping" }),
+      body: JSON.stringify({
+        title: title.trim() || "Live shopping",
+        allowGuests,
+      }),
     });
     setBusy(false);
     if (!res.ok || !data?.live) {
@@ -180,7 +185,7 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
           )}
         </div>
         {ready && canGoLive && !activeLive ? (
-          <div className="relative border-t border-white/8 px-3 py-2">
+          <div className="relative space-y-2 border-t border-white/8 px-3 py-2">
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -189,6 +194,17 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
               aria-label="Titre du live"
               className="h-8 rounded-lg border-white/10 bg-black/30 px-2.5 text-[12px] text-white placeholder:text-white/35 focus-visible:ring-[#ff2d45]/40"
             />
+            <label className="flex cursor-pointer items-center gap-2 py-0.5">
+              <input
+                type="checkbox"
+                checked={allowGuests}
+                onChange={(e) => setAllowGuests(e.target.checked)}
+                className="size-3.5 rounded border-white/30 bg-black/40 accent-[#ff2d45]"
+              />
+              <span className="text-[11px] font-semibold text-white/65">
+                Autoriser les viewers à monter sur scène
+              </span>
+            </label>
           </div>
         ) : null}
       </section>
@@ -222,15 +238,28 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
         ) : activeLive ? (
           resumeBtn
         ) : canGoLive ? (
-          <div className="flex gap-2">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={80}
-              placeholder="Titre du live"
-              className="h-10 flex-1 rounded-xl border-white/10 bg-black/35 text-sm text-white placeholder:text-white/35 focus-visible:ring-[#ff2d45]/40"
-            />
-            {goLiveBtn}
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={80}
+                placeholder="Titre du live"
+                className="h-10 flex-1 rounded-xl border-white/10 bg-black/35 text-sm text-white placeholder:text-white/35 focus-visible:ring-[#ff2d45]/40"
+              />
+              {goLiveBtn}
+            </div>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allowGuests}
+                onChange={(e) => setAllowGuests(e.target.checked)}
+                className="size-3.5 rounded border-white/30 bg-black/40 accent-[#ff2d45]"
+              />
+              <span className="text-[12px] font-semibold text-white/65">
+                Autoriser les viewers à monter sur scène
+              </span>
+            </label>
           </div>
         ) : (
           <p className="text-[12px] text-white/55">

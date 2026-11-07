@@ -3,9 +3,11 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 54;
+const PRISMA_SCHEMA_REV = 55;
 const CHALLENGE_HAS_PRODUCT =
   Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
+const CHALLENGE_HAS_PROGRAMMED =
+  Prisma.DailyChallengeScalarFieldEnum.programmed === "programmed";
 
 /** Forces a reload if the generated client predates cart_item.quantity. */
 const CART_ITEM_HAS_QUANTITY =
@@ -106,6 +108,7 @@ function getPrismaClient() {
     ORDER_HAS_FEE_BPS &&
     SHOP_BOOST_HAS_TARGET_CITY &&
     CHALLENGE_HAS_PRODUCT &&
+    CHALLENGE_HAS_PROGRAMMED &&
     LIVE_GUEST_HAS_MIC &&
     CREATOR_LIVE_HAS_MIC &&
     CREATOR_LIVE_HAS_LIKE &&

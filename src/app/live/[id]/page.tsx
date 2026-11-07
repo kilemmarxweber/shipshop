@@ -2733,8 +2733,8 @@ export default function LiveRoomPage({
                       if (ok) {
                         toast.message(
                           guestJoinLocked
-                            ? "Montées ouvertes"
-                            : "Montées fermées",
+                            ? "Montées ouvertes — viewers peuvent demander"
+                            : "Montées fermées — live host-only",
                         );
                       }
                     })();

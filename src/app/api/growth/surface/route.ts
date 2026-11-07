@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
-import { prisma, withDbRetry } from "@/lib/prisma";
-import { ensureActiveChallenges } from "@/lib/growth/challenge";
 import { packCatalog } from "@/lib/growth/campaign-packs";
+import { listActiveChallenges } from "@/lib/growth/challenge";
 import { firstVisualUrl, isProbablyVideo } from "@/lib/growth/challenge-look";
 import { challengeProductCueFromRow } from "@/lib/growth/challenge-product";
 import {
-  parseChallengeSpotlight,
-  spotlightCoverCandidates,
+    parseChallengeSpotlight,
+    spotlightCoverCandidates,
 } from "@/lib/growth/challenge-spotlight";
 import { enrichLiveTeasers } from "@/lib/growth/enrich-live-teasers";
+import { prisma, withDbRetry } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
+import { NextResponse } from "next/server";
 
 type HighlightProduct = {
   id: string;
@@ -31,7 +31,9 @@ function pickHighlights(products: HighlightProduct[]) {
   const take = (pred: (product: HighlightProduct) => boolean) => {
     const found = products.find(
       (product) =>
-        !used.has(product.id) && pred(product) && firstVisualUrl(product.images),
+        !used.has(product.id) &&
+        pred(product) &&
+        firstVisualUrl(product.images),
     );
     if (found) used.add(found.id);
     return found ?? null;
@@ -45,8 +47,7 @@ function pickHighlights(products: HighlightProduct[]) {
     take((product) => product.category === "Mode"),
     take((product) => product.category === "Beauté"),
     take(
-      (product) =>
-        product.category !== "Mode" && product.category !== "Beauté",
+      (product) => product.category !== "Mode" && product.category !== "Beauté",
     ),
   ].filter((row): row is HighlightProduct => Boolean(row));
 
@@ -62,110 +63,111 @@ function pickHighlights(products: HighlightProduct[]) {
 
 export async function GET() {
   const session = await getSession();
-  const active = await ensureActiveChallenges();
+  const active = await listActiveChallenges();
   const challengeIds = active.map((row) => row.id);
 
-  const [doneRows, participantRows, stories, lives, catalog] = await Promise.all([
-    session && challengeIds.length
-      ? withDbRetry(() =>
-          prisma.challengeCompletion.findMany({
-            where: {
-              userId: session.user.id,
-              challengeId: { in: challengeIds },
-            },
-            select: { challengeId: true },
-          }),
-        )
-      : Promise.resolve([]),
-    challengeIds.length
-      ? withDbRetry(() =>
-          prisma.challengeCompletion.findMany({
-            where: { challengeId: { in: challengeIds } },
-            orderBy: { createdAt: "desc" },
-            take: 40,
-            select: {
-              challengeId: true,
-              user: { select: { name: true, image: true } },
-            },
-          }),
-        )
-      : Promise.resolve([]),
-    withDbRetry(() =>
-      prisma.brandCampaign.findMany({
-        where: {
-          status: "ACTIVE",
-          kind: "STORY",
-        },
-        orderBy: { createdAt: "desc" },
-        take: 12,
-        select: {
-          id: true,
-          title: true,
-          kind: true,
-          objective: true,
-          body: true,
-          mediaUrl: true,
-          ctaUrl: true,
-          productId: true,
-          category: true,
-        },
-      }),
-    ),
-    withDbRetry(() =>
-      prisma.creatorLive.findMany({
-        where: { status: { in: ["LIVE", "PAUSED"] } },
-        orderBy: { startedAt: "desc" },
-        take: 8,
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          startedAt: true,
-          viewerPeak: true,
-          giftCents: true,
-          user: { select: { id: true, name: true, image: true } },
-          product: {
-            select: {
-              id: true,
-              title: true,
-              images: true,
-              priceCents: true,
-              shop: {
-                select: { name: true, slug: true, logoUrl: true },
+  const [doneRows, participantRows, stories, lives, catalog] =
+    await Promise.all([
+      session && challengeIds.length
+        ? withDbRetry(() =>
+            prisma.challengeCompletion.findMany({
+              where: {
+                userId: session.user.id,
+                challengeId: { in: challengeIds },
+              },
+              select: { challengeId: true },
+            }),
+          )
+        : Promise.resolve([]),
+      challengeIds.length
+        ? withDbRetry(() =>
+            prisma.challengeCompletion.findMany({
+              where: { challengeId: { in: challengeIds } },
+              orderBy: { createdAt: "desc" },
+              take: 40,
+              select: {
+                challengeId: true,
+                user: { select: { name: true, image: true } },
+              },
+            }),
+          )
+        : Promise.resolve([]),
+      withDbRetry(() =>
+        prisma.brandCampaign.findMany({
+          where: {
+            status: "ACTIVE",
+            kind: "STORY",
+          },
+          orderBy: { createdAt: "desc" },
+          take: 12,
+          select: {
+            id: true,
+            title: true,
+            kind: true,
+            objective: true,
+            body: true,
+            mediaUrl: true,
+            ctaUrl: true,
+            productId: true,
+            category: true,
+          },
+        }),
+      ),
+      withDbRetry(() =>
+        prisma.creatorLive.findMany({
+          where: { status: { in: ["LIVE", "PAUSED"] } },
+          orderBy: { startedAt: "desc" },
+          take: 8,
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            startedAt: true,
+            viewerPeak: true,
+            giftCents: true,
+            user: { select: { id: true, name: true, image: true } },
+            product: {
+              select: {
+                id: true,
+                title: true,
+                images: true,
+                priceCents: true,
+                shop: {
+                  select: { name: true, slug: true, logoUrl: true },
+                },
               },
             },
           },
-        },
-      }),
-    ),
-    withDbRetry(() =>
-      prisma.product.findMany({
-        where: {
-          status: "ACTIVE",
-          quantity: { gt: 0 },
-          wantedRequestId: null,
-        },
-        orderBy: { createdAt: "desc" },
-        take: 28,
-        select: {
-          id: true,
-          title: true,
-          category: true,
-          images: true,
-          soundtrackStartMs: true,
-          soundtrack: { select: { audioUrl: true, durationMs: true } },
-          shop: {
-            select: {
-              name: true,
-              logoUrl: true,
-              owner: { select: { name: true, image: true } },
-            },
+        }),
+      ),
+      withDbRetry(() =>
+        prisma.product.findMany({
+          where: {
+            status: "ACTIVE",
+            quantity: { gt: 0 },
+            wantedRequestId: null,
           },
-          _count: { select: { likes: true } },
-        },
-      }),
-    ),
-  ]);
+          orderBy: { createdAt: "desc" },
+          take: 28,
+          select: {
+            id: true,
+            title: true,
+            category: true,
+            images: true,
+            soundtrackStartMs: true,
+            soundtrack: { select: { audioUrl: true, durationMs: true } },
+            shop: {
+              select: {
+                name: true,
+                logoUrl: true,
+                owner: { select: { name: true, image: true } },
+              },
+            },
+            _count: { select: { likes: true } },
+          },
+        }),
+      ),
+    ]);
 
   const doneIds = new Set(doneRows.map((row) => row.challengeId));
   const facesByChallenge = new Map<
@@ -248,9 +250,7 @@ export async function GET() {
   const challenges = open.map((challenge) => {
     const cue = challengeProductCueFromRow({
       productFocus:
-        "productFocus" in challenge
-          ? (challenge.productFocus as string)
-          : null,
+        "productFocus" in challenge ? (challenge.productFocus as string) : null,
       productTeaser:
         "productTeaser" in challenge ? challenge.productTeaser : null,
       product:

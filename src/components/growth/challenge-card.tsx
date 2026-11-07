@@ -1,21 +1,59 @@
 "use client";
 
-import Link from "next/link";
-import { useId } from "react";
-import { ChevronRight, ShoppingBag, Sparkles, Trophy } from "lucide-react";
-import { cn, formatMoney } from "@/lib/utils";
+import {
+    ChallengeSpotlightMedia,
+    CoverImage,
+    Face,
+} from "@/components/growth/cover-image";
 import { useI18n } from "@/components/i18n-provider";
 import { categoryMood } from "@/lib/growth/challenge-look";
-import type { UserLocale } from "@/lib/user-locale";
 import type {
-  ChallengeCardModel,
-  ChallengeTemplate,
+    ChallengeCardModel,
+    ChallengeTemplate,
 } from "@/lib/growth/challenge-place";
+import type { UserLocale } from "@/lib/user-locale";
+import { cn, formatMoney } from "@/lib/utils";
 import {
-  ChallengeSpotlightMedia,
-  CoverImage,
-  Face,
-} from "@/components/growth/cover-image";
+    ChevronRight,
+    ShoppingBag,
+    Sparkles,
+    Ticket,
+    Trophy,
+} from "lucide-react";
+import Link from "next/link";
+import { useId } from "react";
+
+function EventCue({
+  challenge,
+  compact,
+}: {
+  challenge: ChallengeCardModel;
+  compact?: boolean;
+}) {
+  const event = challenge.event;
+  if (!event) return null;
+  const price =
+    event.fromPriceCents != null
+      ? formatMoney(event.fromPriceCents, event.currency)
+      : null;
+  return (
+    <Link
+      href={`/events/${event.id}`}
+      className={cn(
+        "inline-flex max-w-full items-center gap-1.5 rounded-full font-semibold ring-1 transition",
+        "bg-sky-400/15 text-sky-100 ring-sky-300/30 hover:bg-sky-400/25",
+        compact
+          ? "px-2 py-0.5 text-[10px]"
+          : "px-2.5 py-1 text-[11px] sm:text-[12px]",
+      )}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <Ticket className="size-3 shrink-0" />
+      <span className="truncate">Billet · {event.title}</span>
+      {price ? <span className="shrink-0 opacity-70">{price}</span> : null}
+    </Link>
+  );
+}
 
 function ProductCue({
   challenge,
@@ -24,6 +62,8 @@ function ProductCue({
   challenge: ChallengeCardModel;
   compact?: boolean;
 }) {
+  if (challenge.event)
+    return <EventCue challenge={challenge} compact={compact} />;
   const product = challenge.product;
   if (!product) return null;
   const price =
@@ -43,7 +83,9 @@ function ProductCue({
     <>
       <ShoppingBag className="size-3 shrink-0" />
       <span className="truncate">
-        {product.kind === "teaser" ? `Aperçu · ${product.title}` : product.title}
+        {product.kind === "teaser"
+          ? `Aperçu · ${product.title}`
+          : product.title}
       </span>
       {price ? (
         <span className="shrink-0 opacity-70">{price}</span>
@@ -119,7 +161,9 @@ function CategoryChip({
           <Sparkles className="absolute inset-0 m-auto size-3 text-[#ffd7e4]" />
         )}
       </span>
-      <span className="truncate">{categoryMood(challenge.category, locale)}</span>
+      <span className="truncate">
+        {categoryMood(challenge.category, locale)}
+      </span>
     </p>
   );
 }
@@ -201,9 +245,7 @@ export function ChallengeCard({
         : t("discover.challengeHeading");
   // Feed reel : plein viewport (colle tabs / pas d’espace). Autres : hauteur fixe.
   const frame = cn(
-    feed
-      ? "h-full min-h-0"
-      : "h-[268px] sm:h-[292px] lg:h-[320px]",
+    feed ? "h-full min-h-0" : "h-[268px] sm:h-[292px] lg:h-[320px]",
     "touch-pan-y",
     videoSpot
       ? "overflow-hidden"
@@ -257,7 +299,11 @@ export function ChallengeCard({
           </div>
           <div className="flex items-center justify-between gap-2">
             <Faces faces={faces} count={count} />
-            <JoinButton done={challenge.done} busy={Boolean(busy)} onJoin={onJoin} />
+            <JoinButton
+              done={challenge.done}
+              busy={Boolean(busy)}
+              onJoin={onJoin}
+            />
           </div>
         </div>
       </section>
@@ -552,7 +598,11 @@ export function ChallengeCard({
         </div>
         <div className="flex items-center justify-between gap-2.5">
           <Faces faces={faces} count={count} />
-          <JoinButton done={challenge.done} busy={Boolean(busy)} onJoin={onJoin} />
+          <JoinButton
+            done={challenge.done}
+            busy={Boolean(busy)}
+            onJoin={onJoin}
+          />
         </div>
       </div>
     </section>

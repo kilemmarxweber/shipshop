@@ -1,12 +1,12 @@
+import { hasActiveBadge, refreshAccountBadges } from "@/lib/growth/badges";
+import { enrichLiveTeasers } from "@/lib/growth/enrich-live-teasers";
+import { endActiveLivesForHost } from "@/lib/growth/live-backdrop-purge";
+import { notifySubscribersLiveStarted } from "@/lib/growth/live-notify";
+import { assertChipShopOwner } from "@/lib/kyc";
+import { prisma, withDbRetry } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSession } from "@/lib/session";
-import { prisma, withDbRetry } from "@/lib/prisma";
-import { hasActiveBadge, refreshAccountBadges } from "@/lib/growth/badges";
-import { assertChipShopOwner } from "@/lib/kyc";
-import { enrichLiveTeasers } from "@/lib/growth/enrich-live-teasers";
-import { notifySubscribersLiveStarted } from "@/lib/growth/live-notify";
-import { endActiveLivesForHost } from "@/lib/growth/live-backdrop-purge";
 
 const schema = z.object({
   title: z.string().min(2).max(80),
@@ -57,7 +57,10 @@ export async function POST(req: Request) {
   const { isPlatformOwner } = await assertChipShopOwner(session.user.id);
   if (!allowed && !isPlatformOwner) {
     return NextResponse.json(
-      { error: "Live réservé aux comptes Influenceur (2 000 abonnés + KYC) ou owner" },
+      {
+        error:
+          "Live réservé aux comptes Influenceur (2 000 abonnés + KYC) ou owner",
+      },
       { status: 403 },
     );
   }
@@ -65,12 +68,15 @@ export async function POST(req: Request) {
     const raw = (await req.json().catch(() => ({}))) as {
       title?: string;
       productId?: string | null;
+      /** true = viewers peuvent demander à monter (défaut : live host-only) */
+      allowGuests?: boolean;
     };
     const title = (raw.title ?? "").trim() || "Live shopping";
     const body = schema.parse({
       title,
       productId: raw.productId ?? null,
     });
+    const guestJoinLocked = raw.allowGuests !== true;
     await endActiveLivesForHost(session.user.id);
     const live = await withDbRetry(() =>
       prisma.creatorLive.create({
@@ -82,6 +88,7 @@ export async function POST(req: Request) {
           lastHeartbeatAt: new Date(),
           plannedMinutes: 60,
           cameraOn: true,
+          guestJoinLocked,
         },
       }),
     );

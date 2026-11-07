@@ -1,20 +1,23 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { assertChipShopOwner } from "@/lib/kyc";
-import { prisma, withDbRetry } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
-import { getSession } from "@/lib/session";
 import {
-  CHALLENGE_CATALOG,
-  challengeInclude,
-  ensureActiveChallenges,
+    CHALLENGE_CATALOG,
+    challengeInclude,
+    demoteLegacyCatalogChallenges,
+    isChallengesEnabled,
+    seedCatalogChallenges,
+    setChallengesEnabled,
 } from "@/lib/growth/challenge";
 import {
-  challengeTeaserSchema,
-  isChallengeProductFocus,
-  type ChallengeProductFocus,
+    challengeTeaserSchema,
+    isChallengeProductFocus,
+    type ChallengeProductFocus,
 } from "@/lib/growth/challenge-product";
 import { challengeSpotlightSchema } from "@/lib/growth/challenge-spotlight";
+import { assertChipShopOwner } from "@/lib/kyc";
+import { prisma, withDbRetry } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
+import { NextResponse } from "next/server";
+import { z } from "zod";
 
 function endsInHours(hours: number) {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
@@ -147,11 +150,7 @@ async function resolveFocusPayload(input: {
 }) {
   let focus: ChallengeProductFocus =
     input.productFocus ??
-    (input.productId
-      ? "catalog"
-      : input.productTeaser
-        ? "teaser"
-        : "none");
+    (input.productId ? "catalog" : input.productTeaser ? "teaser" : "none");
 
   if (!isChallengeProductFocus(focus)) focus = "none";
 
@@ -220,11 +219,17 @@ export async function GET() {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
+  await demoteLegacyCatalogChallenges();
   const now = new Date();
-  const [active, recent] = await Promise.all([
+  const [active, recent, events] = await Promise.all([
     withDbRetry(() =>
       prisma.dailyChallenge.findMany({
-        where: { startsAt: { lte: now }, endsAt: { gt: now } },
+        // Uniquement ceux programmés en paramètres (affichés feed)
+        where: {
+          programmed: true,
+          startsAt: { lte: now },
+          endsAt: { gt: now },
+        },
         orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }],
         take: 40,
         include: productInclude,
@@ -232,18 +237,51 @@ export async function GET() {
     ),
     withDbRetry(() =>
       prisma.dailyChallenge.findMany({
-        where: { endsAt: { lte: now } },
+        where: {
+          OR: [{ endsAt: { lte: now } }, { programmed: false }],
+        },
         orderBy: { endsAt: "desc" },
         take: 20,
         include: productInclude,
       }),
     ),
+    // Picker « Event billet » — même auth que challenges (évite un 2e appel /api/admin/events)
+    withDbRetry(() =>
+      prisma.event.findMany({
+        orderBy: [
+          { status: "asc" },
+          { startsAt: "desc" },
+          { createdAt: "desc" },
+        ],
+        take: 80,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          currency: true,
+          organizerName: true,
+          imageUrl: true,
+          startsAt: true,
+        },
+      }),
+    ),
   ]);
 
+  const challengesEnabled = await isChallengesEnabled();
   return NextResponse.json({
     active,
     recent,
     catalog: CHALLENGE_CATALOG,
+    challengesEnabled,
+    events: events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      status: event.status,
+      currency: event.currency,
+      organizerName: event.organizerName,
+      imageUrl: event.imageUrl,
+      startsAt: event.startsAt.toISOString(),
+    })),
   });
 }
 
@@ -259,9 +297,43 @@ export async function POST(req: Request) {
 
   const json = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
+  if (json.action === "set_enabled") {
+    const enabled = Boolean(json.enabled);
+    try {
+      await setChallengesEnabled(enabled);
+      if (enabled) await demoteLegacyCatalogChallenges();
+      return NextResponse.json({
+        ok: true,
+        challengesEnabled: enabled,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Activation challenges impossible",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   if (json.action === "seed_catalog") {
-    const challenges = await ensureActiveChallenges();
-    return NextResponse.json({ challenges, ok: true });
+    try {
+      const challenges = await seedCatalogChallenges();
+      return NextResponse.json({ challenges, ok: true });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Seed catalogue impossible",
+        },
+        { status: 400 },
+      );
+    }
   }
 
   const parsed = createSchema.parse(json);
@@ -320,6 +392,7 @@ export async function POST(req: Request) {
         city: parsed.city?.trim() || "Kinshasa",
         startsAt: new Date(),
         endsAt: endsInHours(hours),
+        programmed: true,
         productFocus: resolved.focus,
         productId: resolved.productId,
         productTeaser:
@@ -368,8 +441,7 @@ export async function PATCH(req: Request) {
   } = {};
 
   if (body.spotlight !== undefined) {
-    data.spotlight =
-      body.spotlight === null ? Prisma.DbNull : body.spotlight;
+    data.spotlight = body.spotlight === null ? Prisma.DbNull : body.spotlight;
   }
   if (body.eventId !== undefined) {
     const eventResolved = await resolveEventId(body.eventId);
@@ -426,9 +498,7 @@ export async function PATCH(req: Request) {
     data.productFocus = resolved.focus;
     data.productId = resolved.productId;
     data.productTeaser =
-      resolved.productTeaser === null
-        ? Prisma.DbNull
-        : resolved.productTeaser;
+      resolved.productTeaser === null ? Prisma.DbNull : resolved.productTeaser;
     if (resolved.copy) {
       data.title = resolved.copy.title;
       data.body = resolved.copy.body;
@@ -450,9 +520,11 @@ export async function PATCH(req: Request) {
   } else if (body.reactivate) {
     data.startsAt = new Date();
     data.endsAt = endsInHours(hours);
+    data.programmed = true;
   } else if (body.hours != null) {
     data.startsAt = new Date();
     data.endsAt = endsInHours(body.hours);
+    data.programmed = true;
   }
 
   const challenge = await withDbRetry(() =>

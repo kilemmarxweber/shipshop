@@ -39,6 +39,16 @@ export type ChallengeCardModel = {
     note?: string | null;
     href: string | null;
   } | null;
+  /** Event billetterie lié — « Je relève » ouvre l’achat de billet. */
+  event?: {
+    id: string;
+    title: string;
+    imageUrl?: string | null;
+    currency: string;
+    fromPriceCents?: number | null;
+    organizerName?: string;
+    status?: string;
+  } | null;
 };
 
 export type MixedRow<T> =
@@ -84,11 +94,19 @@ function densityPlan(seed: string, surface: ChallengeSurface) {
   const band = startHash % 3;
   if (surface === "feed") {
     const first =
-      band === 0 ? 2 + (startHash % 3) : band === 1 ? 4 + (startHash % 4) : 6 + (startHash % 5);
+      band === 0
+        ? 2 + (startHash % 3)
+        : band === 1
+          ? 4 + (startHash % 4)
+          : 6 + (startHash % 5);
     return { first, gap: 5 + (gapHash % 3) };
   }
   const first =
-    band === 0 ? 3 + (startHash % 3) : band === 1 ? 5 + (startHash % 3) : 8 + (startHash % 5);
+    band === 0
+      ? 3 + (startHash % 3)
+      : band === 1
+        ? 5 + (startHash % 3)
+        : 8 + (startHash % 5);
   return { first, gap: 8 + (gapHash % 4) };
 }
 
@@ -175,7 +193,10 @@ export function weaveChallenges<T>(
       ? kept
       : pickOpenChallenge(open, memory.assigned, slot);
     if (!challenge) return;
-    if (!memory.assigned.has(slot) || memory.assigned.get(slot) !== challenge.id) {
+    if (
+      !memory.assigned.has(slot) ||
+      memory.assigned.get(slot) !== challenge.id
+    ) {
       memory.assigned.set(slot, challenge.id);
     }
     const occurrence = [...memory.assigned.values()].filter(

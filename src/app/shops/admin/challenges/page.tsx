@@ -1,42 +1,40 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import {
-  ArrowLeft,
-  ExternalLink,
-  Package,
-  Search,
-  ShoppingBag,
-  Sparkles,
-  Target,
-  X,
-} from "lucide-react";
-import { toast } from "sonner";
+import { usePageBack } from "@/components/back-nav-context";
+import { PageLoader } from "@/components/page-loader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
 import { CATEGORIES } from "@/lib/categories";
-import { cn, formatMoney } from "@/lib/utils";
-import { refreshGrowthSurface } from "@/lib/growth/use-growth-surface";
+import { uploadCompressedMedia } from "@/lib/compress-media";
+import { fetchJson } from "@/lib/fetch-json";
+import { categoryLook, isProbablyVideo } from "@/lib/growth/challenge-look";
 import {
-  parseChallengeTeaser,
-  type ChallengeProductFocus,
-  type ChallengeTeaser,
+    parseChallengeTeaser,
+    type ChallengeProductFocus,
+    type ChallengeTeaser,
 } from "@/lib/growth/challenge-product";
 import type { ChallengeQualityReport } from "@/lib/growth/challenge-report";
 import {
-  parseChallengeSpotlight,
-  type ChallengeSpotlight,
+    parseChallengeSpotlight,
+    type ChallengeSpotlight,
 } from "@/lib/growth/challenge-spotlight";
-import { uploadCompressedMedia } from "@/lib/compress-media";
+import { refreshGrowthSurface } from "@/lib/growth/use-growth-surface";
+import { cn, formatMoney } from "@/lib/utils";
 import {
-  categoryLook,
-  isProbablyVideo,
-} from "@/lib/growth/challenge-look";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { PageLoader } from "@/components/page-loader";
-import { usePageBack } from "@/components/back-nav-context";
+    ArrowLeft,
+    ExternalLink,
+    Package,
+    Search,
+    ShoppingBag,
+    Sparkles,
+    Target,
+    Ticket,
+    X,
+} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 type LinkedProduct = {
   id: string;
@@ -63,6 +61,22 @@ type ChallengeRow = {
   productTeaser?: unknown;
   spotlight?: unknown;
   product?: LinkedProduct | null;
+  eventId?: string | null;
+  event?: {
+    id: string;
+    title: string;
+    status?: string;
+    currency?: string;
+    organizerName?: string;
+  } | null;
+};
+
+type EventHit = {
+  id: string;
+  title: string;
+  status?: string;
+  organizerName?: string;
+  currency?: string;
 };
 
 type CatalogItem = {
@@ -133,13 +147,8 @@ function ChallengeLivePreview({
   const look = categoryLook(category);
   const headline = title.trim() || "Titre du challenge";
   const copy =
-    body.trim() ||
-    "La consigne s’affiche ici — like, commente, partage.";
-  const cover =
-    spotlight?.url ||
-    product?.images[0] ||
-    teaser.image ||
-    null;
+    body.trim() || "La consigne s’affiche ici — like, commente, partage.";
+  const cover = spotlight?.url || product?.images[0] || teaser.image || null;
   const productLabel =
     focus === "catalog" && product
       ? product.title
@@ -171,10 +180,7 @@ function ChallengeLivePreview({
           )
         ) : (
           <div
-            className={cn(
-              "absolute inset-0 bg-gradient-to-br",
-              look.wash,
-            )}
+            className={cn("absolute inset-0 bg-gradient-to-br", look.wash)}
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
@@ -256,8 +262,11 @@ export default function ChallengesAdminPage() {
   const [productQ, setProductQ] = useState("");
   const [productHits, setProductHits] = useState<ProductHit[]>([]);
   const [productOpen, setProductOpen] = useState(false);
+  const [eventId, setEventId] = useState<string | null>(null);
+  const [events, setEvents] = useState<EventHit[]>([]);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [challengesEnabled, setChallengesEnabled] = useState(false);
   const [report, setReport] = useState<ChallengeQualityReport | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
 
@@ -310,6 +319,8 @@ export default function ChallengesAdminPage() {
       active?: ChallengeRow[];
       recent?: ChallengeRow[];
       catalog?: CatalogItem[];
+      challengesEnabled?: boolean;
+      events?: EventHit[];
       error?: string;
     }>("/api/admin/challenges");
     if (res.status === 403) {
@@ -325,11 +336,54 @@ export default function ChallengesAdminPage() {
     setActive(data?.active ?? []);
     setRecent(data?.recent ?? []);
     setCatalog(data?.catalog ?? []);
+    setChallengesEnabled(Boolean(data?.challengesEnabled));
+    if (Array.isArray(data?.events)) {
+      setEvents(data.events);
+    }
+  }
+
+  async function toggleChallengesEnabled(next: boolean) {
+    setBusy(true);
+    const { res, data } = await fetchJson<{
+      challengesEnabled?: boolean;
+      error?: string;
+    }>("/api/admin/challenges", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_enabled", enabled: next }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Paramètre impossible");
+      return;
+    }
+    setChallengesEnabled(Boolean(data?.challengesEnabled ?? next));
+    await syncSurface();
+    toast.success(
+      next
+        ? "Challenges activés — visibles feed / Découvrir"
+        : "Challenges désactivés — masqués du feed",
+    );
   }
 
   useEffect(() => {
     if (session) void load();
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session || events.length > 0) return;
+    void (async () => {
+      const { res, data } = await fetchJson<{
+        events?: EventHit[];
+        error?: string;
+      }>("/api/admin/events");
+      if (!res.ok) {
+        toast.error(data?.error ?? "Events billets introuvables");
+        return;
+      }
+      setEvents(data?.events ?? []);
+    })();
+  }, [session?.user?.id, events.length]);
 
   useEffect(() => {
     if (!productOpen || focus !== "catalog") return;
@@ -375,6 +429,7 @@ export default function ChallengesAdminPage() {
     setSpotlight(null);
     setProductQ("");
     setProductOpen(false);
+    setEventId(null);
   }
 
   function fillFromCatalog(item: CatalogItem) {
@@ -448,6 +503,7 @@ export default function ChallengesAdminPage() {
       },
     );
     setSpotlight(parseChallengeSpotlight(row.spotlight));
+    setEventId(row.eventId ?? row.event?.id ?? null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -562,6 +618,7 @@ export default function ChallengesAdminPage() {
             body: body.trim() || undefined,
             category,
             city: city.trim() || "Kinshasa",
+            eventId,
             ...focusPayload,
             ...payloadSpotlight(),
           }),
@@ -590,6 +647,7 @@ export default function ChallengesAdminPage() {
           category,
           city: city.trim() || "Kinshasa",
           hours,
+          eventId,
           ...focusPayload,
           ...payloadSpotlight(),
         }),
@@ -703,14 +761,19 @@ export default function ChallengesAdminPage() {
 
   function focusBadge(row: ChallengeRow) {
     const f = focusOf(row);
+    const parts: string[] = [];
     if (f === "catalog" && row.product) {
-      return `Boutique · ${row.product.title}`;
-    }
-    if (f === "teaser") {
+      parts.push(`Boutique · ${row.product.title}`);
+    } else if (f === "teaser") {
       const t = parseChallengeTeaser(row.productTeaser);
-      return t ? `Aperçu · ${t.title}` : "Aperçu";
+      parts.push(t ? `Aperçu · ${t.title}` : "Aperçu");
+    } else {
+      parts.push("Mission libre");
     }
-    return "Mission libre";
+    if (row.event?.title || row.eventId) {
+      parts.push(`Billet · ${row.event?.title ?? "event"}`);
+    }
+    return parts.join(" · ");
   }
 
   return (
@@ -726,456 +789,547 @@ export default function ChallengesAdminPage() {
           Challenges
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-pretty text-muted-foreground">
-          Trois ancrages : mission libre, produit boutique, ou teaser hors
-          catalogue. Aperçu live à droite.
+          Activation owner/admin uniquement — pas à la publication produit.
+          Ancrages : mission libre, produit boutique, teaser, ou event billet («
+          Je relève » → achat ticket).
         </p>
         <p className="mt-2 text-[11px] tabular-nums text-muted-foreground">
-          {active.length} actif{active.length === 1 ? "" : "s"} · {recent.length}{" "}
-          terminé{recent.length === 1 ? "" : "s"} récemment
+          {active.length} actif{active.length === 1 ? "" : "s"} ·{" "}
+          {recent.length} terminé{recent.length === 1 ? "" : "s"} récemment
         </p>
       </div>
+
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1 size-4 accent-primary"
+            checked={challengesEnabled}
+            disabled={busy}
+            onChange={(e) => void toggleChallengesEnabled(e.target.checked)}
+          />
+          <span>
+            <span className="block text-sm font-bold text-foreground">
+              Activer les challenges (feed & Découvrir)
+            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Interrupteur plateforme. Le feed n’affiche que les challenges
+              publiés ici (Programmés). Pas de catalogue auto, pas à la
+              publication produit.
+            </span>
+          </span>
+        </label>
+      </section>
 
       <section className="overflow-hidden rounded-2xl border border-border bg-surface">
         <div className="grid gap-0 lg:grid-cols-[1fr_minmax(240px,280px)]">
           <div className="space-y-4 p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold">
-            {editingId ? "Modifier le challenge" : "Nouveau challenge"}
-          </h2>
-          {editingId ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => resetForm()}
-            >
-              Annuler
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void seedCatalog()}
-            >
-              Sync catalogue
-            </Button>
-          )}
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Ancrage
-          </p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {FOCUS_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => applyFocus(opt.id)}
-                  className={cn(
-                    "rounded-xl px-2 py-2.5 text-left transition",
-                    focus === opt.id
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-surface-2 text-muted-foreground hover:text-foreground",
-                  )}
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold">
+                {editingId ? "Modifier le challenge" : "Nouveau challenge"}
+              </h2>
+              {editingId ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => resetForm()}
                 >
-                  <Icon className="mb-1 size-3.5 opacity-80" />
-                  <span className="block text-[10px] font-bold leading-tight">
-                    {opt.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-1.5 text-[10px] text-pretty text-muted-foreground">
-            {FOCUS_OPTIONS.find((o) => o.id === focus)?.hint}
-          </p>
-        </div>
-
-        <div className="space-y-2 rounded-xl border border-border bg-surface-2 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Spotlight (hero)
-          </p>
-          <p className="text-[10px] text-pretty text-muted-foreground">
-            JPG, PNG, WebP ou courte vidéo — prioritaire sur la cover produit.
-          </p>
-          {spotlight ? (
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-surface p-2">
-              {spotlight.kind === "video" ? (
-                <video
-                  src={spotlight.url}
-                  poster={spotlight.posterUrl ?? undefined}
-                  className="size-14 rounded-lg object-cover"
-                  muted
-                  playsInline
-                />
+                  Annuler
+                </Button>
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={spotlight.url}
-                  alt=""
-                  className="size-14 rounded-lg object-cover outline outline-1 outline-black/10"
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[11px] font-semibold">
-                  {spotlight.kind === "video"
-                    ? "Vidéo"
-                    : /\.webp(\?|$)/i.test(spotlight.url)
-                      ? "WebP"
-                      : "Image"}
-                </p>
-                <p className="truncate text-[10px] text-muted-foreground">
-                  Prêt pour la carte
-                </p>
-              </div>
-              <button
-                type="button"
-                className="text-[11px] font-semibold text-destructive"
-                onClick={() => setSpotlight(null)}
-              >
-                Retirer
-              </button>
-            </div>
-          ) : null}
-          <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-border bg-surface px-3 py-2.5 text-[11px] font-semibold transition hover:border-primary/40">
-            {uploading
-              ? "Upload…"
-              : spotlight
-                ? "Changer le spotlight"
-                : "Ajouter JPG / PNG / WebP / vidéo"}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,.webp"
-              className="hidden"
-              disabled={uploading}
-              onChange={(e) =>
-                void onSpotlightMedia(e.target.files?.[0] ?? null)
-              }
-            />
-          </label>
-        </div>
-
-        {focus === "catalog" ? (
-          <div className="space-y-2">
-            {product ? (
-              <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 p-2">
-                {product.images[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={product.images[0]}
-                    alt=""
-                    className="size-12 rounded-lg object-cover"
-                  />
-                ) : (
-                  <div className="grid size-12 place-items-center rounded-lg bg-surface">
-                    <ShoppingBag className="size-4 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{product.title}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    {product.shop.name} ·{" "}
-                    {formatMoney(product.priceCents, product.currency)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="grid size-8 place-items-center rounded-full hover:bg-surface"
-                  onClick={() => setProduct(null)}
-                  aria-label="Retirer"
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || !challengesEnabled}
+                  onClick={() => void seedCatalog()}
+                  title={
+                    challengesEnabled
+                      ? "Publier le catalogue type du jour"
+                      : "Activez d’abord les challenges"
+                  }
                 >
-                  <X className="size-4" />
-                </button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={() => setProductOpen((v) => !v)}
-              >
-                <ShoppingBag className="size-4" />
-                Choisir un produit publié
-              </Button>
-            )}
-            {productOpen ? (
-              <div className="rounded-xl border border-border bg-surface-2 p-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={productQ}
-                    onChange={(e) => setProductQ(e.target.value)}
-                    placeholder="Rechercher…"
-                    className="bg-surface pl-8"
-                    autoFocus
-                  />
-                </div>
-                <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-                  {productHits.map((p) => (
-                    <li key={p.id}>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface"
-                        onClick={() => pickProduct(p)}
-                      >
-                        {p.images[0] ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={p.images[0]}
-                            alt=""
-                            className="size-9 rounded-md object-cover"
-                          />
-                        ) : (
-                          <div className="size-9 rounded-md bg-surface" />
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12px] font-semibold">
-                            {p.title}
-                          </span>
-                          <span className="block truncate text-[10px] text-muted-foreground">
-                            {p.shop.name}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {focus === "teaser" ? (
-          <div className="space-y-2 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
-            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-200/90">
-              <Sparkles className="size-3.5" />
-              Produit non enregistré — teasing avant fiche boutique
-            </p>
-            <Input
-              value={teaser.title}
-              onChange={(e) =>
-                setTeaser((prev) => ({ ...prev, title: e.target.value }))
-              }
-              placeholder="Nom du produit"
-              className="bg-surface-2"
-              maxLength={120}
-            />
-            <Input
-              value={teaser.shopName ?? ""}
-              onChange={(e) =>
-                setTeaser((prev) => ({ ...prev, shopName: e.target.value }))
-              }
-              placeholder="Boutique / marque (optionnel)"
-              className="bg-surface-2"
-              maxLength={80}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                value={
-                  teaser.priceCents != null ? teaser.priceCents / 100 : ""
-                }
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  setTeaser((prev) => ({
-                    ...prev,
-                    priceCents: Number.isFinite(n) ? Math.round(n * 100) : null,
-                  }));
-                }}
-                placeholder="Prix indicatif"
-                className="bg-surface-2"
-              />
-              <Input
-                value={teaser.currency ?? "USD"}
-                onChange={(e) =>
-                  setTeaser((prev) => ({
-                    ...prev,
-                    currency: e.target.value.toUpperCase().slice(0, 8),
-                  }))
-                }
-                placeholder="Devise"
-                className="bg-surface-2"
-              />
+                  Sync catalogue
+                </Button>
+              )}
             </div>
-            <textarea
-              value={teaser.note ?? ""}
-              onChange={(e) =>
-                setTeaser((prev) => ({ ...prev, note: e.target.value }))
-              }
-              placeholder="Note courte (arrivage, drop, promo…)"
-              rows={2}
-              maxLength={220}
-              className="w-full resize-none rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none"
-            />
-            <div className="flex items-center gap-2">
-              {teaser.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={teaser.image}
-                  alt=""
-                  className="size-14 rounded-lg object-cover"
-                />
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Ancrage
+              </p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {FOCUS_OPTIONS.map((opt) => {
+                  const Icon = opt.icon;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => applyFocus(opt.id)}
+                      className={cn(
+                        "rounded-xl px-2 py-2.5 text-left transition",
+                        focus === opt.id
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-surface-2 text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="mb-1 size-3.5 opacity-80" />
+                      <span className="block text-[10px] font-bold leading-tight">
+                        {opt.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10px] text-pretty text-muted-foreground">
+                {FOCUS_OPTIONS.find((o) => o.id === focus)?.hint}
+              </p>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-border bg-surface-2 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Spotlight (hero)
+              </p>
+              <p className="text-[10px] text-pretty text-muted-foreground">
+                JPG, PNG, WebP ou courte vidéo — prioritaire sur la cover
+                produit.
+              </p>
+              {spotlight ? (
+                <div className="flex items-center gap-2 rounded-xl border border-border bg-surface p-2">
+                  {spotlight.kind === "video" ? (
+                    <video
+                      src={spotlight.url}
+                      poster={spotlight.posterUrl ?? undefined}
+                      className="size-14 rounded-lg object-cover"
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={spotlight.url}
+                      alt=""
+                      className="size-14 rounded-lg object-cover outline outline-1 outline-black/10"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11px] font-semibold">
+                      {spotlight.kind === "video"
+                        ? "Vidéo"
+                        : /\.webp(\?|$)/i.test(spotlight.url)
+                          ? "WebP"
+                          : "Image"}
+                    </p>
+                    <p className="truncate text-[10px] text-muted-foreground">
+                      Prêt pour la carte
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold text-destructive"
+                    onClick={() => setSpotlight(null)}
+                  >
+                    Retirer
+                  </button>
+                </div>
               ) : null}
-              <label className="inline-flex cursor-pointer items-center rounded-full border border-border bg-surface-2 px-3 py-1.5 text-[11px] font-semibold">
-                {uploading ? "Upload…" : teaser.image ? "Changer l’image" : "Image"}
+              <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-border bg-surface px-3 py-2.5 text-[11px] font-semibold transition hover:border-primary/40">
+                {uploading
+                  ? "Upload…"
+                  : spotlight
+                    ? "Changer le spotlight"
+                    : "Ajouter JPG / PNG / WebP / vidéo"}
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,.webp"
                   className="hidden"
                   disabled={uploading}
                   onChange={(e) =>
-                    void onTeaserImage(e.target.files?.[0] ?? null)
+                    void onSpotlightMedia(e.target.files?.[0] ?? null)
                   }
                 />
               </label>
-              {teaser.image ? (
+            </div>
+
+            {focus === "catalog" ? (
+              <div className="space-y-2">
+                {product ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 p-2">
+                    {product.images[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={product.images[0]}
+                        alt=""
+                        className="size-12 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="grid size-12 place-items-center rounded-lg bg-surface">
+                        <ShoppingBag className="size-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {product.title}
+                      </p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {product.shop.name} ·{" "}
+                        {formatMoney(product.priceCents, product.currency)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="grid size-8 place-items-center rounded-full hover:bg-surface"
+                      onClick={() => setProduct(null)}
+                      aria-label="Retirer"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                    onClick={() => setProductOpen((v) => !v)}
+                  >
+                    <ShoppingBag className="size-4" />
+                    Choisir un produit publié
+                  </Button>
+                )}
+                {productOpen ? (
+                  <div className="rounded-xl border border-border bg-surface-2 p-2">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={productQ}
+                        onChange={(e) => setProductQ(e.target.value)}
+                        placeholder="Rechercher…"
+                        className="bg-surface pl-8"
+                        autoFocus
+                      />
+                    </div>
+                    <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                      {productHits.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface"
+                            onClick={() => pickProduct(p)}
+                          >
+                            {p.images[0] ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={p.images[0]}
+                                alt=""
+                                className="size-9 rounded-md object-cover"
+                              />
+                            ) : (
+                              <div className="size-9 rounded-md bg-surface" />
+                            )}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[12px] font-semibold">
+                                {p.title}
+                              </span>
+                              <span className="block truncate text-[10px] text-muted-foreground">
+                                {p.shop.name}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Event billet (optionnel)
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                « Je relève » ouvre la fiche Event pour acheter un billet (comme
+                sur Android).
+              </p>
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
-                  className="text-[11px] text-muted-foreground"
-                  onClick={() =>
-                    setTeaser((prev) => ({ ...prev, image: null }))
-                  }
+                  onClick={() => setEventId(null)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[11px] font-bold transition",
+                    !eventId
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-surface-2 text-muted-foreground ring-1 ring-border",
+                  )}
                 >
-                  Retirer
+                  Aucun
                 </button>
+                {events.slice(0, 24).map((event) => {
+                  const on = eventId === event.id;
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => setEventId(event.id)}
+                      className={cn(
+                        "inline-flex max-w-[14rem] items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold transition",
+                        on
+                          ? "bg-sky-500 text-white"
+                          : "bg-surface-2 text-muted-foreground ring-1 ring-border",
+                      )}
+                      title={event.title}
+                    >
+                      <Ticket className="size-3 shrink-0" />
+                      <span className="truncate">
+                        {event.status && event.status !== "ON_SALE"
+                          ? `${event.title} · ${event.status}`
+                          : event.title}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {events.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Aucun event chargé — crée-en un dans Billets / Events, ou
+                  recharge (owner/admin requis).
+                </p>
               ) : null}
             </div>
-          </div>
-        ) : null}
 
-        {!editingId && focus === "none" && catalog.length > 0 ? (
-          <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Modèles mission libre
-            </p>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {catalog.map((item) => (
-                <button
-                  key={item.title}
-                  type="button"
-                  onClick={() => fillFromCatalog(item)}
-                  className="shrink-0 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[10px] font-semibold transition hover:border-primary/40"
-                >
-                  {item.title}
-                </button>
-              ))}
+            {focus === "teaser" ? (
+              <div className="space-y-2 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-200/90">
+                  <Sparkles className="size-3.5" />
+                  Produit non enregistré — teasing avant fiche boutique
+                </p>
+                <Input
+                  value={teaser.title}
+                  onChange={(e) =>
+                    setTeaser((prev) => ({ ...prev, title: e.target.value }))
+                  }
+                  placeholder="Nom du produit"
+                  className="bg-surface-2"
+                  maxLength={120}
+                />
+                <Input
+                  value={teaser.shopName ?? ""}
+                  onChange={(e) =>
+                    setTeaser((prev) => ({ ...prev, shopName: e.target.value }))
+                  }
+                  placeholder="Boutique / marque (optionnel)"
+                  className="bg-surface-2"
+                  maxLength={80}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={
+                      teaser.priceCents != null ? teaser.priceCents / 100 : ""
+                    }
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setTeaser((prev) => ({
+                        ...prev,
+                        priceCents: Number.isFinite(n)
+                          ? Math.round(n * 100)
+                          : null,
+                      }));
+                    }}
+                    placeholder="Prix indicatif"
+                    className="bg-surface-2"
+                  />
+                  <Input
+                    value={teaser.currency ?? "USD"}
+                    onChange={(e) =>
+                      setTeaser((prev) => ({
+                        ...prev,
+                        currency: e.target.value.toUpperCase().slice(0, 8),
+                      }))
+                    }
+                    placeholder="Devise"
+                    className="bg-surface-2"
+                  />
+                </div>
+                <textarea
+                  value={teaser.note ?? ""}
+                  onChange={(e) =>
+                    setTeaser((prev) => ({ ...prev, note: e.target.value }))
+                  }
+                  placeholder="Note courte (arrivage, drop, promo…)"
+                  rows={2}
+                  maxLength={220}
+                  className="w-full resize-none rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none"
+                />
+                <div className="flex items-center gap-2">
+                  {teaser.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={teaser.image}
+                      alt=""
+                      className="size-14 rounded-lg object-cover"
+                    />
+                  ) : null}
+                  <label className="inline-flex cursor-pointer items-center rounded-full border border-border bg-surface-2 px-3 py-1.5 text-[11px] font-semibold">
+                    {uploading
+                      ? "Upload…"
+                      : teaser.image
+                        ? "Changer l’image"
+                        : "Image"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={(e) =>
+                        void onTeaserImage(e.target.files?.[0] ?? null)
+                      }
+                    />
+                  </label>
+                  {teaser.image ? (
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground"
+                      onClick={() =>
+                        setTeaser((prev) => ({ ...prev, image: null }))
+                      }
+                    >
+                      Retirer
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {!editingId && focus === "none" && catalog.length > 0 ? (
+              <div>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Modèles mission libre
+                </p>
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  {catalog.map((item) => (
+                    <button
+                      key={item.title}
+                      type="button"
+                      onClick={() => fillFromCatalog(item)}
+                      className="shrink-0 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[10px] font-semibold transition hover:border-primary/40"
+                    >
+                      {item.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Titre
+                </span>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Titre du challenge"
+                  className="bg-surface-2"
+                  maxLength={120}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Consigne
+                </span>
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="Consigne (préremplie si produit / teaser)"
+                  rows={3}
+                  maxLength={400}
+                  className="w-full resize-none rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <span className="mt-0.5 block text-right text-[10px] tabular-nums text-muted-foreground">
+                  {body.length}/400
+                </span>
+              </label>
             </div>
-          </div>
-        ) : null}
 
-        <div className="space-y-2">
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Titre
-            </span>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Titre du challenge"
-              className="bg-surface-2"
-              maxLength={120}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Consigne
-            </span>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Consigne (préremplie si produit / teaser)"
-              rows={3}
-              maxLength={400}
-              className="w-full resize-none rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-            />
-            <span className="mt-0.5 block text-right text-[10px] tabular-nums text-muted-foreground">
-              {body.length}/400
-            </span>
-          </label>
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Catégorie
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCategory(c.id)}
-                className={cn(
-                  "rounded-full px-2.5 py-1 text-[10px] font-bold transition",
-                  category === c.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-surface-2 text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Ville
-            </span>
-            <Input
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="Ville"
-              className="bg-surface-2"
-            />
-          </label>
-          {!editingId ? (
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Durée (h)
-              </span>
-              <Input
-                type="number"
-                min={1}
-                max={168}
-                value={hours}
-                onChange={(e) => setHours(Number(e.target.value) || 24)}
-                placeholder="Durée (h)"
-                className="bg-surface-2"
-              />
-            </label>
-          ) : (
-            <div className="flex flex-col justify-end">
-              <div className="flex h-10 items-center rounded-xl border border-border bg-surface-2 px-3 text-[11px] text-muted-foreground">
-                Durée via +24 h
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Catégorie
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCategory(c.id)}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[10px] font-bold transition",
+                      category === c.id
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-surface-2 text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
               </div>
             </div>
-          )}
-        </div>
 
-        <Button
-          className="w-full"
-          disabled={
-            busy ||
-            uploading ||
-            (focus === "catalog" && !product) ||
-            (focus === "teaser" && teaser.title.trim().length < 2) ||
-            (focus === "none" && (!title.trim() || !body.trim()))
-          }
-          onClick={() => void saveChallenge()}
-        >
-          {busy
-            ? "Enregistrement…"
-            : editingId
-              ? "Enregistrer"
-              : "Publier le challenge"}
-        </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Ville
+                </span>
+                <Input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Ville"
+                  className="bg-surface-2"
+                />
+              </label>
+              {!editingId ? (
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Durée (h)
+                  </span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={168}
+                    value={hours}
+                    onChange={(e) => setHours(Number(e.target.value) || 24)}
+                    placeholder="Durée (h)"
+                    className="bg-surface-2"
+                  />
+                </label>
+              ) : (
+                <div className="flex flex-col justify-end">
+                  <div className="flex h-10 items-center rounded-xl border border-border bg-surface-2 px-3 text-[11px] text-muted-foreground">
+                    Durée via +24 h
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Button
+              className="w-full"
+              disabled={
+                busy ||
+                uploading ||
+                (focus === "catalog" && !product) ||
+                (focus === "teaser" && teaser.title.trim().length < 2) ||
+                (focus === "none" && (!title.trim() || !body.trim()))
+              }
+              onClick={() => void saveChallenge()}
+            >
+              {busy
+                ? "Enregistrement…"
+                : editingId
+                  ? "Enregistrer"
+                  : "Publier le challenge"}
+            </Button>
           </div>
 
           <aside className="flex flex-col items-center justify-start gap-3 border-t border-border bg-[#0e0e12] p-5 lg:border-t-0 lg:border-l">
@@ -1199,6 +1353,11 @@ export default function ChallengesAdminPage() {
               {focus === "teaser" && teaser.title.trim()
                 ? ` · ${teaser.title.trim()}`
                 : null}
+              {eventId
+                ? ` · Billet · ${
+                    events.find((e) => e.id === eventId)?.title ?? "event"
+                  }`
+                : null}
             </p>
           </aside>
         </div>
@@ -1206,7 +1365,9 @@ export default function ChallengesAdminPage() {
 
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-2">
-          <h2 className="text-sm font-bold">Actifs ({active.length})</h2>
+          <h2 className="text-sm font-bold">
+            Programmés · feed ({active.length})
+          </h2>
           <Link
             href="/discover"
             className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary"
@@ -1232,96 +1393,98 @@ export default function ChallengesAdminPage() {
                 parseChallengeTeaser(row.productTeaser)?.image ||
                 null;
               return (
-              <li
-                key={row.id}
-                className="overflow-hidden rounded-2xl border border-border bg-surface"
-              >
-                <div className="flex gap-3 p-3">
-                  {thumb ? (
-                    spot?.kind === "video" ? (
-                      <video
-                        src={thumb}
-                        poster={spot.posterUrl ?? undefined}
-                        className="size-16 shrink-0 rounded-xl object-cover"
-                        muted
-                        playsInline
-                      />
+                <li
+                  key={row.id}
+                  className="overflow-hidden rounded-2xl border border-border bg-surface"
+                >
+                  <div className="flex gap-3 p-3">
+                    {thumb ? (
+                      spot?.kind === "video" ? (
+                        <video
+                          src={thumb}
+                          poster={spot.posterUrl ?? undefined}
+                          className="size-16 shrink-0 rounded-xl object-cover"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={thumb}
+                          alt=""
+                          className="size-16 shrink-0 rounded-xl object-cover outline outline-1 outline-black/10"
+                        />
+                      )
                     ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={thumb}
-                        alt=""
-                        className="size-16 shrink-0 rounded-xl object-cover outline outline-1 outline-black/10"
+                      <div
+                        className={cn(
+                          "size-16 shrink-0 rounded-xl bg-gradient-to-br",
+                          categoryLook(row.category).wash,
+                        )}
                       />
-                    )
-                  ) : (
-                    <div
-                      className={cn(
-                        "size-16 shrink-0 rounded-xl bg-gradient-to-br",
-                        categoryLook(row.category).wash,
-                      )}
-                    />
-                  )}
-                  <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{row.title}</p>
-                <p className="mt-0.5 text-[11px] font-medium text-primary">
-                  {focusBadge(row)}
-                </p>
-                <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
-                  {row.category ?? "—"} · {row.completions} participants
-                </p>
-                <p className="mt-1 line-clamp-2 text-[11px] text-pretty text-muted-foreground">
-                  {row.body}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <Button
-                    size="sm"
-                    className="h-7 text-[10px]"
-                    disabled={busy || reportBusy}
-                    onClick={() => void openReport(row.id)}
-                  >
-                    Rapport
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px]"
-                    disabled={busy}
-                    onClick={() => startEdit(row)}
-                  >
-                    Modifier
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px]"
-                    disabled={busy}
-                    onClick={() => void prolong(row.id, 24)}
-                  >
-                    +24 h
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-[10px] text-destructive"
-                    disabled={busy}
-                    onClick={() => void endChallenge(row.id)}
-                  >
-                    Terminer
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-[10px] text-destructive"
-                    disabled={busy}
-                    onClick={() => void removeChallenge(row.id)}
-                  >
-                    Supprimer
-                  </Button>
-                </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {row.title}
+                      </p>
+                      <p className="mt-0.5 text-[11px] font-medium text-primary">
+                        {focusBadge(row)}
+                      </p>
+                      <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                        {row.category ?? "—"} · {row.completions} participants
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[11px] text-pretty text-muted-foreground">
+                        {row.body}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          className="h-7 text-[10px]"
+                          disabled={busy || reportBusy}
+                          onClick={() => void openReport(row.id)}
+                        >
+                          Rapport
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[10px]"
+                          disabled={busy}
+                          onClick={() => startEdit(row)}
+                        >
+                          Modifier
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[10px]"
+                          disabled={busy}
+                          onClick={() => void prolong(row.id, 24)}
+                        >
+                          +24 h
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-[10px] text-destructive"
+                          disabled={busy}
+                          onClick={() => void endChallenge(row.id)}
+                        >
+                          Terminer
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-[10px] text-destructive"
+                          disabled={busy}
+                          onClick={() => void removeChallenge(row.id)}
+                        >
+                          Supprimer
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </li>
+                </li>
               );
             })}
           </ul>
@@ -1413,7 +1576,9 @@ export default function ChallengesAdminPage() {
             ) : report ? (
               <div className="mt-3 space-y-3">
                 <div className="rounded-xl border border-border bg-surface-2 p-3">
-                  <p className="text-sm font-semibold">{report.challenge.title}</p>
+                  <p className="text-sm font-semibold">
+                    {report.challenge.title}
+                  </p>
                   {report.challenge.productLabel ? (
                     <p className="mt-0.5 text-[11px] text-primary">
                       Produit · {report.challenge.productLabel}
@@ -1472,7 +1637,8 @@ export default function ChallengesAdminPage() {
                           </code>
                         </div>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {p.phone ?? "Pas de tél."} · {p.email ?? "Pas d’email"}
+                          {p.phone ?? "Pas de tél."} ·{" "}
+                          {p.email ?? "Pas d’email"}
                           {p.emailVerified ? " · vérifié" : ""}
                         </p>
                         <p className="text-[10px] text-muted-foreground">

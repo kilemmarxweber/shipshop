@@ -46,15 +46,14 @@ import {
 } from "@/lib/growth/live-session";
 import { isLiveSfuConfigured } from "@/lib/growth/live-sfu";
 import {
-    leaveLiveViewer,
-    listLiveViewers,
-    pingLiveViewer,
-} from "@/lib/growth/live-viewers";
-import {
     isLiveStageLayoutId,
     normalizeStageLayout,
 } from "@/lib/growth/live-stage-layout";
 import { isLiveVideoFilterId } from "@/lib/growth/live-video-filters";
+import {
+    leaveLiveViewer,
+    pingLiveViewer
+} from "@/lib/growth/live-viewers";
 import { idempotencyFrom } from "@/lib/payments/ledger";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -1209,8 +1208,18 @@ export async function POST(
           `,
         ),
       );
+      // Fermeture : refuse les demandes en attente (live host-only).
+      if (guestJoinLocked) {
+        await withDbRetry(() =>
+          prisma.liveGuest.updateMany({
+            where: { liveId: id, status: "PENDING" },
+            data: { status: "REFUSED", decidedAt: new Date() },
+          }),
+        );
+      }
       return NextResponse.json({
         live: publicLive({ ...live, guestJoinLocked }),
+        guests: await guestsPayload(),
       });
     } catch (error) {
       console.error("[api/growth/lives] guest_join_lock", error);
