@@ -436,6 +436,7 @@ export async function PATCH(req: Request) {
     productTeaser?: Prisma.InputJsonValue | typeof Prisma.DbNull;
     spotlight?: Prisma.InputJsonValue | typeof Prisma.DbNull;
     eventId?: string | null;
+    programmed?: boolean;
     startsAt?: Date;
     endsAt?: Date;
   } = {};

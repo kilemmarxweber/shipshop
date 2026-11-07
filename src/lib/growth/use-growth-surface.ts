@@ -208,7 +208,7 @@ export function useGrowthSurface() {
         ? `Challenge relevé · réf. ${data.reference}`
         : "Challenge relevé",
     );
-    const eventId = data.eventId ?? data.event?.id ?? linkedEventId;
+    const eventId = data?.eventId ?? data?.event?.id ?? linkedEventId;
     if (eventId && typeof window !== "undefined") {
       window.location.href = `/events/${eventId}`;
     }
