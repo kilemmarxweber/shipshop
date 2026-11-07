@@ -74,6 +74,8 @@ import {
     MessageCircle,
     Mic,
     MicOff,
+    Monitor,
+    MonitorOff,
     Pause,
     Play,
     Plus,
@@ -252,7 +254,8 @@ export default function LiveRoomPage({
   const guestCameraOnRef = useRef(false);
   const guestMicOnRef = useRef(false);
   const remoteHostVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteHostCameraPipRef = useRef<HTMLVideoElement | null>(null);
+  const cameraBeforeShareRef = useRef(true);
+  const shareStoppingRef = useRef(false);
   const sessionUserIdRef = useRef<string | null>(null);
   liveIdRef.current = id;
   endedRef.current = live?.status === "ENDED";
@@ -951,6 +954,7 @@ export default function LiveRoomPage({
     if (sfu.failed) setSfuGaveUp(true);
   }, [sfu.failed]);
   const sfuEnabled = sfuPreferred && !sfu.failed;
+
   const mesh = useLiveRtc({
     liveId: id,
     peerId: session?.user?.id ?? null,
@@ -975,12 +979,6 @@ export default function LiveRoomPage({
         .map((t) => `${t.kind}:${t.id}:${t.readyState}:${t.enabled}`)
         .join("|")
     : "";
-  const hostRemoteCameraTrackKey = hostRemoteCameraStream
-    ? hostRemoteCameraStream
-        .getTracks()
-        .map((t) => `${t.kind}:${t.id}:${t.readyState}:${t.enabled}`)
-        .join("|")
-    : "";
   const hostRemoteAudioRef = useRemoteLiveAudio(
     hostRemoteCameraStream ?? hostRemoteScreenStream,
     Boolean(!isHost && (hostRemoteCameraStream || hostRemoteScreenStream)),
@@ -999,29 +997,6 @@ export default function LiveRoomPage({
     if (el.srcObject !== hostRemoteStream) el.srcObject = hostRemoteStream;
     void el.play().catch(() => undefined);
   }, [hostRemoteStream, hostRemoteTrackKey, isHost]);
-
-  // Caméra host en PiP quand le ScreenShare est la scène principale
-  useEffect(() => {
-    if (isHost) return;
-    const el = remoteHostCameraPipRef.current;
-    if (!el) return;
-    const pipStream =
-      hostRemoteScreenStream && hostRemoteCameraStream
-        ? hostRemoteCameraStream
-        : null;
-    if (!pipStream) {
-      el.srcObject = null;
-      return;
-    }
-    el.muted = true;
-    if (el.srcObject !== pipStream) el.srcObject = pipStream;
-    void el.play().catch(() => undefined);
-  }, [
-    hostRemoteCameraStream,
-    hostRemoteCameraTrackKey,
-    hostRemoteScreenStream,
-    isHost,
-  ]);
 
   useEffect(() => {
     if (isHost || !live || live.status !== "LIVE") {
@@ -1383,6 +1358,10 @@ export default function LiveRoomPage({
 
   async function toggleCamera() {
     if (!isHost || busy) return;
+    if (sfu.screenSharing) {
+      toast.message("Arrête le partage d’écran pour réactiver la caméra");
+      return;
+    }
     const next = !localCameraOn;
     setLocalCameraOn(next);
     setAvTracksEnabled(streamRef.current, {
@@ -1393,6 +1372,70 @@ export default function LiveRoomPage({
     await hostAction("camera", { cameraOn: next });
     setBusy(false);
   }
+
+  async function restoreCameraAfterShare() {
+    if (!cameraBeforeShareRef.current) return;
+    setLocalCameraOn(true);
+    setAvTracksEnabled(streamRef.current, {
+      video: true,
+      pageVisible: pageVisibleRef.current,
+    });
+    await hostAction("camera", { cameraOn: true });
+  }
+
+  async function toggleScreenShare() {
+    if (!isHost || busy) return;
+    if (!sfuEnabled) {
+      toast.message("Partage d’écran disponible avec LiveKit (SFU)");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (sfu.screenSharing) {
+        shareStoppingRef.current = true;
+        await sfu.stopScreenShare();
+        await restoreCameraAfterShare();
+        shareStoppingRef.current = false;
+        toast.message("Partage d’écran arrêté");
+      } else {
+        cameraBeforeShareRef.current = localCameraOn;
+        setLocalCameraOn(false);
+        setAvTracksEnabled(streamRef.current, {
+          video: false,
+          pageVisible: pageVisibleRef.current,
+        });
+        await hostAction("camera", { cameraOn: false });
+        await sfu.startScreenShare();
+        toast.message("Écran partagé — caméra coupée (comme WhatsApp)");
+      }
+    } catch (error) {
+      shareStoppingRef.current = false;
+      toast.error(
+        error instanceof Error ? error.message : "Partage d’écran impossible",
+      );
+      if (!sfu.screenSharing && cameraBeforeShareRef.current) {
+        setLocalCameraOn(true);
+        setAvTracksEnabled(streamRef.current, {
+          video: true,
+          pageVisible: pageVisibleRef.current,
+        });
+        await hostAction("camera", { cameraOn: true });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const wasScreenSharingRef = useRef(false);
+  useEffect(() => {
+    const was = wasScreenSharingRef.current;
+    wasScreenSharingRef.current = sfu.screenSharing;
+    if (!isHost || !was || sfu.screenSharing || shareStoppingRef.current) {
+      return;
+    }
+    void restoreCameraAfterShare();
+    toast.message("Partage d’écran arrêté");
+  }, [isHost, sfu.screenSharing]);
 
   async function toggleMic() {
     if (!isHost || busy) return;
@@ -1532,8 +1575,13 @@ export default function LiveRoomPage({
     overlays.find((o) => o.kind === "product")?.image ??
     null;
   const hasBackdrop = Boolean(live.backdropUrl?.trim() || live.backdropPreset);
+  const hostScreenSharing = isHost && sfu.screenSharing;
   const showHostLocalVideo =
-    isHost && localCameraOn && !ended && Boolean(hostStream);
+    isHost &&
+    localCameraOn &&
+    !ended &&
+    Boolean(hostStream) &&
+    !hostScreenSharing;
   const hostRemote = hostRemoteStream;
   const hostScreenOn = Boolean(hostRemoteScreenStream);
   // Viewer : plein écran dès qu’un flux distant existe (écran ou cam)
@@ -1542,12 +1590,6 @@ export default function LiveRoomPage({
     !ended &&
     Boolean(hostRemote) &&
     (hostScreenOn || live.cameraOn !== false);
-  const showHostCameraPip =
-    !isHost &&
-    !ended &&
-    hostScreenOn &&
-    Boolean(hostRemoteCameraStream) &&
-    live.cameraOn !== false;
   const viewerWaitingForMedia = !isHost && !ended && !paused && !hostRemote;
   const selected = overlays.find((o) => o.id === selectedOverlayId);
   const chats = live.chats ?? [];
@@ -1640,7 +1682,19 @@ export default function LiveRoomPage({
           }
           hostNode={
             <>
-              {showHostLocalVideo ? (
+              {hostScreenSharing ? (
+                <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 bg-[#07070C] px-8 text-center">
+                  <div className="grid size-[4.5rem] place-items-center rounded-[1.35rem] border border-[#00D68F]/40 bg-[#00D68F]/15">
+                    <Monitor className="size-9 text-[#7dffb3]" />
+                  </div>
+                  <p className="text-lg font-extrabold text-white">
+                    Partage d’écran
+                  </p>
+                  <p className="max-w-sm text-[13px] font-semibold text-white/55">
+                    Les spectateurs voient ton écran — caméra coupée
+                  </p>
+                </div>
+              ) : showHostLocalVideo ? (
                 <video
                   ref={videoRef}
                   muted
@@ -1685,18 +1739,6 @@ export default function LiveRoomPage({
                 />
               ) : null}
 
-              {showHostCameraPip ? (
-                <video
-                  ref={remoteHostCameraPipRef}
-                  muted
-                  autoPlay
-                  {...iosInlineVideo}
-                  disablePictureInPicture
-                  style={videoFilterStyle}
-                  className="absolute bottom-28 left-3 z-[6] h-36 w-28 rounded-2xl border border-white/30 object-cover shadow-lg [-webkit-transform:scaleX(-1)] [transform:scaleX(-1)]"
-                />
-              ) : null}
-
               {!isHost && !ended ? (
                 <audio
                   ref={hostRemoteAudioRef}
@@ -1708,9 +1750,11 @@ export default function LiveRoomPage({
 
               <LiveVideoStudioGrade
                 filterId={
-                  showHostLocalVideo || showHostRemoteVideo
-                    ? live.videoFilter
-                    : null
+                  hostScreenSharing || hostScreenOn
+                    ? null
+                    : showHostLocalVideo || showHostRemoteVideo
+                      ? live.videoFilter
+                      : null
                 }
               />
             </>
@@ -1799,6 +1843,28 @@ export default function LiveRoomPage({
                 })();
               }}
             />
+          </div>
+        ) : null}
+
+        {hostScreenSharing && !ended ? (
+          <div className="pointer-events-auto absolute inset-x-0 top-0 z-[40] flex items-center gap-3 bg-red-600 px-4 py-2.5 pt-[max(0.65rem,env(safe-area-inset-top))] shadow-lg">
+            <span className="size-2.5 shrink-0 rounded-full bg-white" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-extrabold text-white">
+                Vous partagez votre écran
+              </p>
+              <p className="truncate text-[11px] font-semibold text-white/85">
+                Caméra coupée — les spectateurs voient uniquement l’écran
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void toggleScreenShare()}
+              className="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-[13px] font-extrabold text-red-700"
+            >
+              Arrêter
+            </button>
           </div>
         ) : null}
 
@@ -2588,14 +2654,18 @@ export default function LiveRoomPage({
             {isHost ? (
               <>
                 <LiveRailBtn
-                  label={localCameraOn ? "Caméra" : "Caméra coupée"}
-                  wait={!localCameraOn}
+                  label={
+                    hostScreenSharing || !localCameraOn
+                      ? "Caméra coupée"
+                      : "Caméra"
+                  }
+                  wait={hostScreenSharing || !localCameraOn}
                   onClick={() => void toggleCamera()}
                 >
-                  {localCameraOn ? (
-                    <Camera className="size-5" />
-                  ) : (
+                  {hostScreenSharing || !localCameraOn ? (
                     <CameraOff className="size-5" />
+                  ) : (
+                    <Camera className="size-5" />
                   )}
                 </LiveRailBtn>
                 <LiveRailBtn
@@ -2607,6 +2677,17 @@ export default function LiveRoomPage({
                     <Mic className="size-5" />
                   ) : (
                     <MicOff className="size-5" />
+                  )}
+                </LiveRailBtn>
+                <LiveRailBtn
+                  label={hostScreenSharing ? "Écran on" : "Écran"}
+                  wait={hostScreenSharing}
+                  onClick={() => void toggleScreenShare()}
+                >
+                  {hostScreenSharing ? (
+                    <MonitorOff className="size-5" />
+                  ) : (
+                    <Monitor className="size-5" />
                   )}
                 </LiveRailBtn>
                 <LiveRailBtn

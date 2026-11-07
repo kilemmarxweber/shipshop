@@ -16,6 +16,7 @@ type Props = {
   onApply: (filterId: LiveVideoFilterId) => Promise<boolean>;
 };
 
+/** Galerie chips ronds (même langage que l’app mobile Live). */
 export function LiveVideoFilterPicker({
   open,
   busy,
@@ -35,11 +36,11 @@ export function LiveVideoFilterPicker({
         onClick={onClose}
       />
       <div className="absolute inset-x-3 z-40 rounded-2xl border border-white/15 bg-[#121218]/95 p-3 shadow-xl backdrop-blur-md bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+4.75rem))] sm:bottom-24">
-        <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <p className="text-sm font-bold text-white">Filtres Live</p>
             <p className="text-[11px] text-white/50">
-              Aucun · beauté · couleurs · chapeau · lunettes · emojis
+              Looks · beauté · AR · stickers
             </p>
           </div>
           <Button
@@ -53,7 +54,7 @@ export function LiveVideoFilterPicker({
           </Button>
         </div>
 
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {LIVE_VIDEO_FILTERS.map((f) => {
             const selected = active === f.id;
             return (
@@ -74,25 +75,27 @@ export function LiveVideoFilterPicker({
                     }
                   })();
                 }}
-                className={cn(
-                  "w-[4.5rem] shrink-0 overflow-hidden rounded-xl border text-center transition active:scale-[0.98]",
-                  selected
-                    ? "border-[#7dffb3] ring-1 ring-[#7dffb3]/60"
-                    : "border-white/15",
-                )}
+                className="flex w-14 shrink-0 flex-col items-center gap-1.5 transition active:scale-[0.97]"
               >
-                <div
-                  className="grid aspect-square w-full place-items-center text-2xl"
-                  style={{ backgroundImage: f.swatch }}
+                <span
+                  className={cn(
+                    "grid size-12 place-items-center rounded-full border-2 text-xl",
+                    selected
+                      ? "border-white bg-[#00D68F] shadow-[0_0_0_2px_rgba(0,214,143,0.35)]"
+                      : "border-white/20 bg-black/45",
+                  )}
+                  style={selected ? undefined : { backgroundImage: f.swatch }}
                 >
                   {f.emoji ?? ""}
-                </div>
-                <div className="bg-black/45 px-1 py-1">
-                  <p className="truncate text-[10px] font-bold text-white">
-                    {f.label}
-                  </p>
-                  <p className="truncate text-[9px] text-white/50">{f.hint}</p>
-                </div>
+                </span>
+                <span
+                  className={cn(
+                    "w-full truncate text-center text-[10px] font-bold",
+                    selected ? "text-[#7dffb3]" : "text-white/70",
+                  )}
+                >
+                  {f.label}
+                </span>
               </button>
             );
           })}

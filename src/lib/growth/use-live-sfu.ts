@@ -11,7 +11,7 @@ import {
     type RemoteTrack,
     type RemoteTrackPublication,
 } from "livekit-client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type RemoteStreamMap = Record<string, MediaStream>;
 
@@ -92,6 +92,7 @@ export function useLiveSfu(opts: {
   const [remoteScreenStreams, setRemoteScreenStreams] =
     useState<RemoteStreamMap>({});
   const [failed, setFailed] = useState(false);
+  const [screenSharing, setScreenSharing] = useState(false);
 
   const roomRef = useRef<Room | null>(null);
   const publishedIdsRef = useRef<Set<string>>(new Set());
@@ -212,6 +213,8 @@ export function useLiveSfu(opts: {
         for (const pub of [
           ...r.localParticipant.trackPublications.values(),
         ] as LocalTrackPublication[]) {
+          // Ne pas toucher au ScreenShare (géré à part, style WhatsApp).
+          if (isScreenShareSource(pub.source)) continue;
           const tid = pub.track?.mediaStreamTrack?.id;
           if (tid && !wantIds.has(tid)) {
             await r.localParticipant.unpublishTrack(pub.track!);
@@ -253,15 +256,26 @@ export function useLiveSfu(opts: {
       return publishLockRef.current;
     }
 
+    const onLocalScreenShare = (pub: LocalTrackPublication) => {
+      if (pub.source === Track.Source.ScreenShare) {
+        setScreenSharing(Boolean(pub.track));
+      }
+    };
+
     room
       .on(RoomEvent.TrackSubscribed, onSubscribed)
       .on(RoomEvent.TrackUnsubscribed, onUnsubscribed)
       .on(RoomEvent.ParticipantDisconnected, onParticipantDisconnected)
       .on(RoomEvent.Disconnected, () => {
         publishedIdsRef.current.clear();
+        setScreenSharing(false);
       })
       .on(RoomEvent.TrackPublished, () => {
         ingestExisting();
+      })
+      .on(RoomEvent.LocalTrackPublished, onLocalScreenShare)
+      .on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
+        if (pub.source === Track.Source.ScreenShare) setScreenSharing(false);
       });
 
     async function connect() {
@@ -312,6 +326,7 @@ export function useLiveSfu(opts: {
       publishedIdsRef.current.clear();
       setRemoteStreams({});
       setRemoteScreenStreams({});
+      setScreenSharing(false);
       void room.disconnect();
       if (roomRef.current === room) roomRef.current = null;
     };
@@ -342,6 +357,7 @@ export function useLiveSfu(opts: {
           }
         }
         publishedIdsRef.current.clear();
+        setScreenSharing(false);
         return;
       }
 
@@ -358,6 +374,7 @@ export function useLiveSfu(opts: {
       for (const pub of [
         ...room.localParticipant.trackPublications.values(),
       ] as LocalTrackPublication[]) {
+        if (isScreenShareSource(pub.source)) continue;
         const tid = pub.track?.mediaStreamTrack?.id;
         if (tid && !wantIds.has(tid)) {
           await room.localParticipant.unpublishTrack(pub.track!);
@@ -396,5 +413,37 @@ export function useLiveSfu(opts: {
     };
   }, [enabled, isPublisher, localStream]);
 
-  return { remoteStreams, remoteScreenStreams, failed };
+  const startScreenShare = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room || room.state !== ConnectionState.Connected) {
+      throw new Error("SFU non connecté");
+    }
+    await room.localParticipant.setScreenShareEnabled(true, {
+      audio: false,
+      resolution: { width: 1280, height: 720, frameRate: 15 },
+    });
+    setScreenSharing(true);
+  }, []);
+
+  const stopScreenShare = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room) {
+      setScreenSharing(false);
+      return;
+    }
+    try {
+      await room.localParticipant.setScreenShareEnabled(false);
+    } finally {
+      setScreenSharing(false);
+    }
+  }, []);
+
+  return {
+    remoteStreams,
+    remoteScreenStreams,
+    failed,
+    screenSharing,
+    startScreenShare,
+    stopScreenShare,
+  };
 }
