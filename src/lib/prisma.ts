@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 55;
+const PRISMA_SCHEMA_REV = 56;
 const CHALLENGE_HAS_PRODUCT =
   Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
 const CHALLENGE_HAS_PROGRAMMED =
@@ -16,6 +16,8 @@ const SHOP_HAS_HOURS = Prisma.ShopScalarFieldEnum.alwaysOpen === "alwaysOpen";
 const COURIER_HAS_ARCHIVE =
   Prisma.CourierScalarFieldEnum.archivedAt === "archivedAt";
 const SHOP_HAS_PRO_UNTIL = Prisma.ShopScalarFieldEnum.proUntil === "proUntil";
+const SHOP_HAS_SOCIAL =
+  Prisma.ShopScalarFieldEnum.tiktokUrl === "tiktokUrl";
 const PRODUCT_HAS_CREATOR_BPS =
   Prisma.ProductScalarFieldEnum.creatorCommissionBps === "creatorCommissionBps";
 const ORDER_HAS_FEE_BPS =
@@ -104,6 +106,7 @@ function getPrismaClient() {
     SHOP_HAS_HOURS &&
     COURIER_HAS_ARCHIVE &&
     SHOP_HAS_PRO_UNTIL &&
+    SHOP_HAS_SOCIAL &&
     PRODUCT_HAS_CREATOR_BPS &&
     ORDER_HAS_FEE_BPS &&
     SHOP_BOOST_HAS_TARGET_CITY &&
