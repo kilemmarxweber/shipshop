@@ -1,40 +1,40 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
-import { KeyRound, Plus, Search, Users } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
-import { uploadCompressedMedia } from "@/lib/compress-media";
-import { ShopBrand } from "@/components/shop-brand";
-import { CurrencyPicker } from "@/components/currency-picker";
-import { DEFAULT_FX, type AppCurrency, parseCurrency } from "@/lib/money";
-import { ShopFxRateField } from "@/components/shop-fx-rate-field";
-import {
-  KinshasaAddressForm,
-  type AddressState,
-} from "@/components/kinshasa-address-form";
-import { cn } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
-import { useConfirmDialog } from "@/components/use-confirm-dialog";
+import { CurrencyPicker } from "@/components/currency-picker";
+import {
+    KinshasaAddressForm,
+    type AddressState,
+} from "@/components/kinshasa-address-form";
+import { ShopBrand } from "@/components/shop-brand";
+import { ShopFxRateField } from "@/components/shop-fx-rate-field";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
+import { useConfirmDialog } from "@/components/use-confirm-dialog";
+import { authClient } from "@/lib/auth-client";
+import { uploadCompressedMedia } from "@/lib/compress-media";
+import { fetchJson } from "@/lib/fetch-json";
+import { DEFAULT_FX, parseCurrency, type AppCurrency } from "@/lib/money";
+import { cn } from "@/lib/utils";
+import { KeyRound, Plus, Search, Users } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 type Shop = {
   id: string;
@@ -160,7 +160,9 @@ export default function ShopsPage() {
   if (!session) {
     return (
       <div className="px-5 py-16 text-center">
-        <p className="text-muted-foreground">Connectez-vous pour gérer vos shops</p>
+        <p className="text-muted-foreground">
+          Connectez-vous pour gérer vos shops
+        </p>
         <Link
           href="/auth/login"
           className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
@@ -383,6 +385,18 @@ export default function ShopsPage() {
                 KPI
               </Link>
               <Link
+                href="/shops/admin/cis"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                CIS
+              </Link>
+              <Link
+                href="/shops/admin/analytics"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Analytics
+              </Link>
+              <Link
                 href="/shops/admin/campaigns"
                 className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
               >
@@ -472,11 +486,16 @@ export default function ShopsPage() {
                       e.target.value = "";
                       if (!file) return;
                       try {
-                        const uploaded = await uploadCompressedMedia(file, "avatar");
+                        const uploaded = await uploadCompressedMedia(
+                          file,
+                          "avatar",
+                        );
                         setShopLogoUrl(uploaded.url);
                       } catch (error) {
                         toast.error(
-                          error instanceof Error ? error.message : "Logo impossible",
+                          error instanceof Error
+                            ? error.message
+                            : "Logo impossible",
                         );
                       }
                     }}
@@ -491,7 +510,10 @@ export default function ShopsPage() {
               />
               <div className="space-y-1">
                 <Label>Monnaie</Label>
-                <CurrencyPicker value={shopCurrency} onChange={setShopCurrency} />
+                <CurrencyPicker
+                  value={shopCurrency}
+                  onChange={setShopCurrency}
+                />
               </div>
               <ShopFxRateField
                 cdfPerUsd={shopFxCdf}
@@ -546,7 +568,10 @@ export default function ShopsPage() {
               />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">
-                  <Link href={`/shop/${shop.slug}#produits`} className="hover:underline">
+                  <Link
+                    href={`/shop/${shop.slug}#produits`}
+                    className="hover:underline"
+                  >
                     {shop.name}
                   </Link>
                 </p>
@@ -558,21 +583,29 @@ export default function ShopsPage() {
                 </p>
                 <p className="mt-1 text-[11px] text-trust">
                   1 $US ={" "}
-                  {(fxDrafts[shop.id] ?? shop.fxCdfPerUsd ?? DEFAULT_FX.cdfPerUsd).toLocaleString(
-                    "fr-CD",
-                  )}{" "}
+                  {(
+                    fxDrafts[shop.id] ??
+                    shop.fxCdfPerUsd ??
+                    DEFAULT_FX.cdfPerUsd
+                  ).toLocaleString("fr-CD")}{" "}
                   CDF
                 </p>
               </div>
             </div>
             <div className="mt-3 space-y-2">
-              <Label className="text-[11px]">Taux du jour (config vendeur)</Label>
+              <Label className="text-[11px]">
+                Taux du jour (config vendeur)
+              </Label>
               <div className="flex gap-2">
                 <Input
                   type="number"
                   min={1}
                   className="h-9 bg-surface-2"
-                  value={fxDrafts[shop.id] ?? shop.fxCdfPerUsd ?? DEFAULT_FX.cdfPerUsd}
+                  value={
+                    fxDrafts[shop.id] ??
+                    shop.fxCdfPerUsd ??
+                    DEFAULT_FX.cdfPerUsd
+                  }
                   onChange={(e) =>
                     setFxDrafts((prev) => ({
                       ...prev,
@@ -692,7 +725,10 @@ export default function ShopsPage() {
             className="bg-surface-2"
           />
           {isOrgOwner ? (
-            <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v)}>
+            <Select
+              value={inviteRole}
+              onValueChange={(v) => v && setInviteRole(v)}
+            >
               <SelectTrigger className="w-full bg-surface-2 sm:w-36">
                 <SelectValue />
               </SelectTrigger>
@@ -719,66 +755,70 @@ export default function ShopsPage() {
               memberFilter === "all" ? true : m.kind === memberFilter,
             )
             .map((m) => (
-            <li
-              key={m.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm"
-            >
-              <span className="min-w-0">
-                {m.user?.name}{" "}
-                {m.isMe && (
-                  <span className="text-[10px] font-bold text-primary">(vous)</span>
-                )}{" "}
-                <span className="text-muted-foreground">({m.user?.email})</span>
-                <span
-                  className={cn(
-                    "ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
-                    m.kind === "vendor"
-                      ? "bg-primary/15 text-primary"
-                      : "bg-muted/50 text-muted-foreground",
-                  )}
-                >
-                  {m.kind === "vendor"
-                    ? `Vendeur · ${m.shopCount} boutique${m.shopCount > 1 ? "s" : ""}`
-                    : "Acheteur"}
-                </span>
-              </span>
-              <div className="flex flex-wrap items-center gap-2">
-                {isOwner ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1 text-xs"
-                    disabled={resetBusyId === m.user.id}
-                    onClick={() => resetMemberPassword(m.user)}
-                  >
-                    <KeyRound className="size-3" />
-                    Reset MDP
-                  </Button>
-                ) : null}
-                {isOrgOwner && m.role !== "owner" ? (
-                  <Select
-                    value={m.role}
-                    onValueChange={(v) => {
-                      if (v && v !== m.role) changeMemberRole(m.id, v);
-                    }}
-                    disabled={roleSavingId === m.id}
-                  >
-                    <SelectTrigger className="h-8 w-32 bg-surface-2 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <span className="rounded-md bg-muted/40 px-2 py-0.5 text-xs capitalize">
-                    {m.role}
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm"
+              >
+                <span className="min-w-0">
+                  {m.user?.name}{" "}
+                  {m.isMe && (
+                    <span className="text-[10px] font-bold text-primary">
+                      (vous)
+                    </span>
+                  )}{" "}
+                  <span className="text-muted-foreground">
+                    ({m.user?.email})
                   </span>
-                )}
-              </div>
-            </li>
-          ))}
+                  <span
+                    className={cn(
+                      "ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
+                      m.kind === "vendor"
+                        ? "bg-primary/15 text-primary"
+                        : "bg-muted/50 text-muted-foreground",
+                    )}
+                  >
+                    {m.kind === "vendor"
+                      ? `Vendeur · ${m.shopCount} boutique${m.shopCount > 1 ? "s" : ""}`
+                      : "Acheteur"}
+                  </span>
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {isOwner ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1 text-xs"
+                      disabled={resetBusyId === m.user.id}
+                      onClick={() => resetMemberPassword(m.user)}
+                    >
+                      <KeyRound className="size-3" />
+                      Reset MDP
+                    </Button>
+                  ) : null}
+                  {isOrgOwner && m.role !== "owner" ? (
+                    <Select
+                      value={m.role}
+                      onValueChange={(v) => {
+                        if (v && v !== m.role) changeMemberRole(m.id, v);
+                      }}
+                      disabled={roleSavingId === m.id}
+                    >
+                      <SelectTrigger className="h-8 w-32 bg-surface-2 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="member">Member</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="rounded-md bg-muted/40 px-2 py-0.5 text-xs capitalize">
+                      {m.role}
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
           {members.filter((m) =>
             memberFilter === "all" ? true : m.kind === memberFilter,
           ).length === 0 && (

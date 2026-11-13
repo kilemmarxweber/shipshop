@@ -21,6 +21,12 @@ import {
 } from "@/lib/montage";
 import { sortByFeedRank } from "@/lib/feed-rank";
 import { loadBuyerTaste } from "@/lib/buyer-taste";
+import { hasActiveCisConsent } from "@/lib/cis/consent";
+import { isCisRankingEnabled } from "@/lib/cis/flags";
+import {
+  cisMatchScore,
+  loadCisPreferenceBoost,
+} from "@/lib/cis/profile";
 import {
   SOLD_ORDER_STATUS_FILTER,
   soldOrdersCount,
@@ -426,6 +432,26 @@ export async function GET(req: Request) {
         );
         followedShopIds = new Set(follows.map((f) => f.shopId));
       }
+
+      let cisBoostByProductId: Map<string, number> | null = null;
+      if (session && !mine) {
+        const [rankingOn, consented] = await Promise.all([
+          isCisRankingEnabled(),
+          hasActiveCisConsent(session.user.id),
+        ]);
+        if (rankingOn && consented) {
+          const prefs = await loadCisPreferenceBoost(session.user.id);
+          cisBoostByProductId = new Map();
+          for (const p of products) {
+            const { score } = cisMatchScore(
+              { category: p.category, shopId: p.shopId },
+              prefs,
+            );
+            if (score > 0) cisBoostByProductId.set(p.id, score);
+          }
+        }
+      }
+
       products = sortByFeedRank(
         products.map((p) => ({
           ...p,
@@ -441,6 +467,7 @@ export async function GET(req: Request) {
         near,
         followedShopIds,
         taste,
+        cisBoostByProductId,
       );
     }
 

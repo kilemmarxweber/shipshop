@@ -63,6 +63,28 @@ const listSelect = {
   _count: { select: { offers: true } },
 } as const;
 
+const mineListSelect = {
+  ...listSelect,
+  offers: {
+    orderBy: { createdAt: "desc" as const },
+    take: 8,
+    select: {
+      id: true,
+      priceCents: true,
+      message: true,
+      images: true,
+      condition: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      shop: {
+        select: { id: true, name: true, slug: true },
+      },
+      seller: { select: { id: true, name: true, image: true } },
+    },
+  },
+} as const;
+
 export async function GET(req: Request) {
   const session = await getSession();
   const { searchParams } = new URL(req.url);
@@ -86,12 +108,17 @@ export async function GET(req: Request) {
       const requests = await withDbRetry(() =>
         prisma.wantedRequest.findMany({
           where: { buyerId: session.user.id },
-          select: listSelect,
+          select: mineListSelect,
           orderBy: { createdAt: "desc" },
           take: 50,
         }),
       );
-      return NextResponse.json({ requests });
+      return NextResponse.json({
+        requests: requests.map((row) => ({
+          ...row,
+          isOwner: true,
+        })),
+      });
     }
 
     const cursorRaw = searchParams.get("cursor");

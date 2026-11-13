@@ -22,13 +22,14 @@ export function productHasVideoMedia(images: string[]) {
   return images.some((url) => isVideoUrl(url));
 }
 
-/** Score lisible : vidéo, proximité, récence, engagement, légèrement following. */
+/** Score lisible : vidéo, proximité, récence, engagement, following, CIS optionnel. */
 export function feedRankScore(
   product: RankableProduct,
   near?: GeoPoint | null,
   now = Date.now(),
   followedShopIds?: Set<string> | null,
   taste?: BuyerTaste | null,
+  cisBoost = 0,
 ) {
   const ageHours = Math.max(0, (now - product.createdAt.getTime()) / 3_600_000);
   const recency = Math.exp(-ageHours / 72);
@@ -67,6 +68,7 @@ export function feedRankScore(
       : 0;
   const boosted = product.boosted ? 1 : 0;
   const promoBoost = product.promoBoost ? 1 : 0;
+  const cis = Math.max(0, Math.min(3, cisBoost));
   return (
     video * 3.2 +
     proximity * 3.6 +
@@ -75,7 +77,8 @@ export function feedRankScore(
     following * 0.8 +
     personal * 1.15 +
     boosted * 4.2 +
-    promoBoost * 2.4
+    promoBoost * 2.4 +
+    cis * 1.1
   );
 }
 
@@ -84,12 +87,27 @@ export function sortByFeedRank<T extends RankableProduct>(
   near?: GeoPoint | null,
   followedShopIds?: Set<string> | null,
   taste?: BuyerTaste | null,
+  cisBoostByProductId?: Map<string, number> | null,
 ) {
   const now = Date.now();
   return [...products].sort((a, b) => {
     const diff =
-      feedRankScore(b, near, now, followedShopIds, taste) -
-      feedRankScore(a, near, now, followedShopIds, taste);
+      feedRankScore(
+        b,
+        near,
+        now,
+        followedShopIds,
+        taste,
+        cisBoostByProductId?.get(b.id) ?? 0,
+      ) -
+      feedRankScore(
+        a,
+        near,
+        now,
+        followedShopIds,
+        taste,
+        cisBoostByProductId?.get(a.id) ?? 0,
+      );
     if (diff !== 0) return diff;
     return b.createdAt.getTime() - a.createdAt.getTime();
   });

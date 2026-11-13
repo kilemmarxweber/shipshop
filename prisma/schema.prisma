@@ -83,6 +83,12 @@ model User {
   ticketsCheckedIn   Ticket[]             @relation("TicketChecker")
   ticketRefundReviews TicketRefundRequest[] @relation("TicketRefundReviewer")
   ticketRefunds      TicketRefundRequest[]  @relation("TicketRefundBuyer")
+  cisConsents        CisConsent[]
+  cisEvents          CisEvent[]
+  cisPreferences     CisPreference[]
+  cisRecommendations CisRecommendation[]
+  cisAdminAudits     CisAdminAudit[]         @relation("CisAdminActor")
+  cisAdminTargets    CisAdminAudit[]         @relation("CisAdminTarget")
 
   @@unique([email])
   @@map("user")
@@ -345,6 +351,8 @@ model ContentSourceConfig {
   scrollAdVideos        Json      @default("[\"/renard.mp4\"]")
   /// Challenges feed/Découvrir — owner/admin uniquement (pas à la pub produit)
   challengesEnabled     Boolean   @default(false)
+  /// Ranking Pour toi enrichi CIS — off = comportement inchangé
+  cisRankingEnabled     Boolean   @default(false)
   updatedAt             DateTime  @updatedAt
 
   @@map("content_source_config")
@@ -1974,4 +1982,96 @@ model TicketRefundRequest {
   @@index([status, createdAt])
   @@index([ticketId])
   @@map("ticket_refund_request")
+}
+
+// ─── Customer Intelligence System (CIS) ─────────────────────────────
+
+model CisConsent {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// accepted | refused | withdrawn
+  status          String
+  policyVersion   String
+  scopes          Json      @default("[]")
+  decidedAt       DateTime  @default(now())
+  withdrawnAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId, decidedAt])
+  @@index([userId, status])
+  @@map("cis_consent")
+}
+
+model CisEvent {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Idempotence client (UUID)
+  clientEventId String
+  /// product_view | product_like | shop_follow | search | add_to_cart | purchase | chat_share_for_cis | wanted_signal
+  type          String
+  productId     String?
+  shopId        String?
+  category      String?
+  query         String?
+  payload       Json     @default("{}")
+  occurredAt    DateTime
+  receivedAt    DateTime @default(now())
+
+  @@unique([userId, clientEventId])
+  @@index([userId, occurredAt])
+  @@index([type, occurredAt])
+  @@index([productId])
+  @@index([shopId])
+  @@map("cis_event")
+}
+
+model CisPreference {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// category | shop | token
+  kind        String
+  key         String
+  score       Float    @default(0)
+  factors     Json     @default("{}")
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, kind, key])
+  @@index([userId, score])
+  @@map("cis_preference")
+}
+
+model CisRecommendation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId   String
+  score       Float
+  reasons     Json     @default("[]")
+  surface     String   @default("foryou")
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  @@index([userId, surface, score])
+  @@index([productId])
+  @@map("cis_recommendation")
+}
+
+model CisAdminAudit {
+  id           String   @id @default(cuid())
+  actorUserId  String
+  actor        User     @relation("CisAdminActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+  targetUserId String?
+  target       User?    @relation("CisAdminTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  action       String
+  meta         Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@map("cis_admin_audit")
 }
