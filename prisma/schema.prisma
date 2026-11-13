@@ -2037,7 +2037,7 @@ model CisPreference {
   key         String
   score       Float    @default(0)
   factors     Json     @default("{}")
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @default(now()) @updatedAt
   createdAt   DateTime @default(now())
 
   @@unique([userId, kind, key])

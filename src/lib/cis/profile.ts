@@ -77,6 +77,7 @@ export async function recomputeCisPreferences(userId: string) {
   );
 
   const buckets = accumulatePreferences(events).slice(0, 80);
+  const updatedAt = new Date();
 
   await withDbRetry(async () => {
     await prisma.$transaction([
@@ -90,6 +91,8 @@ export async function recomputeCisPreferences(userId: string) {
                 key: row.key,
                 score: row.score,
                 factors: row.factors,
+                // createMany does not fill @updatedAt, and the column is NOT NULL.
+                updatedAt,
               })),
             }),
           ]
