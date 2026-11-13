@@ -1,3 +1,4 @@
+import { Prisma } from "@/generated/prisma/client";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { CIS_EVENT_TYPES, type CisEventType } from "@/lib/cis/constants";
 import { hasActiveCisConsent } from "@/lib/cis/consent";
@@ -64,7 +65,7 @@ export async function ingestCisEvents(userId: string, events: IncomingCisEvent[]
             shopId: event.shopId || null,
             category: event.category || null,
             query: event.query?.slice(0, 200) || null,
-            payload: event.payload ?? {},
+            payload: (event.payload ?? {}) as Prisma.InputJsonValue,
             occurredAt: parseOccurredAt(event.occurredAt),
           },
         }),

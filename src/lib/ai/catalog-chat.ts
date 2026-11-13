@@ -100,6 +100,7 @@ export function buildCatalogReply(
     currency: string;
     quantity: number;
     category: string;
+    images?: string[];
   }>,
 ) {
   const lower = message.toLowerCase();
