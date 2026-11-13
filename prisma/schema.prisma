@@ -351,8 +351,8 @@ model ContentSourceConfig {
   scrollAdVideos        Json      @default("[\"/renard.mp4\"]")
   /// Challenges feed/Découvrir — owner/admin uniquement (pas à la pub produit)
   challengesEnabled     Boolean   @default(false)
-  /// Ranking Pour toi enrichi CIS — off = comportement inchangé
-  cisRankingEnabled     Boolean   @default(false)
+  /// Ranking Pour toi enrichi CIS — on par défaut (consentement user toujours requis)
+  cisRankingEnabled     Boolean   @default(true)
   updatedAt             DateTime  @updatedAt
 
   @@map("content_source_config")

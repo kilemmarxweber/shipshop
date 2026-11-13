@@ -1,10 +1,10 @@
-import { prisma, withDbRetry } from "@/lib/prisma";
 import {
-  CIS_CONSENT_STATUSES,
-  CIS_DEFAULT_SCOPES,
-  CIS_POLICY_VERSION,
-  type CisConsentStatus,
+    CIS_CONSENT_STATUSES,
+    CIS_DEFAULT_SCOPES,
+    CIS_POLICY_VERSION,
+    type CisConsentStatus,
 } from "@/lib/cis/constants";
+import { prisma, withDbRetry } from "@/lib/prisma";
 
 export function isCisConsentStatus(value: unknown): value is CisConsentStatus {
   return (
@@ -14,17 +14,29 @@ export function isCisConsentStatus(value: unknown): value is CisConsentStatus {
 }
 
 export async function getLatestCisConsent(userId: string) {
-  return withDbRetry(() =>
-    prisma.cisConsent.findFirst({
-      where: { userId },
-      orderBy: { decidedAt: "desc" },
-    }),
-  );
+  try {
+    return await withDbRetry(() =>
+      prisma.cisConsent.findFirst({
+        where: { userId },
+        orderBy: { decidedAt: "desc" },
+      }),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/cis_consent|CisConsent|does not exist|P2021|P2022/i.test(message)) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function hasActiveCisConsent(userId: string) {
-  const latest = await getLatestCisConsent(userId);
-  return latest?.status === "accepted";
+  try {
+    const latest = await getLatestCisConsent(userId);
+    return latest?.status === "accepted";
+  } catch {
+    return false;
+  }
 }
 
 export async function recordCisConsent(input: {

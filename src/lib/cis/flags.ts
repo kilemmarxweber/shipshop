@@ -8,11 +8,15 @@ export async function isCisRankingEnabled() {
         select: { cisRankingEnabled: true },
       }),
     );
-    return Boolean(row?.cisRankingEnabled);
+    // Pas de ligne config = activé par défaut (consentement user toujours requis).
+    if (!row) return true;
+    return Boolean(row.cisRankingEnabled);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/cisRankingEnabled|Unknown column|does not exist|P2022/i.test(message)) {
-      return false;
+    if (
+      /cisRankingEnabled|Unknown column|does not exist|P2022/i.test(message)
+    ) {
+      return true;
     }
     throw error;
   }

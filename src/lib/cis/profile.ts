@@ -1,9 +1,9 @@
-import { prisma, withDbRetry } from "@/lib/prisma";
 import {
-  CIS_EVENT_WEIGHTS,
-  CIS_HALF_LIFE_HOURS,
-  type CisEventType,
+    CIS_EVENT_WEIGHTS,
+    CIS_HALF_LIFE_HOURS,
+    type CisEventType,
 } from "@/lib/cis/constants";
+import { prisma, withDbRetry } from "@/lib/prisma";
 
 export type PreferenceBucket = {
   kind: "category" | "shop";
@@ -29,8 +29,7 @@ export function accumulatePreferences(
   const map = new Map<string, PreferenceBucket>();
 
   for (const event of events) {
-    const weight =
-      CIS_EVENT_WEIGHTS[event.type as CisEventType] ?? 0.2;
+    const weight = CIS_EVENT_WEIGHTS[event.type as CisEventType] ?? 0.2;
     const w = weight * decay(event.occurredAt, now);
     if (event.category) {
       const id = `category:${event.category}`;
@@ -102,20 +101,30 @@ export async function recomputeCisPreferences(userId: string) {
 }
 
 export async function loadCisPreferenceBoost(userId: string) {
-  const rows = await withDbRetry(() =>
-    prisma.cisPreference.findMany({
-      where: { userId },
-      orderBy: { score: "desc" },
-      take: 40,
-    }),
-  );
-  const categories = new Map<string, number>();
-  const shops = new Map<string, number>();
-  for (const row of rows) {
-    if (row.kind === "category") categories.set(row.key, row.score);
-    if (row.kind === "shop") shops.set(row.key, row.score);
+  try {
+    const rows = await withDbRetry(() =>
+      prisma.cisPreference.findMany({
+        where: { userId },
+        orderBy: { score: "desc" },
+        take: 40,
+      }),
+    );
+    const categories = new Map<string, number>();
+    const shops = new Map<string, number>();
+    for (const row of rows) {
+      if (row.kind === "category") categories.set(row.key, row.score);
+      if (row.kind === "shop") shops.set(row.key, row.score);
+    }
+    return { categories, shops };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      /cis_preference|CisPreference|does not exist|P2021|P2022/i.test(message)
+    ) {
+      return { categories: new Map(), shops: new Map() };
+    }
+    throw error;
   }
-  return { categories, shops };
 }
 
 export function cisMatchScore(

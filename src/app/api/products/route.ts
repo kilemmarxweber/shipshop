@@ -1,38 +1,32 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { collectFollowingProductIds } from "@/lib/following-feed";
-import {
-  decodeTimeIdCursor,
-  pageFromRows,
-  parseListLimit,
-  PUBLIC_PAGE_SIZE,
-  timeIdCursorWhere,
-} from "@/lib/list-cursor";
-import { getAppConfig } from "@/lib/content-source";
-import { assertCanManageShop, managedShopsWhere } from "@/lib/shop-access";
-import { PRISMA_FEATURES, prisma, withDbRetry } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
-import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
-import {
-  clampSoundtrackStartMs,
-  LOCAL_SOUNDTRACK_ID,
-  normalizeMotions,
-  SOUNDTRACK_START_MAX_MS,
-} from "@/lib/montage";
-import { sortByFeedRank } from "@/lib/feed-rank";
 import { loadBuyerTaste } from "@/lib/buyer-taste";
 import { hasActiveCisConsent } from "@/lib/cis/consent";
 import { isCisRankingEnabled } from "@/lib/cis/flags";
+import { cisMatchScore, loadCisPreferenceBoost } from "@/lib/cis/profile";
+import { getAppConfig } from "@/lib/content-source";
+import { sortByFeedRank } from "@/lib/feed-rank";
+import { collectFollowingProductIds } from "@/lib/following-feed";
 import {
-  cisMatchScore,
-  loadCisPreferenceBoost,
-} from "@/lib/cis/profile";
+    decodeTimeIdCursor,
+    pageFromRows,
+    parseListLimit,
+    PUBLIC_PAGE_SIZE,
+    timeIdCursorWhere,
+} from "@/lib/list-cursor";
+import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
 import {
-  SOLD_ORDER_STATUS_FILTER,
-  soldOrdersCount,
-} from "@/lib/sold-orders";
-import { relativeUploadPathFromUrl } from "@/lib/upload-file.server";
+    clampSoundtrackStartMs,
+    LOCAL_SOUNDTRACK_ID,
+    normalizeMotions,
+    SOUNDTRACK_START_MAX_MS,
+} from "@/lib/montage";
+import { prisma, PRISMA_FEATURES, withDbRetry } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
 import { expireDuePromos } from "@/lib/shiprewards/grant";
+import { assertCanManageShop, managedShopsWhere } from "@/lib/shop-access";
+import { SOLD_ORDER_STATUS_FILTER, soldOrdersCount } from "@/lib/sold-orders";
+import { relativeUploadPathFromUrl } from "@/lib/upload-file.server";
+import { NextResponse } from "next/server";
+import { z } from "zod";
 
 type ZoneBoostRow = {
   productId: string;
@@ -60,12 +54,19 @@ function nullableString(value: unknown): string | null {
 }
 
 function isBoostInViewerZone(
-  boost: {
-    targetCity: string | null;
-    targetCommune: string | null;
-    targetQuartier: string | null;
-    targetAvenue: string | null;
-  } | { targetCity?: null; targetCommune?: null; targetQuartier?: null; targetAvenue?: null },
+  boost:
+    | {
+        targetCity: string | null;
+        targetCommune: string | null;
+        targetQuartier: string | null;
+        targetAvenue: string | null;
+      }
+    | {
+        targetCity?: null;
+        targetCommune?: null;
+        targetQuartier?: null;
+        targetAvenue?: null;
+      },
   viewer: {
     city?: string | null;
     commune?: string | null;
@@ -161,13 +162,20 @@ const createSchema = z.object({
   sizes: z.array(z.string().min(1).max(20)).max(20).default([]),
   location: z.string().max(200).optional(),
   soundtrackId: z.string().min(1).optional().nullable(),
-  soundtrackStartMs: z.number().int().min(0).max(SOUNDTRACK_START_MAX_MS).optional(),
+  soundtrackStartMs: z
+    .number()
+    .int()
+    .min(0)
+    .max(SOUNDTRACK_START_MAX_MS)
+    .optional(),
   imageMotions: z.array(z.string().max(24)).max(12).optional(),
   status: z.enum(["DRAFT", "ACTIVE"]).default("DRAFT"),
 });
 
 function isAllowedProductMediaUrl(url: string) {
-  return Boolean(relativeUploadPathFromUrl(url)) || url.includes("picsum.photos");
+  return (
+    Boolean(relativeUploadPathFromUrl(url)) || url.includes("picsum.photos")
+  );
 }
 
 export async function GET(req: Request) {
@@ -343,11 +351,7 @@ export async function GET(req: Request) {
       });
     } else {
       and.push({
-        status: (status ?? "ACTIVE") as
-          | "ACTIVE"
-          | "DRAFT"
-          | "SOLD"
-          | "HIDDEN",
+        status: (status ?? "ACTIVE") as "ACTIVE" | "DRAFT" | "SOLD" | "HIDDEN",
         wantedRequestId: null,
       });
       if ((status ?? "ACTIVE") === "ACTIVE") {
@@ -435,20 +439,26 @@ export async function GET(req: Request) {
 
       let cisBoostByProductId: Map<string, number> | null = null;
       if (session && !mine) {
-        const [rankingOn, consented] = await Promise.all([
-          isCisRankingEnabled(),
-          hasActiveCisConsent(session.user.id),
-        ]);
-        if (rankingOn && consented) {
-          const prefs = await loadCisPreferenceBoost(session.user.id);
-          cisBoostByProductId = new Map();
-          for (const p of products) {
-            const { score } = cisMatchScore(
-              { category: p.category, shopId: p.shopId },
-              prefs,
-            );
-            if (score > 0) cisBoostByProductId.set(p.id, score);
+        try {
+          const [rankingOn, consented] = await Promise.all([
+            isCisRankingEnabled(),
+            hasActiveCisConsent(session.user.id),
+          ]);
+          if (rankingOn && consented) {
+            const prefs = await loadCisPreferenceBoost(session.user.id);
+            cisBoostByProductId = new Map();
+            for (const p of products) {
+              const { score } = cisMatchScore(
+                { category: p.category, shopId: p.shopId },
+                prefs,
+              );
+              if (score > 0) cisBoostByProductId.set(p.id, score);
+            }
           }
+        } catch (error) {
+          // CIS ne doit jamais casser le fil Pour toi.
+          console.error("[products] CIS ranking skipped", error);
+          cisBoostByProductId = null;
         }
       }
 
@@ -461,8 +471,7 @@ export async function GET(req: Request) {
           likesCount: p._count.likes,
           commentsCount: p._count.comments,
           boosted: boostedIds.has(p.id),
-          promoBoost:
-            p.promoTier === "FLASH" || p.promoTier === "FORTE",
+          promoBoost: p.promoTier === "FLASH" || p.promoTier === "FORTE",
         })),
         near,
         followedShopIds,
@@ -567,7 +576,10 @@ export async function POST(req: Request) {
     const body = createSchema.parse(await req.json());
     const shop = await prisma.shop.findUnique({ where: { id: body.shopId } });
     if (!shop) {
-      return NextResponse.json({ error: "Boutique introuvable" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Boutique introuvable" },
+        { status: 404 },
+      );
     }
 
     const access = await assertCanManageShop(session.user.id, shop.id);
@@ -603,7 +615,9 @@ export async function POST(req: Request) {
         }),
       );
       if (!track) {
-        const catalog = cfg.catalogTracks.find((row) => row.id === soundtrackId);
+        const catalog = cfg.catalogTracks.find(
+          (row) => row.id === soundtrackId,
+        );
         if (catalog) {
           await withDbRetry(() =>
             prisma.soundtrack.upsert({
@@ -698,8 +712,7 @@ export async function PATCH(req: Request) {
 
   try {
     const body = bulkSchema.parse(await req.json());
-    const nextStatus =
-      body.action === "hide_products" ? "HIDDEN" : "ACTIVE";
+    const nextStatus = body.action === "hide_products" ? "HIDDEN" : "ACTIVE";
 
     const { where: shopWhere } = await managedShopsWhere(session.user.id);
     const result = await withDbRetry(() =>
