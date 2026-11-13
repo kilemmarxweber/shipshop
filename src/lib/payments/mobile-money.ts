@@ -90,23 +90,105 @@ function postedResult(
   extra: {
     balanceCents: number;
     payerBalanceAfter: number;
-    beneficiaryBalanceAfter: number;
+    /** Solde contrepartie — réservé notifications internes, jamais exposé tel quel. */
+    beneficiaryBalanceAfter?: number;
     alreadyConfirmed: boolean;
     transaction?: { id: string };
+    /** Qui consulte : seul son solde est renvoyé. */
+    viewerUserId?: string;
   },
 ) {
   const pub = publicMovement(movement);
+  const viewer = extra.viewerUserId ?? movement.payerUserId;
+  const isPayer = viewer === movement.payerUserId;
+  const ownBalance = isPayer
+    ? extra.payerBalanceAfter
+    : (extra.beneficiaryBalanceAfter ?? extra.balanceCents);
   return {
     ...pub,
     alreadyConfirmed: extra.alreadyConfirmed,
     alreadyApplied: extra.alreadyConfirmed || movement.status === "POSTED",
-    balanceCents: extra.balanceCents,
-    payerBalanceAfter: extra.payerBalanceAfter,
-    beneficiaryBalanceAfter: extra.beneficiaryBalanceAfter,
+    balanceCents: ownBalance,
+    payerBalanceAfter: isPayer ? extra.payerBalanceAfter : undefined,
+    // Ne jamais exposer le solde de la contrepartie au client.
+    beneficiaryBalanceAfter: undefined,
     currency: asCurrency(movement.currency),
     transactionId: extra.transaction?.id ?? pub.transactionId,
     type: movement.kind === "DEPOSIT" ? "DEPOSIT" : "TRANSFER_OUT",
   };
+}
+
+/** Divergence d'idempotence → HTTP 409 côté route. */
+export class IdempotencyConflictError extends Error {
+  readonly status = 409 as const;
+  constructor(
+    message = "Cette clé d'idempotence a déjà été utilisée pour une autre opération.",
+  ) {
+    super(message);
+    this.name = "IdempotencyConflictError";
+  }
+}
+
+/** Comparaison centralisée des paramètres immuables d'un transfert P2P. */
+export function transferIdempotencyMatches(
+  existing: {
+    kind: string;
+    payerUserId: string;
+    beneficiaryUserId: string | null;
+    amountCents: number;
+    currency: string;
+  },
+  expected: {
+    payerUserId: string;
+    beneficiaryUserId: string;
+    amountCents: number;
+    currency: AppCurrency;
+  },
+) {
+  return (
+    existing.kind === "P2P_BALANCE" &&
+    existing.payerUserId === expected.payerUserId &&
+    existing.beneficiaryUserId === expected.beneficiaryUserId &&
+    existing.amountCents === expected.amountCents &&
+    asCurrency(existing.currency) === expected.currency
+  );
+}
+
+function assertTransferIdempotencyMatch(
+  existing: {
+    kind: string;
+    payerUserId: string;
+    beneficiaryUserId: string | null;
+    amountCents: number;
+    currency: string;
+  },
+  expected: {
+    payerUserId: string;
+    beneficiaryUserId: string;
+    amountCents: number;
+    currency: AppCurrency;
+  },
+) {
+  if (!transferIdempotencyMatches(existing, expected)) {
+    throw new IdempotencyConflictError();
+  }
+}
+
+async function replayPostedTransfer(
+  existing: NonNullable<Awaited<ReturnType<typeof loadMovement>>>,
+  payerUserId: string,
+) {
+  const currency = asCurrency(existing.currency);
+  const payerW = await prisma.wallet.findUnique({
+    where: { userId: payerUserId },
+  });
+  return postedResult(existing, {
+    alreadyConfirmed: existing.status === "POSTED",
+    balanceCents: payerW ? walletCents(payerW, currency) : 0,
+    payerBalanceAfter: payerW ? walletCents(payerW, currency) : 0,
+    viewerUserId: payerUserId,
+    transaction: existing.transactions.find((t) => t.type === "TRANSFER_OUT"),
+  });
 }
 
 /** Simulated deposits keep the previous 9–15 digit check. CinetPay has its own. */
@@ -748,31 +830,22 @@ export async function transferFromBalance(input: {
     throw new Error("Choisissez un autre bénéficiaire");
   }
 
+  const currency = parseCurrency(input.currency);
   const existing = await prisma.moneyMovement.findUnique({
     where: { clientIdempotencyKey: key },
     include: movementInclude,
   });
   if (existing) {
-    if (existing.payerUserId !== input.payerUserId) {
-      throw new Error("Clé d’idempotence déjà utilisée");
-    }
-    const currency = asCurrency(existing.currency);
-    const payerW = await prisma.wallet.findUnique({
-      where: { userId: input.payerUserId },
+    assertTransferIdempotencyMatch(existing, {
+      payerUserId: input.payerUserId,
+      beneficiaryUserId: beneficiaryId,
+      amountCents: input.amountCents,
+      currency,
     });
-    const creditW = await prisma.wallet.findUnique({
-      where: { userId: beneficiaryId },
-    });
-    return postedResult(existing, {
-      alreadyConfirmed: existing.status === "POSTED",
-      balanceCents: payerW ? walletCents(payerW, currency) : 0,
-      payerBalanceAfter: payerW ? walletCents(payerW, currency) : 0,
-      beneficiaryBalanceAfter: creditW ? walletCents(creditW, currency) : 0,
-      transaction: existing.transactions.find((t) => t.type === "TRANSFER_OUT"),
-    });
+    // Rejeu strict : soldes issus du mouvement existant / wallet du payeur uniquement.
+    return replayPostedTransfer(existing, input.payerUserId);
   }
 
-  const currency = parseCurrency(input.currency);
   const beneficiary = await prisma.user.findUnique({
     where: { id: beneficiaryId },
     select: { id: true, name: true },
@@ -910,6 +983,7 @@ export async function transferFromBalance(input: {
       balanceCents: result.payerAfter,
       payerBalanceAfter: result.payerAfter,
       beneficiaryBalanceAfter: result.creditAfter,
+      viewerUserId: input.payerUserId,
       transaction: result.outTxn,
     });
   } catch (error) {
@@ -921,24 +995,14 @@ export async function transferFromBalance(input: {
         where: { clientIdempotencyKey: key },
         include: movementInclude,
       });
-      if (again && again.payerUserId === input.payerUserId) {
-        const payerW = await prisma.wallet.findUnique({
-          where: { userId: input.payerUserId },
-        });
-        const creditW = await prisma.wallet.findUnique({
-          where: { userId: beneficiaryId },
-        });
-        const ccy = asCurrency(again.currency);
-        return postedResult(again, {
-          alreadyConfirmed: true,
-          balanceCents: payerW ? walletCents(payerW, ccy) : 0,
-          payerBalanceAfter: payerW ? walletCents(payerW, ccy) : 0,
-          beneficiaryBalanceAfter: creditW ? walletCents(creditW, ccy) : 0,
-          transaction: again.transactions.find(
-            (t) => t.type === "TRANSFER_OUT",
-          ),
-        });
-      }
+      if (!again) throw error;
+      assertTransferIdempotencyMatch(again, {
+        payerUserId: input.payerUserId,
+        beneficiaryUserId: beneficiaryId,
+        amountCents: input.amountCents,
+        currency,
+      });
+      return replayPostedTransfer(again, input.payerUserId);
     }
     throw error;
   }
@@ -966,18 +1030,16 @@ export async function getMovementForUser(
     return null;
   }
   const currency = asCurrency(row.currency);
-  const payerW = await prisma.wallet.findUnique({
-    where: { userId: row.payerUserId },
+  const ownWallet = await prisma.wallet.findUnique({
+    where: { userId },
   });
-  const creditId = row.beneficiaryUserId ?? row.payerUserId;
-  const creditW = await prisma.wallet.findUnique({
-    where: { userId: creditId },
-  });
+  const ownBalance = ownWallet ? walletCents(ownWallet, currency) : 0;
+  const isPayer = row.payerUserId === userId;
   return {
     ...publicMovement(row),
-    balanceCents: payerW ? walletCents(payerW, currency) : 0,
-    payerBalanceAfter: payerW ? walletCents(payerW, currency) : 0,
-    beneficiaryBalanceAfter: creditW ? walletCents(creditW, currency) : 0,
+    balanceCents: ownBalance,
+    payerBalanceAfter: isPayer ? ownBalance : undefined,
+    beneficiaryBalanceAfter: undefined,
     currency,
   };
 }

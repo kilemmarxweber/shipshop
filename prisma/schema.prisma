@@ -137,6 +137,43 @@ model Verification {
   @@map("verification")
 }
 
+/// Better Auth rate-limit storage (shared across instances).
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String
+  count       Int
+  lastRequest BigInt
+
+  @@index([key])
+  @@map("rateLimit")
+}
+
+/// Compteurs de sécurité connexion (compte + IP), stockage PostgreSQL atomique.
+model LoginSecurity {
+  id              String    @id @default(cuid())
+  /// ACCOUNT | IP
+  kind            String
+  /// Empreinte SHA-256 de l'identifiant ou de l'IP (jamais la valeur brute).
+  subjectKey      String
+  failCount       Int       @default(0)
+  /// Nombre d'épisodes de blocage déjà appliqués (pour délai progressif).
+  lockLevel       Int       @default(0)
+  lockUntil       DateTime?
+  windowStart     DateTime  @default(now())
+  lastAttemptAt   DateTime  @default(now())
+  /// Déduplication alerte e-mail pour l'épisode courant.
+  lastAlertAt     DateTime?
+  episodeId       String?
+  /// Comptes distincts ciblés depuis une IP (JSON string[] d'empreintes).
+  targetedSubjects Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([kind, subjectKey])
+  @@index([lockUntil])
+  @@map("login_security")
+}
+
 // ─── Better Auth organization plugin ────────────────────────────────
 
 model Organization {
@@ -222,6 +259,11 @@ model Shop {
   workDays       Json     @default("[]")
   /// ShipPro : outils avancés jusqu’à cette date (jamais requis pour vendre).
   proUntil       DateTime?
+  /// Liens publics vers les comptes du vendeur (URL normalisées).
+  tiktokUrl      String?
+  facebookUrl    String?
+  instagramUrl   String?
+  xUrl           String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -573,6 +615,11 @@ model Conversation {
   product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   wantedRequestId String?
   wantedRequest   WantedRequest? @relation(fields: [wantedRequestId], references: [id], onDelete: SetNull)
+  /// Suppression côté acheteur : la conversation disparaît de son inbox sans
+  /// effacer l'historique du vendeur. Réinitialisé à chaque nouveau message.
+  buyerDeletedAt  DateTime?
+  /// Suppression côté vendeur / staff : même logique, côté boutique.
+  sellerDeletedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -581,6 +628,8 @@ model Conversation {
   @@unique([buyerId, shopId])
   @@index([shopId])
   @@index([wantedRequestId])
+  @@index([buyerDeletedAt])
+  @@index([sellerDeletedAt])
   @@map("conversation")
 }
 

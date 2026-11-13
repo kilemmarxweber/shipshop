@@ -23,7 +23,15 @@ export async function GET() {
       prisma.conversation.findMany({
         where: inboxWhere,
         include: {
-          shop: { select: { id: true, name: true, slug: true, logoUrl: true } },
+          shop: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              logoUrl: true,
+              ownerUserId: true,
+            },
+          },
           product: { select: { id: true, title: true, images: true } },
           wantedRequest: {
             select: { id: true, title: true, condition: true, budgetCents: true },
@@ -131,10 +139,7 @@ export async function POST(req: Request) {
           },
         }),
       );
-    } else if (
-      (body.productId && !conversation.productId) ||
-      (body.wantedRequestId && !conversation.wantedRequestId)
-    ) {
+    } else {
       conversation = await withDbRetry(() =>
         prisma.conversation.update({
           where: { id: conversation!.id },
@@ -145,6 +150,9 @@ export async function POST(req: Request) {
             ...(body.wantedRequestId && !conversation!.wantedRequestId
               ? { wantedRequestId: body.wantedRequestId }
               : {}),
+            // Reprendre la conversation la rend visible des deux côtés.
+            buyerDeletedAt: null,
+            sellerDeletedAt: null,
           },
         }),
       );

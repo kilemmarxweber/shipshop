@@ -48,12 +48,45 @@ async function shopOwnerIdsForStaff(userId: string): Promise<string[]> {
 
 export async function conversationInboxWhere(userId: string) {
   const { isOwner } = await assertChipShopOwner(userId);
-  if (isOwner) return {};
+  if (isOwner) {
+    // La plateforme voit toutes les conversations (modération), sauf celles
+    // qu'elle a elle-même masquées côté acheteur.
+    return {
+      OR: [
+        { buyerId: { not: userId } },
+        { buyerId: userId, buyerDeletedAt: null },
+      ],
+    };
+  }
 
   const ownerIds = await shopOwnerIdsForStaff(userId);
   return {
-    OR: [{ buyerId: userId }, { shop: { ownerUserId: { in: ownerIds } } }],
+    OR: [
+      { buyerId: userId, buyerDeletedAt: null },
+      { shop: { ownerUserId: { in: ownerIds } }, sellerDeletedAt: null },
+    ],
   };
+}
+
+export type ConversationAccessRole = "buyer" | "seller" | "platform";
+
+/**
+ * Rôle du demandeur sur une conversation déjà validée par
+ * `canAccessConversation`. Sert à distinguer une suppression « côté compte »
+ * (masquage) d'une suppression plateforme (effacement réel).
+ */
+export async function conversationAccessRole(
+  userId: string,
+  conversation: { buyerId: string; shop: { ownerUserId: string | null } },
+): Promise<ConversationAccessRole | null> {
+  const { isOwner } = await assertChipShopOwner(userId);
+  if (isOwner) return "platform";
+
+  if (conversation.buyerId === userId) return "buyer";
+  if (conversation.shop.ownerUserId === userId) {
+    return "seller";
+  }
+  return null;
 }
 
 export async function canAccessConversation(

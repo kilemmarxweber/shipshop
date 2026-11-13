@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAccessConversation } from "@/lib/conversation-access";
+import {
+  canAccessConversation,
+  conversationAccessRole,
+} from "@/lib/conversation-access";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -17,6 +20,24 @@ export async function GET(
   const conversation = await canAccessConversation(session.user.id, id);
   if (!conversation) {
     return NextResponse.json({ error: "Conversation introuvable" }, { status: 404 });
+  }
+
+  // Ouvrir un fil restaure la conversation masquée de son côté.
+  const role = await conversationAccessRole(session.user.id, conversation);
+  if (role === "buyer" && conversation.buyerDeletedAt) {
+    await withDbRetry(() =>
+      prisma.conversation.update({
+        where: { id },
+        data: { buyerDeletedAt: null },
+      }),
+    );
+  } else if (role === "seller" && conversation.sellerDeletedAt) {
+    await withDbRetry(() =>
+      prisma.conversation.update({
+        where: { id },
+        data: { sellerDeletedAt: null },
+      }),
+    );
   }
 
   await withDbRetry(() =>
@@ -123,7 +144,12 @@ export async function POST(
 
         await tx.conversation.update({
           where: { id },
-          data: { updatedAt: new Date() },
+          data: {
+            updatedAt: new Date(),
+            // Un nouveau message rend la conversation visible des deux côtés.
+            buyerDeletedAt: null,
+            sellerDeletedAt: null,
+          },
         });
 
         return created;
@@ -135,4 +161,46 @@ export async function POST(
     const msg = error instanceof Error ? error.message : "Erreur message";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const conversation = await canAccessConversation(session.user.id, id);
+  if (!conversation) {
+    return NextResponse.json({ error: "Conversation introuvable" }, { status: 404 });
+  }
+
+  const role = await conversationAccessRole(session.user.id, conversation);
+  if (!role) {
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  }
+
+  // Plateforme (owner/admin) : suppression réelle. Le participant masque
+  // uniquement son inbox ; l'autre côté conserve son historique.
+  if (role === "platform") {
+    await withDbRetry(() =>
+      prisma.conversation.delete({ where: { id } }),
+    );
+    return NextResponse.json({ deleted: true, mode: "hard" });
+  }
+
+  await withDbRetry(() =>
+    prisma.conversation.update({
+      where: { id },
+      data:
+        role === "buyer"
+          ? { buyerDeletedAt: new Date() }
+          : { sellerDeletedAt: new Date() },
+    }),
+  );
+
+  return NextResponse.json({ deleted: true, mode: "hidden" });
 }

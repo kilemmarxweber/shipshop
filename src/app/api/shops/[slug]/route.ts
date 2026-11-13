@@ -10,19 +10,26 @@ import {
   shopHoursBodySchema,
 } from "@/lib/shop-hours";
 import { assertCanManageShop } from "@/lib/shop-access";
+import {
+  normalizeSocialLink,
+  SHOP_SOCIAL_SELECT,
+  shopSocialBodySchema,
+} from "@/lib/shop-social";
 
-const updateSchema = z.object({
-  logoUrl: z.string().min(1).max(500).optional().nullable(),
-  description: z.string().max(500).optional().nullable(),
-  fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
-  fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
-  alwaysOpen: z.boolean().optional(),
-  hoursStart: z.string().nullable().optional(),
-  hoursEnd: z.string().nullable().optional(),
-  workDays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
-  lat: z.number().min(-90).max(90).optional(),
-  lng: z.number().min(-180).max(180).optional(),
-});
+const updateSchema = z
+  .object({
+    logoUrl: z.string().min(1).max(500).optional().nullable(),
+    description: z.string().max(500).optional().nullable(),
+    fxCdfPerUsd: z.number().int().min(1).max(100_000).optional(),
+    fxKwPerUsd: z.number().int().min(1).max(100_000).optional(),
+    alwaysOpen: z.boolean().optional(),
+    hoursStart: z.string().nullable().optional(),
+    hoursEnd: z.string().nullable().optional(),
+    workDays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+  })
+  .merge(shopSocialBodySchema);
 
 /** Profil public boutique (par slug) + stats catégories. */
 export async function GET(
@@ -46,6 +53,7 @@ export async function GET(
           createdAt: true,
           isActive: true,
           ...SHOP_HOURS_SELECT,
+          ...SHOP_SOCIAL_SELECT,
           owner: {
             select: {
               id: true,
@@ -210,6 +218,33 @@ export async function PATCH(
           ...(typeof body.lat === "number" && typeof body.lng === "number"
             ? { lat: body.lat, lng: body.lng }
             : {}),
+          ...(body.tiktokUrl !== undefined
+            ? {
+                tiktokUrl: normalizeSocialLink(
+                  "tiktok",
+                  body.tiktokUrl || null,
+                ),
+              }
+            : {}),
+          ...(body.facebookUrl !== undefined
+            ? {
+                facebookUrl: normalizeSocialLink(
+                  "facebook",
+                  body.facebookUrl || null,
+                ),
+              }
+            : {}),
+          ...(body.instagramUrl !== undefined
+            ? {
+                instagramUrl: normalizeSocialLink(
+                  "instagram",
+                  body.instagramUrl || null,
+                ),
+              }
+            : {}),
+          ...(body.xUrl !== undefined
+            ? { xUrl: normalizeSocialLink("x", body.xUrl || null) }
+            : {}),
         },
         select: {
           id: true,
@@ -222,6 +257,7 @@ export async function PATCH(
           fxKwPerUsd: true,
           fxRateUpdatedAt: true,
           ...SHOP_HOURS_SELECT,
+          ...SHOP_SOCIAL_SELECT,
         },
       }),
     );

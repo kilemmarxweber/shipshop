@@ -19,21 +19,27 @@ export async function isLiveFollower(
   hostUserId: string,
 ): Promise<boolean> {
   if (!followerId || followerId === hostUserId) return false;
-  const [direct, shop] = await Promise.all([
-    withDbRetry(() =>
-      prisma.userFollow.findFirst({
-        where: { followerId, creatorId: hostUserId },
-        select: { followerId: true },
-      }),
-    ),
-    withDbRetry(() =>
-      prisma.shopFollow.findFirst({
-        where: { userId: followerId, shop: { ownerUserId: hostUserId } },
-        select: { userId: true },
-      }),
-    ),
-  ]);
-  return Boolean(direct || shop);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const [direct, shop] = await Promise.all([
+      withDbRetry(() =>
+        prisma.userFollow.findFirst({
+          where: { followerId, creatorId: hostUserId },
+          select: { followerId: true },
+        }),
+      ),
+      withDbRetry(() =>
+        prisma.shopFollow.findFirst({
+          where: { userId: followerId, shop: { ownerUserId: hostUserId } },
+          select: { userId: true },
+        }),
+      ),
+    ]);
+    if (direct || shop) return true;
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 120 * (attempt + 1)));
+    }
+  }
+  return false;
 }
 
 const guestSelect = {

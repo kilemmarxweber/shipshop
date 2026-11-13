@@ -1,3 +1,9 @@
+import {
+    assertLoginAllowed,
+    recordLoginFailure,
+    recordLoginSuccess,
+    requestClientIp,
+} from "@/lib/auth-login-security";
 import { emailFromPhone, isPhoneBackedEmail } from "@/lib/auth-register";
 import { isPlatformRole, orgAccessControl, orgRoles } from "@/lib/org-access";
 import { looksLikeEmail, normalizeAccountPhone } from "@/lib/phone";
@@ -5,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureMembership } from "@/lib/system-org";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { bearer, organization } from "better-auth/plugins";
 
 function trustedOrigins() {
@@ -33,6 +39,15 @@ function trustedOrigins() {
   );
 }
 
+function signInSubject(body: unknown) {
+  const raw = String(
+    body && typeof body === "object" && "email" in body
+      ? ((body as { email?: unknown }).email ?? "")
+      : "",
+  ).trim();
+  return raw;
+}
+
 export const auth = betterAuth({
   trustedOrigins: trustedOrigins(),
   database: prismaAdapter(prisma, {
@@ -40,6 +55,33 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+  },
+  // Better Auth rate-limit (IP/path) — stockage DB pour multi-instances.
+  // Docs: https://www.better-auth.com/docs/concepts/rate-limit (v1.7.x)
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 100,
+    storage: "database",
+    modelName: "rateLimit",
+    customRules: {
+      "/sign-in/email": {
+        window: 60,
+        max: 20,
+      },
+      "/sign-up/email": {
+        window: 60,
+        max: 10,
+      },
+      "/request-password-reset": {
+        window: 60,
+        max: 5,
+      },
+      "/forget-password": {
+        window: 60,
+        max: 5,
+      },
+    },
   },
   user: {
     additionalFields: {
@@ -90,6 +132,22 @@ export const auth = betterAuth({
       }
       if (ctx.path === "/sign-in/email") {
         const raw = String(ctx.body?.email ?? "").trim();
+        const ip = requestClientIp({
+          headers: ctx.headers,
+          request: ctx.request,
+        });
+
+        // Limitation compte/IP avant vérification du mot de passe.
+        const gate = await assertLoginAllowed({
+          subjectRaw: raw || "unknown",
+          ip,
+        });
+        if (gate.blocked) {
+          throw new APIError("TOO_MANY_REQUESTS", {
+            message: "Invalid email or password",
+          });
+        }
+
         if (raw.includes("@")) {
           const email = raw.toLowerCase();
           if (isPhoneBackedEmail(email) || !looksLikeEmail(email)) {
@@ -116,7 +174,13 @@ export const auth = betterAuth({
           where: { phone },
           select: { email: true },
         });
+        // Réponse générique : ne pas révéler si le numéro existe.
         if (!user?.email) {
+          await recordLoginFailure({
+            subjectRaw: phone,
+            ip,
+            userAgent: ctx.headers?.get("user-agent"),
+          });
           throw new APIError("UNAUTHORIZED", {
             message: "Invalid email or password",
           });
@@ -127,6 +191,46 @@ export const auth = betterAuth({
             body: { ...ctx.body, email: user.email },
           },
         };
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/email") return;
+      const subject = signInSubject(ctx.body);
+      if (!subject) return;
+      const ip = requestClientIp({
+        headers: ctx.headers,
+        request: ctx.request,
+      });
+      const ua = ctx.headers?.get("user-agent");
+      const returned = ctx.context.returned;
+
+      if (isAPIError(returned)) {
+        // Échec mot de passe / auth — compter même si le compte n'existe pas
+        // (Better Auth renvoie le même UNAUTHORIZED).
+        if (
+          returned.statusCode === 401 ||
+          returned.status === "UNAUTHORIZED" ||
+          returned.statusCode === 429
+        ) {
+          // 429 déjà géré (lock) : ne pas prolonger.
+          if (
+            returned.statusCode === 429 ||
+            returned.status === "TOO_MANY_REQUESTS"
+          ) {
+            return;
+          }
+          await recordLoginFailure({
+            subjectRaw: subject,
+            ip,
+            userAgent: ua,
+          });
+        }
+        return;
+      }
+
+      // Succès : session créée
+      if (returned && typeof returned === "object") {
+        await recordLoginSuccess({ subjectRaw: subject, ip });
       }
     }),
   },
