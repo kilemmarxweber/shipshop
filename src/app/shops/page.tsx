@@ -8,6 +8,13 @@ import {
 } from "@/components/kinshasa-address-form";
 import { ShopBrand } from "@/components/shop-brand";
 import { ShopFxRateField } from "@/components/shop-fx-rate-field";
+import {
+    EMPTY_SOCIAL_DRAFT,
+    ShopSocialFields,
+    socialDraftFromUrls,
+    socialPayloadFromDraft,
+    type ShopSocialDraft,
+} from "@/components/shop-social-fields";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -49,6 +56,10 @@ type Shop = {
   owner?: { id: string; name: string; email: string } | null;
   _count?: { products: number };
   proUntil?: string | null;
+  tiktokUrl?: string | null;
+  facebookUrl?: string | null;
+  instagramUrl?: string | null;
+  xUrl?: string | null;
 };
 
 type Org = { id: string; name: string; slug: string };
@@ -83,6 +94,12 @@ export default function ShopsPage() {
   });
   const [fxDrafts, setFxDrafts] = useState<Record<string, number>>({});
   const [fxSavingId, setFxSavingId] = useState<string | null>(null);
+  const [createSocials, setCreateSocials] =
+    useState<ShopSocialDraft>(EMPTY_SOCIAL_DRAFT);
+  const [socialDrafts, setSocialDrafts] = useState<
+    Record<string, ShopSocialDraft>
+  >({});
+  const [socialSavingId, setSocialSavingId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [members, setMembers] = useState<OrgMember[]>([]);
@@ -208,6 +225,7 @@ export default function ShopsPage() {
         fxConfirmed: shopFxConfirmed,
         lat: shopAddress.lat ?? undefined,
         lng: shopAddress.lng ?? undefined,
+        ...socialPayloadFromDraft(createSocials),
       }),
     });
     const json = await res.json();
@@ -220,6 +238,7 @@ export default function ShopsPage() {
     setShopLogoUrl(null);
     setShopFxConfirmed(false);
     setShopCurrency("USD");
+    setCreateSocials(EMPTY_SOCIAL_DRAFT);
     setShopAddress({
       city: "Kinshasa",
       commune: "",
@@ -228,6 +247,26 @@ export default function ShopsPage() {
       parcelle: "",
     });
     loadSeller();
+  }
+
+  async function saveShopSocials(shop: Shop) {
+    const draft = socialDrafts[shop.id] ?? socialDraftFromUrls(shop);
+    setSocialSavingId(shop.id);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      `/api/shops/${shop.slug}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(socialPayloadFromDraft(draft)),
+      },
+    );
+    setSocialSavingId(null);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Réseaux non enregistrés");
+      return;
+    }
+    toast.success("Réseaux enregistrés");
+    await loadSeller();
   }
 
   async function changeMemberRole(memberId: string, role: string) {
@@ -531,6 +570,11 @@ export default function ShopsPage() {
                   onChange={setShopAddress}
                 />
               </div>
+              <ShopSocialFields
+                value={createSocials}
+                onChange={setCreateSocials}
+                idPrefix="create-shop"
+              />
               <Button onClick={createShop} className="w-full">
                 Créer
               </Button>
@@ -623,6 +667,24 @@ export default function ShopsPage() {
                   {fxSavingId === shop.id ? "…" : "Sauver"}
                 </Button>
               </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              <ShopSocialFields
+                idPrefix={`shop-${shop.id}`}
+                value={socialDrafts[shop.id] ?? socialDraftFromUrls(shop)}
+                onChange={(next) =>
+                  setSocialDrafts((prev) => ({ ...prev, [shop.id]: next }))
+                }
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 w-full"
+                disabled={socialSavingId === shop.id}
+                onClick={() => void saveShopSocials(shop)}
+              >
+                {socialSavingId === shop.id ? "…" : "Enregistrer les réseaux"}
+              </Button>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-1.5">
               <button

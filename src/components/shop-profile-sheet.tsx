@@ -12,6 +12,7 @@ import { useI18n } from "@/components/i18n-provider";
 import { ShareMenu } from "@/components/share-menu";
 import { ShopLiveAvatar } from "@/components/shop-brand";
 import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import { ShopSocialLinks } from "@/components/shop-social-links";
 import { Button } from "@/components/ui/button";
 import {
     Sheet,
@@ -45,6 +46,10 @@ type ShopDetail = ShopProfileTarget &
     lat?: number | null;
     lng?: number | null;
     categories?: { id: string; count: number }[];
+    tiktokUrl?: string | null;
+    facebookUrl?: string | null;
+    instagramUrl?: string | null;
+    xUrl?: string | null;
   };
 
 type ProductRow = {
@@ -209,7 +214,7 @@ export function ShopProfileSheet({
                     name={shop.name}
                     logoUrl={detail?.logoUrl ?? shop.logoUrl}
                     live
-                    className="size-20 text-2xl ring-0"
+                    className="size-20 text-2xl"
                   />
                 </Link>
               ) : (
@@ -223,7 +228,7 @@ export function ShopProfileSheet({
                     name={shop.name}
                     logoUrl={detail?.logoUrl ?? shop.logoUrl}
                     live={false}
-                    className="size-20 text-2xl ring-0"
+                    className="size-20 text-2xl"
                   />
                 </button>
               )}
@@ -355,6 +360,17 @@ export function ShopProfileSheet({
                 <MessageCircle className="size-4" />
               </Button>
             </div>
+
+            <ShopSocialLinks
+              className="mt-3 justify-center"
+              socials={{
+                contactPhone: phone,
+                tiktokUrl: detail?.tiktokUrl,
+                facebookUrl: detail?.facebookUrl,
+                instagramUrl: detail?.instagramUrl,
+                xUrl: detail?.xUrl,
+              }}
+            />
 
             {showAddress ? (
               <div className="mt-3 rounded-2xl border border-border bg-background p-3 text-sm">

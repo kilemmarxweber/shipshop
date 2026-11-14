@@ -870,7 +870,7 @@ export default function ProfilePage() {
               <Link
                 key={href}
                 href={href}
-                className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-colors duration-150 hover:border-primary/40 hover:bg-muted/60 hover:text-foreground active:bg-muted"
+                className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-colors duration-150 hover:border-primary/50 hover:bg-primary/10 hover:text-primary active:border-primary active:bg-primary/15 active:text-primary"
               >
                 {label}
               </Link>
@@ -897,7 +897,7 @@ export default function ProfilePage() {
           <Link
             key={href}
             href={href}
-            className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-colors duration-150 hover:border-primary/40 hover:bg-muted/60"
+            className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-surface text-sm font-medium text-foreground no-underline transition-colors duration-150 hover:border-primary/50 hover:bg-primary/10 hover:text-primary active:border-primary active:bg-primary/15 active:text-primary"
           >
             {label}
           </Link>

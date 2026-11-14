@@ -13,6 +13,7 @@ import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
 import { ShopBrand, ShopLiveAvatar } from "@/components/shop-brand";
 import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import { ShopSocialLinks } from "@/components/shop-social-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirmDialog } from "@/components/use-confirm-dialog";
@@ -85,6 +86,10 @@ type ShopProfile = {
   followersCount?: number;
   canManage?: boolean;
   isActive?: boolean;
+  tiktokUrl?: string | null;
+  facebookUrl?: string | null;
+  instagramUrl?: string | null;
+  xUrl?: string | null;
 } & ShopHoursFields;
 
 type Product = {
@@ -446,7 +451,7 @@ function ShopInner() {
                 name={shop.name}
                 logoUrl={shop.logoUrl}
                 live
-                className="size-14 rounded-2xl text-xl ring-0"
+                className="size-14 text-xl"
               />
             </Link>
           ) : (
@@ -460,7 +465,7 @@ function ShopInner() {
                 name={shop.name}
                 logoUrl={shop.logoUrl}
                 live={Boolean(shopLive)}
-                className="size-14 rounded-2xl text-xl ring-0"
+                className="size-14 text-xl"
               />
               {isOwnShop && (
                 <input
@@ -614,6 +619,17 @@ function ShopInner() {
             <MessageCircle className="size-4" />
           </Button>
         </div>
+
+        <ShopSocialLinks
+          className="mt-3"
+          socials={{
+            contactPhone: shop.contactPhone,
+            tiktokUrl: shop.tiktokUrl,
+            facebookUrl: shop.facebookUrl,
+            instagramUrl: shop.instagramUrl,
+            xUrl: shop.xUrl,
+          }}
+        />
 
         {showAddress && (
           <div className="mt-3 rounded-2xl border border-border bg-surface p-3 text-sm">

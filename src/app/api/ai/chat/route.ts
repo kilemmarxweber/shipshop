@@ -1,10 +1,7 @@
+import { assistShipShop } from "@/lib/ai/catalog-chat";
+import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  buildCatalogReply,
-  searchCatalogProducts,
-} from "@/lib/ai/catalog-chat";
-import { getSession } from "@/lib/session";
 
 const bodySchema = z.object({
   message: z.string().min(1).max(500),
@@ -23,20 +20,44 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Message invalide" }, { status: 400 });
   }
 
-  const { products } = await searchCatalogProducts(body.message, 6);
-  const result = buildCatalogReply(body.message, products);
+  try {
+    const result = await assistShipShop(body.message, {
+      userId: session.user?.id ?? null,
+      take: 6,
+    });
 
-  return NextResponse.json({
-    reply: result.reply,
-    products: result.products.map((p) => ({
-      id: p.id,
-      title: p.title,
-      priceCents: p.priceCents,
-      currency: p.currency,
-      images: p.images,
-      category: p.category,
-      quantity: p.quantity,
-    })),
-    provider: "catalog",
-  });
+    return NextResponse.json({
+      reply: result.reply,
+      products: result.products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        priceCents: p.priceCents,
+        currency: p.currency,
+        images: p.images,
+        category: p.category,
+        quantity: p.quantity,
+      })),
+      links: result.links,
+      provider: result.provider,
+    });
+  } catch (cause) {
+    console.error("[api/ai/chat]", cause);
+    return NextResponse.json(
+      {
+        error: "Assistant indisponible",
+        reply:
+          "Je n’ai pas pu interroger le catalogue. Réessayez, ou ouvrez Découvrir.",
+        products: [],
+        links: [
+          {
+            id: "discover",
+            kind: "route",
+            title: "Découvrir",
+            href: "/(tabs)/boutique",
+          },
+        ],
+      },
+      { status: 500 },
+    );
+  }
 }

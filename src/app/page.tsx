@@ -69,10 +69,11 @@ import { useAppConfig } from "@/lib/use-app-config";
 import { usePaginatedList } from "@/lib/use-paginated-list";
 import { ScrollAdFeedSurface } from "@/lib/use-scroll-ad";
 import { cn, formatMoney } from "@/lib/utils";
-import { Heart, MessageCircle, Share2 } from "lucide-react";
-import Link from "next/link";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { peekWantedNavigation } from "@/lib/wanted-list-events";
+import { Heart, MessageCircle, Share2, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type Product = {
@@ -134,7 +135,9 @@ function categoryLabel(t: (path: MessagePath) => string, id: string): string {
 export default function FeedPage() {
   const { t, locale } = useI18n();
   const appConfig = useAppConfig();
+  const router = useRouter();
   const { data: session } = authClient.useSession();
+  const messagingShopId = useRef<string | null>(null);
   const [tab, setTab] = useState<FeedTab>("foryou");
   const [wantedFlashId, setWantedFlashId] = useState<string | null>(null);
   const [audioEpoch, setAudioEpoch] = useState(0);
@@ -500,6 +503,40 @@ export default function FeedPage() {
     });
   }
 
+  async function messageShop(product: Product) {
+    if (!session) {
+      setAuthOpen(true);
+      return;
+    }
+    const shopId = product.shop.id;
+    if (messagingShopId.current === shopId) return;
+    messagingShopId.current = shopId;
+    try {
+      const { res, data } = await fetchJson<{
+        conversation?: { id: string };
+        error?: string;
+      }>("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopId,
+          productId: product.id,
+          message: `${t("shop.interestedIn")} ${product.title}.`,
+        }),
+      });
+      if (!res.ok || !data?.conversation?.id) {
+        throw new Error(data?.error ?? t("feed.conversationFailed"));
+      }
+      router.push(`/messages/${data.conversation.id}`);
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : t("feed.conversationFailed"),
+      );
+    } finally {
+      messagingShopId.current = null;
+    }
+  }
+
   async function toggleLike(product: Product, opts?: { forceLike?: boolean }) {
     if (!session) {
       setAuthOpen(true);
@@ -829,6 +866,22 @@ export default function FeedPage() {
               </div>
 
               <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!session) {
+                      setAuthOpen(true);
+                      return;
+                    }
+                    router.push("/ai-chat");
+                  }}
+                  className="ai-chat-rail-hit grid cursor-pointer place-items-center"
+                  aria-label="IA Chat"
+                >
+                  <span className="ai-chat-rail-btn grid size-10 place-items-center rounded-full border-2 border-white bg-primary text-white sm:size-12">
+                    <Sparkles className="size-5" />
+                  </span>
+                </button>
                 <FollowShopButton
                   slug={p.shop.slug}
                   followedByMe={Boolean(p.shop.followedByMe)}
@@ -841,6 +894,7 @@ export default function FeedPage() {
                   onChange={(followed, followersCount) =>
                     setShopFollowed(p.shop.id, followed, followersCount)
                   }
+                  onMessage={() => void messageShop(p)}
                 />
                 <button
                   type="button"

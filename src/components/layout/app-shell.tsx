@@ -306,7 +306,9 @@ export function AppShell({
                         className={cn(
                           "flex flex-col items-center overflow-visible pt-2.5 text-[11px] font-bold tabular-nums transition-colors duration-150",
                           isPublish && "justify-start pt-0",
-                          active ? "text-[#00D68F]" : "text-white/50",
+                          active
+                            ? "text-primary"
+                            : "text-white/50 hover:text-primary/80",
                         )}
                       >
                         {isPublish ? (

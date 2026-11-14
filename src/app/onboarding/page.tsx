@@ -1,22 +1,28 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
 import { BackButton } from "@/components/back-button";
+import { CurrencyPicker } from "@/components/currency-picker";
+import {
+    KinshasaAddressForm,
+    type AddressState,
+} from "@/components/kinshasa-address-form";
+import { ShopFxRateField } from "@/components/shop-fx-rate-field";
+import {
+    EMPTY_SOCIAL_DRAFT,
+    ShopSocialFields,
+    socialPayloadFromDraft,
+    type ShopSocialDraft,
+} from "@/components/shop-social-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CurrencyPicker } from "@/components/currency-picker";
-import { ShopFxRateField } from "@/components/shop-fx-rate-field";
-import {
-  KinshasaAddressForm,
-  type AddressState,
-} from "@/components/kinshasa-address-form";
+import { authClient } from "@/lib/auth-client";
 import { uploadCompressedMedia } from "@/lib/compress-media";
 import { DEFAULT_FX, type AppCurrency } from "@/lib/money";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -29,6 +35,7 @@ export default function OnboardingPage() {
   const [fxCdfPerUsd, setFxCdfPerUsd] = useState(DEFAULT_FX.cdfPerUsd);
   const [fxConfirmed, setFxConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [socials, setSocials] = useState<ShopSocialDraft>(EMPTY_SOCIAL_DRAFT);
   const [address, setAddress] = useState<AddressState>({
     city: "Kinshasa",
     commune: "",
@@ -61,6 +68,7 @@ export default function OnboardingPage() {
         fxConfirmed,
         lat: address.lat ?? undefined,
         lng: address.lng ?? undefined,
+        ...socialPayloadFromDraft(socials),
       }),
     });
     const json = await res.json();
@@ -86,8 +94,8 @@ export default function OnboardingPage() {
       <BackButton fallbackHref="/" />
       <h1 className="font-heading text-2xl font-bold">Devenir vendeur</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Votre compte est déjà member de <strong>Chip Shop</strong>. Créez
-        votre boutique — le rôle reste member (l&apos;owner peut le changer).
+        Votre compte est déjà member de <strong>Chip Shop</strong>. Créez votre
+        boutique — le rôle reste member (l&apos;owner peut le changer).
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
@@ -114,11 +122,16 @@ export default function OnboardingPage() {
                   if (!file) return;
                   setLogoUploading(true);
                   try {
-                    const uploaded = await uploadCompressedMedia(file, "avatar");
+                    const uploaded = await uploadCompressedMedia(
+                      file,
+                      "avatar",
+                    );
                     setLogoUrl(uploaded.url);
                   } catch (error) {
                     toast.error(
-                      error instanceof Error ? error.message : "Logo impossible",
+                      error instanceof Error
+                        ? error.message
+                        : "Logo impossible",
                     );
                   } finally {
                     setLogoUploading(false);
@@ -184,6 +197,11 @@ export default function OnboardingPage() {
             className="min-h-24 bg-surface-2"
           />
         </div>
+        <ShopSocialFields
+          value={socials}
+          onChange={setSocials}
+          idPrefix="onboard"
+        />
         <Button
           type="submit"
           disabled={loading}

@@ -18,7 +18,7 @@ export function ShopLiveAvatar({
         "relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-trust text-xs font-bold text-white ring-2",
         live
           ? "ss-shop-live overflow-visible ring-[#E11D48]"
-          : "ss-shop-pulse overflow-visible ring-trust",
+          : "overflow-visible ring-white",
         className,
       )}
     >

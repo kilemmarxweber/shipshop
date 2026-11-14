@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
-import {
-  buildCatalogReply,
-  extractSearchTerms,
-} from "./catalog-chat";
+import { buildCatalogReply, extractSearchTerms } from "./catalog-chat";
 
-const terms = extractSearchTerms("Montre-moi des robes élégantes");
-assert.ok(terms.includes("robes") || terms.includes("elegantes"));
+const robeTerms = extractSearchTerms("Montre-moi des robes élégantes");
+assert.ok(robeTerms.includes("robes") || robeTerms.includes("robe"));
+assert.ok(robeTerms.includes("robe"), "synonyme robe attendu");
+
+const phoneTerms = extractSearchTerms("Quel est le meilleur smartphone ?");
+assert.ok(phoneTerms.includes("smartphone"));
+assert.ok(
+  phoneTerms.includes("iphone") || phoneTerms.includes("phone"),
+  "synonymes smartphone",
+);
+assert.ok(!phoneTerms.includes("est"), "stop-word est filtré");
 
 const blocked = buildCatalogReply("rembourse ma commande", []);
 assert.match(blocked.reply, /paiement|remboursement|annulation/i);
