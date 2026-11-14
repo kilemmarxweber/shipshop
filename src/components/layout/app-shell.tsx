@@ -307,8 +307,8 @@ export function AppShell({
                           "flex flex-col items-center overflow-visible pt-2.5 text-[11px] font-bold tabular-nums transition-colors duration-150",
                           isPublish && "justify-start pt-0",
                           active
-                            ? "text-primary"
-                            : "text-white/50 hover:text-primary/80",
+                            ? "text-white"
+                            : "text-white/50 hover:text-white/80",
                         )}
                       >
                         {isPublish ? (
@@ -317,8 +317,8 @@ export function AppShell({
                           <span className="relative">
                             <Icon
                               className="size-6"
-                              strokeWidth={active ? 2.4 : 1.9}
-                              fill={active ? "currentColor" : "none"}
+                              strokeWidth={active ? 2.35 : 1.9}
+                              fill="none"
                             />
                             {item.href === "/cart" && cartCount > 0 && (
                               <span className="absolute -top-1 -right-2.5 grid min-w-4 place-items-center rounded-full bg-[#FF7A00] px-0.5 text-[10px] font-extrabold text-white">

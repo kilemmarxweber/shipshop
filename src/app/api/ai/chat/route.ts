@@ -1,4 +1,4 @@
-import { assistShipShop } from "@/lib/ai/catalog-chat";
+import { assistShipShop } from "@/lib/ai/assist-shipshop";
 import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { z } from "zod";

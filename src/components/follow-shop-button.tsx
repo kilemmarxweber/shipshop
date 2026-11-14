@@ -15,6 +15,8 @@ type Props = {
   isOwnShop?: boolean;
   compact?: boolean;
   icon?: boolean;
+  /** Avatar (rail) — badge + / send collé comme sur Android. */
+  avatar?: React.ReactNode;
   count?: number;
   className?: string;
   onChange?: (followed: boolean, followersCount?: number) => void;
@@ -28,6 +30,7 @@ export function FollowShopButton({
   isOwnShop = false,
   compact = false,
   icon = false,
+  avatar,
   count = 0,
   className,
   onChange,
@@ -37,7 +40,19 @@ export function FollowShopButton({
   const { t, locale } = useI18n();
   const { data: session } = authClient.useSession();
 
-  if (isOwnShop) return null;
+  if (isOwnShop) {
+    if (icon && avatar) {
+      return (
+        <div className={cn("relative flex flex-col items-center", className)}>
+          {avatar}
+          <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+            {compactCount(Math.max(0, count), locale)}
+          </span>
+        </div>
+      );
+    }
+    return null;
+  }
 
   async function toggle(e: React.MouseEvent) {
     e.preventDefault();
@@ -67,11 +82,17 @@ export function FollowShopButton({
 
   if (icon) {
     const Icon = followedByMe ? Send : Plus;
-    return (
+    const badge = (
       <button
         type="button"
         onClick={toggle}
-        className={cn("grid cursor-pointer place-items-center", className)}
+        className={cn(
+          "grid place-items-center rounded-full border-2 border-white text-white transition hover:scale-105 active:scale-95",
+          avatar
+            ? "absolute bottom-3.5 left-1/2 z-[2] size-[22px] -translate-x-1/2"
+            : "size-10 sm:size-12",
+          followedByMe ? "bg-[#FF4D8D]" : "bg-[#FF453A]",
+        )}
         aria-label={
           followedByMe
             ? onMessage
@@ -80,18 +101,37 @@ export function FollowShopButton({
             : t("follow.follow")
         }
       >
-        <span
+        <Icon
+          className={avatar ? (followedByMe ? "size-2.5" : "size-3.5") : "size-5"}
+          strokeWidth={2.6}
+        />
+      </button>
+    );
+
+    if (avatar) {
+      return (
+        <div
           className={cn(
-            "grid size-10 place-items-center rounded-full border-2 border-white transition hover:scale-105 active:scale-95 sm:size-12",
-            followedByMe ? "bg-[#FF4D8D] text-white" : "bg-[#FF453A] text-white",
+            "relative mb-0.5 flex flex-col items-center pb-3.5",
+            className,
           )}
         >
-          <Icon className="size-5" strokeWidth={2.4} />
-        </span>
+          {avatar}
+          {badge}
+          <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+            {compactCount(Math.max(0, count), locale)}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div className={cn("grid cursor-pointer place-items-center", className)}>
+        {badge}
         <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
           {compactCount(Math.max(0, count), locale)}
         </span>
-      </button>
+      </div>
     );
   }
 

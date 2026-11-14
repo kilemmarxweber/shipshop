@@ -20,7 +20,7 @@ import { PageLoader } from "@/components/page-loader";
 import { ProductCommentsSheet } from "@/components/product-comments-sheet";
 import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
-import { ShopBrand } from "@/components/shop-brand";
+import { ShopBrand, ShopLiveAvatar } from "@/components/shop-brand";
 import {
     Sheet,
     SheetContent,
@@ -895,6 +895,29 @@ export default function FeedPage() {
                     setShopFollowed(p.shop.id, followed, followersCount)
                   }
                   onMessage={() => void messageShop(p)}
+                  avatar={
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (live?.id) {
+                          router.push(`/live/${live.id}`);
+                          return;
+                        }
+                        router.push(`/shop/${p.shop.slug}`);
+                      }}
+                      className="grid place-items-center"
+                      aria-label={p.shop.name}
+                    >
+                      <ShopLiveAvatar
+                        name={p.shop.name}
+                        logoUrl={p.shop.logoUrl}
+                        live={Boolean(live?.id)}
+                        className="!size-11"
+                      />
+                    </button>
+                  }
                 />
                 <button
                   type="button"
