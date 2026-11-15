@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { enforceApiSecurity } from "@/lib/security";
 import { getOrCreateWallet, getSession } from "@/lib/session";
 import { expireStaleMovements, flushNotifyOutbox } from "@/lib/payments/ledger";
 import { getBucketCents } from "@/lib/wallet-buckets";
 import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
+  const blocked = await enforceApiSecurity({
+    request: req,
+    bucket: "wallet",
+    session,
+    failClosed: true,
+  });
+  if (blocked) return blocked;
 
   await expireStaleMovements();
   void flushNotifyOutbox();

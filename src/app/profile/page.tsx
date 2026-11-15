@@ -860,6 +860,7 @@ export default function ProfilePage() {
                       ["/shops/admin/content", "Contenu (Système / Sanity)"],
                       ["/shops/kyc", "Revue KYC"],
                       ["/shops/admin/moderation", "Modération NSFW"],
+                      ["/shops/admin/security", "Security Center"],
                     ] as const)
                   : []),
                 ["/shops", isOwner ? "Toutes les boutiques" : "Mes boutiques"],

@@ -1,4 +1,5 @@
 export const PUBLIC_PAGE_SIZE = 8;
+/** Plafond serveur pour listes publiques (anti-dump catalogue). */
 export const PUBLIC_PAGE_MAX = 24;
 
 export function parseListLimit(raw: string | null, fallback: number) {

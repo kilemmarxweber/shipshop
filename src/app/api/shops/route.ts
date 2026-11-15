@@ -1,5 +1,6 @@
 import { APP_CURRENCIES, DEFAULT_FX, parseFxRate } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
+import { enforceApiSecurity } from "@/lib/security";
 import { getSession } from "@/lib/session";
 import { managedShopsWhere } from "@/lib/shop-access";
 import { assertUniqueShopName } from "@/lib/shop-name";
@@ -27,6 +28,12 @@ const createSchema = z
 
 export async function GET(req: Request) {
   const session = await getSession();
+  const blocked = await enforceApiSecurity({
+    request: req,
+    bucket: "shops",
+    session,
+  });
+  if (blocked) return blocked;
   const { searchParams } = new URL(req.url);
   const organizationId = searchParams.get("organizationId");
   const mine = searchParams.get("mine") === "1";
@@ -58,7 +65,7 @@ export async function GET(req: Request) {
   const shops = await prisma.shop.findMany({
     where: { isActive: true },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 24,
     include: { _count: { select: { products: true } } },
   });
   return NextResponse.json({ shops });

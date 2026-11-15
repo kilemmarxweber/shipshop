@@ -8,6 +8,7 @@ import {
 } from "@/lib/growth/challenge-spotlight";
 import { enrichLiveTeasers } from "@/lib/growth/enrich-live-teasers";
 import { prisma, withDbRetry } from "@/lib/prisma";
+import { enforceApiSecurity } from "@/lib/security";
 import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
 
@@ -61,8 +62,14 @@ function pickHighlights(products: HighlightProduct[]) {
   return slots.slice(0, 4);
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getSession();
+  const blocked = await enforceApiSecurity({
+    request: req,
+    bucket: "growth",
+    session,
+  });
+  if (blocked) return blocked;
   const active = await listActiveChallenges();
   const challengeIds = active.map((row) => row.id);
 

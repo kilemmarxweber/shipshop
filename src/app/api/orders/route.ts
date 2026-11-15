@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isInsufficientFunds, purchaseProduct } from "@/lib/checkout";
 import { notifyOrderEvent } from "@/lib/messaging/notify";
 import { prisma, withDbRetry } from "@/lib/prisma";
+import { enforceApiSecurity } from "@/lib/security";
 import { getSession } from "@/lib/session";
 import { idempotencyFrom } from "@/lib/payments/ledger";
 import {
@@ -49,6 +50,13 @@ export async function GET(req: Request) {
   if (!session) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
+  const blocked = await enforceApiSecurity({
+    request: req,
+    bucket: "orders",
+    session,
+    failClosed: true,
+  });
+  if (blocked) return blocked;
 
   try {
     const { searchParams } = new URL(req.url);

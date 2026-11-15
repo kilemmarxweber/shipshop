@@ -7,6 +7,7 @@ import {
     timeIdCursorWhere,
 } from "@/lib/list-cursor";
 import { prisma, withDbRetry } from "@/lib/prisma";
+import { enforceApiSecurity } from "@/lib/security";
 import { getSession } from "@/lib/session";
 import {
     WANTED_BATCH_MAX,
@@ -87,6 +88,13 @@ const mineListSelect = {
 
 export async function GET(req: Request) {
   const session = await getSession();
+  const blocked = await enforceApiSecurity({
+    request: req,
+    bucket: "wanted",
+    session,
+    hasCursor: new URL(req.url).searchParams.has("cursor"),
+  });
+  if (blocked) return blocked;
   const { searchParams } = new URL(req.url);
   const mine = searchParams.get("mine") === "1";
   const category = searchParams.get("category");

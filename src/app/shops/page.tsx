@@ -459,6 +459,12 @@ export default function ShopsPage() {
               >
                 NSFW
               </Link>
+              <Link
+                href="/shops/admin/security"
+                className="inline-flex h-7 items-center rounded-lg border border-primary/40 bg-primary/10 px-2.5 text-[0.8rem] font-medium whitespace-nowrap text-primary"
+              >
+                Security
+              </Link>
             </>
           ) : null}
           <Link

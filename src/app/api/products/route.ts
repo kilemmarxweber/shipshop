@@ -20,6 +20,7 @@ import {
     SOUNDTRACK_START_MAX_MS,
 } from "@/lib/montage";
 import { prisma, PRISMA_FEATURES, withDbRetry } from "@/lib/prisma";
+import { enforceApiSecurity, PUBLIC_CATALOG_HARD_MAX } from "@/lib/security";
 import { getSession } from "@/lib/session";
 import { expireDuePromos } from "@/lib/shiprewards/grant";
 import { assertCanManageShop, managedShopsWhere } from "@/lib/shop-access";
@@ -209,10 +210,25 @@ export async function GET(req: Request) {
       quartier: nearQuartier,
       avenue: nearAvenue,
     };
+    const isSearch = Boolean(q?.trim());
+    const blocked = await enforceApiSecurity({
+      request: req,
+      bucket: isSearch ? "search" : "catalog",
+      session,
+      isSearch,
+      hasCursor: Boolean(cursorRaw),
+    });
+    if (blocked) return blocked;
     const paginated = searchParams.has("limit") || Boolean(cursorRaw);
-    const limit = paginated
-      ? parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_SIZE)
-      : 80;
+    // Catalogue public : jamais de dump 80 items sans pagination (anti-scraping).
+    const limit = mine
+      ? paginated
+        ? parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_SIZE)
+        : 80
+      : parseListLimit(
+          searchParams.get("limit"),
+          paginated ? PUBLIC_PAGE_SIZE : PUBLIC_CATALOG_HARD_MAX,
+        );
     const cursor = decodeTimeIdCursor(cursorRaw);
 
     if (mine) {

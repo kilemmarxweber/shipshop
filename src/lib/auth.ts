@@ -144,7 +144,8 @@ export const auth = betterAuth({
         });
         if (gate.blocked) {
           throw new APIError("TOO_MANY_REQUESTS", {
-            message: "Invalid email or password",
+            message:
+              "Plusieurs tentatives erronées. Votre compte est temporairement bloqué. Réessaie plus tard.",
           });
         }
 

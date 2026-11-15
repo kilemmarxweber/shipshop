@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma, withDbRetry } from "@/lib/prisma";
+import { enforceApiSecurity } from "@/lib/security";
+import { getSession } from "@/lib/session";
 
 /** Dernières annonces actives — flash nouveautés (léger). */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const session = await getSession();
+    const blocked = await enforceApiSecurity({
+      request: req,
+      bucket: "catalog",
+      session,
+    });
+    if (blocked) return blocked;
     const products = await withDbRetry(() =>
       prisma.product.findMany({
         where: { status: "ACTIVE", quantity: { gt: 0 }, wantedRequestId: null },

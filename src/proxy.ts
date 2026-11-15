@@ -32,8 +32,8 @@ function corsHeaders(origin: string) {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers":
-      "Authorization, Content-Type, Idempotency-Key, X-Idempotency-Key, Accept, Origin",
-    "Access-Control-Expose-Headers": "set-auth-token",
+      "Authorization, Content-Type, Idempotency-Key, X-Idempotency-Key, Accept, Origin, X-ShipShop-Client, X-ShipShop-Install-Id",
+    "Access-Control-Expose-Headers": "set-auth-token, Retry-After",
     Vary: "Origin",
   };
 }

@@ -2075,3 +2075,55 @@ model CisAdminAudit {
   @@index([targetUserId, createdAt])
   @@map("cis_admin_audit")
 }
+
+// ─── Anti-scraping / security center ────────────────────────────────
+
+/// Compteurs de débit API partagés entre instances (Postgres, pas Redis).
+model ApiThrottle {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  count       Int
+  windowStart BigInt
+  updatedAt   DateTime @updatedAt
+
+  @@map("api_throttle")
+}
+
+/// Événements de détection (rétention gérée côté ops).
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  type      String
+  severity  String
+  endpoint  String?
+  method    String?
+  ipHash    String?
+  userId    String?
+  sessionId String?
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([severity, createdAt])
+  @@index([userId, createdAt])
+  @@index([ipHash, createdAt])
+  @@map("security_event")
+}
+
+/// Restrictions temporaires (compte / session / IP hashée).
+model SecurityRestriction {
+  id         String    @id @default(cuid())
+  /// USER | SESSION | IP
+  scope      String
+  subjectKey String
+  reason     String
+  /// honeypot | rate_limit | risk | manual
+  source     String
+  expiresAt  DateTime
+  liftedAt   DateTime?
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([scope, subjectKey, expiresAt])
+  @@index([expiresAt])
+  @@map("security_restriction")
+}

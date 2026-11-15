@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 57;
+const PRISMA_SCHEMA_REV = 58;
 const CHALLENGE_HAS_PRODUCT =
   Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
 const CHALLENGE_HAS_PROGRAMMED =

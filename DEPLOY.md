@@ -7,18 +7,18 @@ PostgreSQL **local** sur le port **5432** (pas Docker). Photos dans **`chipshop-
 
 ## 1. Prérequis VPS
 
-| Élément | Détail |
-|---|---|
-| OS | Ubuntu 22.04 ou 24.04 |
-| RAM | 2 Go minimum, **4 Go recommandé** (`next build` est lourd) |
-| Swap | **4 Go** si le VPS a 2 Go de RAM (sinon `next build` = exit **137**) |
-| Node | **20+** |
-| Package manager | **pnpm** |
-| PostgreSQL | **16** en local, `127.0.0.1:5432` seulement |
-| Reverse proxy | **Nginx** + **Certbot** (HTTPS) |
-| Processus | **PM2** : `pnpm start` (port **3000**) |
-| Pare-feu | **80 / 443** ouverts ; **5432 fermé** sur Internet |
-| Timezone | `Africa/Kinshasa` |
+| Élément         | Détail                                                               |
+| --------------- | -------------------------------------------------------------------- |
+| OS              | Ubuntu 22.04 ou 24.04                                                |
+| RAM             | 2 Go minimum, **4 Go recommandé** (`next build` est lourd)           |
+| Swap            | **4 Go** si le VPS a 2 Go de RAM (sinon `next build` = exit **137**) |
+| Node            | **20+**                                                              |
+| Package manager | **pnpm**                                                             |
+| PostgreSQL      | **16** en local, `127.0.0.1:5432` seulement                          |
+| Reverse proxy   | **Nginx** + **Certbot** (HTTPS)                                      |
+| Processus       | **PM2** : `pnpm start` (port **3000**)                               |
+| Pare-feu        | **80 / 443** ouverts ; **5432 fermé** sur Internet                   |
+| Timezone        | `Africa/Kinshasa`                                                    |
 
 DNS :
 
@@ -77,10 +77,10 @@ Ne jamais `resolve --applied` tant que le SQL n’a pas réellement réussi.
 
 Toutes les images / vidéos vont dans **un dossier hors du repo**.
 
-| Environnement | Chemin |
-|---|---|
-| Windows (dev) | `C:/chipshop-uploads` |
-| Linux / VPS | `/var/www/chipshop-uploads` |
+| Environnement | Chemin                      |
+| ------------- | --------------------------- |
+| Windows (dev) | `C:/chipshop-uploads`       |
+| Linux / VPS   | `/var/www/chipshop-uploads` |
 
 URL publique : `/uploads/...` (`NEXT_PUBLIC_UPLOAD_URL`).
 
@@ -286,21 +286,40 @@ Si le process démarre sans les variables : `pm2 restart shipshop --update-env`.
 
 ## 8. Ce qu’on oublie souvent
 
-| Sujet | Pourquoi |
-|---|---|
+| Sujet                                 | Pourquoi                                                           |
+| ------------------------------------- | ------------------------------------------------------------------ |
 | `pnpm-workspace.yaml` (`allowBuilds`) | pnpm 10/11 ignore sinon prisma/esbuild → `ERR_PNPM_IGNORED_BUILDS` |
-| HTTPS + URL canonique | Auth Better Auth et liens d’invitation |
-| `ENCRYPTION_SECRET` | Sinon fallback dangereux / clés illisibles plus tard |
-| Uploads persistants | Hors Git, hors `.next` |
-| Pas d’e-mail | Les invitations vont dans les **logs**, pas en SMTP |
-| Compte owner | Créer le compte réel après migrate |
-| Backups | `pg_dump` **et** `/var/www/chipshop-uploads` |
-| RAM / swap | Sinon `next build` est tué |
-| `NEXT_PUBLIC_*` au build | Rebuild obligatoire après changement |
+| HTTPS + URL canonique                 | Auth Better Auth et liens d’invitation                             |
+| `ENCRYPTION_SECRET`                   | Sinon fallback dangereux / clés illisibles plus tard               |
+| Uploads persistants                   | Hors Git, hors `.next`                                             |
+| Pas d’e-mail                          | Les invitations vont dans les **logs**, pas en SMTP                |
+| Compte owner                          | Créer le compte réel après migrate                                 |
+| Backups                               | `pg_dump` **et** `/var/www/chipshop-uploads`                       |
+| RAM / swap                            | Sinon `next build` est tué                                         |
+| `NEXT_PUBLIC_*` au build              | Rebuild obligatoire après changement                               |
 
 ---
 
-## 9. Backups
+## 9. Anubis (anti-bot web, sans Docker)
 
+Anubis se place **devant le HTML** uniquement. Les API mobile (`/api/*`) restent en direct sur Node (rate-limit Postgres + Security Center).
+
+Procédure complète : `infrastructure/anubis/STAGING.md`.
+
+Résumé :
+
+```bash
+cd /var/www/shop/shipshop/infrastructure/anubis
+sudo sed -i 's/\r$//' install-native.sh   # si déployé depuis Windows
+sudo bash install-native.sh
+# puis fusionner nginx-shipshop-anubis.conf dans le vhost 443
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Vérifier `TRUST_PROXY=1` dans `.env`. Retour arrière : `location /` → `127.0.0.1:3000`.
+
+---
+
+## 10. Backups
 
 Conserver plusieurs jours, hors du seul disque du VPS si possible.
