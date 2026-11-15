@@ -6,6 +6,7 @@ import {
     type LiveVideoFilterId,
 } from "@/lib/growth/live-video-filters";
 import { cn } from "@/lib/utils";
+import { useRef } from "react";
 import { toast } from "sonner";
 
 type Props = {
@@ -24,6 +25,7 @@ export function LiveVideoFilterPicker({
   onClose,
   onApply,
 }: Props) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
   if (!open) return null;
   const active = current?.trim() || "natural";
 
@@ -35,12 +37,16 @@ export function LiveVideoFilterPicker({
         className="absolute inset-0 z-[39] bg-black/55"
         onClick={onClose}
       />
-      <div className="absolute inset-x-3 z-40 rounded-2xl border border-white/15 bg-[#121218]/95 p-3 shadow-xl backdrop-blur-md bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+4.75rem))] sm:bottom-24">
+      <div
+        className="pointer-events-auto absolute inset-x-3 z-40 rounded-2xl border border-white/15 bg-[#121218]/95 p-3 shadow-xl backdrop-blur-md bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+4.75rem))] sm:bottom-24"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <p className="text-sm font-bold text-white">Filtres Live</p>
             <p className="text-[11px] text-white/50">
-              Looks · beauté · AR · stickers
+              Looks · beauté · AR · stickers · glisse →
             </p>
           </div>
           <Button
@@ -54,51 +60,73 @@ export function LiveVideoFilterPicker({
           </Button>
         </div>
 
-        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {LIVE_VIDEO_FILTERS.map((f) => {
-            const selected = active === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  void (async () => {
-                    const ok = await onApply(f.id);
-                    if (ok) {
-                      toast.success(
-                        f.id === "natural"
-                          ? "Filtres désactivés"
-                          : `Filtre « ${f.label} »`,
-                      );
-                      onClose();
-                    }
-                  })();
-                }}
-                className="flex w-14 shrink-0 flex-col items-center gap-1.5 transition active:scale-[0.97]"
-              >
-                <span
-                  className={cn(
-                    "grid size-12 place-items-center rounded-full border-2 text-xl",
-                    selected
-                      ? "border-white bg-[#00D68F] shadow-[0_0_0_2px_rgba(0,214,143,0.35)]"
-                      : "border-white/20 bg-black/45",
-                  )}
-                  style={selected ? undefined : { backgroundImage: f.swatch }}
+        <div
+          ref={scrollerRef}
+          role="listbox"
+          aria-label="Filtres vidéo"
+          className="min-w-0 w-full touch-pan-x overscroll-x-contain overflow-x-auto overflow-y-hidden pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]"
+          onWheel={(e) => {
+            // Convertit la molette verticale en scroll horizontal (desktop).
+            const el = scrollerRef.current;
+            if (!el) return;
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+              el.scrollLeft += e.deltaY;
+              e.preventDefault();
+            }
+            e.stopPropagation();
+          }}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <div className="flex w-max gap-3 px-1">
+            {LIVE_VIDEO_FILTERS.map((f) => {
+              const selected = active === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  disabled={busy}
+                  onClick={() => {
+                    void (async () => {
+                      const ok = await onApply(f.id);
+                      if (ok) {
+                        toast.success(
+                          f.id === "natural"
+                            ? "Filtres désactivés"
+                            : `Filtre « ${f.label} »`,
+                        );
+                        onClose();
+                      }
+                    })();
+                  }}
+                  className="flex w-14 shrink-0 flex-col items-center gap-1.5 transition active:scale-[0.97]"
                 >
-                  {f.emoji ?? ""}
-                </span>
-                <span
-                  className={cn(
-                    "w-full truncate text-center text-[10px] font-bold",
-                    selected ? "text-[#7dffb3]" : "text-white/70",
-                  )}
-                >
-                  {f.label}
-                </span>
-              </button>
-            );
-          })}
+                  <span
+                    className={cn(
+                      "grid size-12 place-items-center rounded-full border-2 text-xl",
+                      selected
+                        ? "border-white bg-[#00D68F] shadow-[0_0_0_2px_rgba(0,214,143,0.35)]"
+                        : "border-white/20 bg-black/45",
+                    )}
+                    style={selected ? undefined : { backgroundImage: f.swatch }}
+                  >
+                    {f.emoji ?? ""}
+                  </span>
+                  <span
+                    className={cn(
+                      "w-full truncate text-center text-[10px] font-bold",
+                      selected ? "text-[#7dffb3]" : "text-white/70",
+                    )}
+                  >
+                    {f.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </>
