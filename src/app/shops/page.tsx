@@ -38,7 +38,7 @@ import { uploadCompressedMedia } from "@/lib/compress-media";
 import { fetchJson } from "@/lib/fetch-json";
 import { DEFAULT_FX, parseCurrency, type AppCurrency } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { KeyRound, Plus, Search, Users } from "lucide-react";
+import { KeyRound, Pencil, Plus, Radio, Search, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -71,6 +71,7 @@ type OrgMember = {
   shopCount: number;
   kind: "vendor" | "buyer";
   isMe?: boolean;
+  liveAccessGranted?: boolean;
   user: { id: string; name: string; email: string; phone?: string | null };
 };
 
@@ -109,6 +110,13 @@ export default function ShopsPage() {
   const [isOwner, setIsOwner] = useState(false);
   const [isOrgOwner, setIsOrgOwner] = useState(false);
   const [roleSavingId, setRoleSavingId] = useState<string | null>(null);
+  const [nameSavingId, setNameSavingId] = useState<string | null>(null);
+  const [liveSavingId, setLiveSavingId] = useState<string | null>(null);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editingMemberName, setEditingMemberName] = useState("");
+  const [editingMemberRole, setEditingMemberRole] = useState<
+    "member" | "admin"
+  >("member");
   const [resetBusyId, setResetBusyId] = useState<string | null>(null);
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const [shopQuery, setShopQuery] = useState("");
@@ -283,6 +291,64 @@ export default function ShopsPage() {
       return;
     }
     toast.success("Rôle mis à jour");
+    loadSeller();
+  }
+
+  async function saveMemberProfile(memberId: string, currentRole: string) {
+    const name = editingMemberName.trim();
+    if (name.length < 2) {
+      toast.error("Nom trop court");
+      return;
+    }
+    setNameSavingId(memberId);
+    const nameRes = await fetch("/api/org/members", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId, name }),
+    });
+    const nameJson = await nameRes.json();
+    if (!nameRes.ok) {
+      setNameSavingId(null);
+      toast.error(nameJson.error ?? "Nom non modifié");
+      return;
+    }
+    if (
+      editingMemberRole !== currentRole &&
+      (editingMemberRole === "member" || editingMemberRole === "admin")
+    ) {
+      const roleRes = await fetch("/api/org/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, role: editingMemberRole }),
+      });
+      const roleJson = await roleRes.json();
+      if (!roleRes.ok) {
+        setNameSavingId(null);
+        toast.error(roleJson.error ?? "Nom enregistré, rôle non modifié");
+        loadSeller();
+        return;
+      }
+    }
+    setNameSavingId(null);
+    toast.success("Profil mis à jour");
+    setEditingMemberId(null);
+    loadSeller();
+  }
+
+  async function toggleMemberLiveAccess(memberId: string, liveAccess: boolean) {
+    setLiveSavingId(memberId);
+    const res = await fetch("/api/org/members", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId, liveAccess }),
+    });
+    const json = await res.json();
+    setLiveSavingId(null);
+    if (!res.ok) {
+      toast.error(json.error ?? "Accès live non modifié");
+      return;
+    }
+    toast.success(liveAccess ? "Accès live accordé" : "Accès live retiré");
     loadSeller();
   }
 
@@ -750,7 +816,7 @@ export default function ShopsPage() {
         </div>
         <p className="mb-3 text-[11px] text-muted-foreground">
           {isOwner
-            ? "Owner : tous les membres. Vendeurs = ont une boutique · acheteurs = sans boutique."
+            ? "Owner : nom, rôle et accès live boutique. Sinon badge Influenceur requis pour le live."
             : "Vous voyez uniquement votre compte et les personnes que vous avez invitées. Acheteurs / abonnés → Contacts."}
         </p>
         <div className="mb-4 flex flex-wrap gap-1.5">
@@ -827,16 +893,72 @@ export default function ShopsPage() {
                 key={m.id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm"
               >
-                <span className="min-w-0">
-                  {m.user?.name}{" "}
-                  {m.isMe && (
-                    <span className="text-[10px] font-bold text-primary">
-                      (vous)
+                <span className="min-w-0 flex-1">
+                  {editingMemberId === m.id ? (
+                    <span className="flex w-full flex-col gap-2 py-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Input
+                          value={editingMemberName}
+                          onChange={(e) => setEditingMemberName(e.target.value)}
+                          className="h-8 max-w-[14rem] bg-surface-2 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter")
+                              void saveMemberProfile(m.id, m.role);
+                            if (e.key === "Escape") setEditingMemberId(null);
+                          }}
+                        />
+                        <Select
+                          value={editingMemberRole}
+                          onValueChange={(v) => {
+                            if (v === "member" || v === "admin") {
+                              setEditingMemberRole(v);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-28 bg-surface-2 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="member">Member</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={nameSavingId === m.id}
+                          onClick={() => void saveMemberProfile(m.id, m.role)}
+                        >
+                          OK
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs"
+                          onClick={() => setEditingMemberId(null)}
+                        >
+                          Annuler
+                        </Button>
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {m.user?.email}
+                        {m.user?.phone ? ` · ${m.user.phone}` : ""}
+                      </span>
                     </span>
-                  )}{" "}
-                  <span className="text-muted-foreground">
-                    ({m.user?.email})
-                  </span>
+                  ) : (
+                    <>
+                      <span className="font-semibold">{m.user?.name}</span>{" "}
+                      {m.isMe && (
+                        <span className="text-[10px] font-bold text-primary">
+                          (vous)
+                        </span>
+                      )}{" "}
+                      <span className="text-muted-foreground">
+                        ({m.user?.email})
+                      </span>
+                    </>
+                  )}
                   <span
                     className={cn(
                       "ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
@@ -849,8 +971,49 @@ export default function ShopsPage() {
                       ? `Vendeur · ${m.shopCount} boutique${m.shopCount > 1 ? "s" : ""}`
                       : "Acheteur"}
                   </span>
+                  {m.liveAccessGranted ? (
+                    <span className="ml-1 rounded-md bg-[#ff2d45]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#ff2d45]">
+                      Live
+                    </span>
+                  ) : null}
                 </span>
                 <div className="flex flex-wrap items-center gap-2">
+                  {isOrgOwner && m.role !== "owner" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1 text-xs"
+                      disabled={nameSavingId === m.id}
+                      onClick={() => {
+                        setEditingMemberId(m.id);
+                        setEditingMemberName(m.user?.name ?? "");
+                        setEditingMemberRole(
+                          m.role === "admin" ? "admin" : "member",
+                        );
+                      }}
+                    >
+                      <Pencil className="size-3" />
+                      Nom / rôle
+                    </Button>
+                  ) : null}
+                  {isOrgOwner && m.role !== "owner" && m.kind === "vendor" ? (
+                    <Button
+                      size="sm"
+                      variant={m.liveAccessGranted ? "default" : "outline"}
+                      className={cn(
+                        "h-8 gap-1 text-xs",
+                        m.liveAccessGranted &&
+                          "bg-[#ff2d45] hover:bg-[#ff4056]",
+                      )}
+                      disabled={liveSavingId === m.id}
+                      onClick={() =>
+                        void toggleMemberLiveAccess(m.id, !m.liveAccessGranted)
+                      }
+                    >
+                      <Radio className="size-3" />
+                      {m.liveAccessGranted ? "Live on" : "Accès live"}
+                    </Button>
+                  ) : null}
                   {isOwner ? (
                     <Button
                       size="sm"

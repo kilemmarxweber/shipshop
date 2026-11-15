@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { setLiveAccessGrant } from "@/lib/growth/badges";
 import { assertChipShopOwner } from "@/lib/kyc";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -10,10 +11,20 @@ import {
 
 const ORG_ROLES = ["member", "admin"] as const;
 
-const patchSchema = z.object({
-  memberId: z.string().min(1),
-  role: z.enum(ORG_ROLES),
-});
+const patchSchema = z.union([
+  z.object({
+    memberId: z.string().min(1),
+    role: z.enum(ORG_ROLES),
+  }),
+  z.object({
+    memberId: z.string().min(1),
+    liveAccess: z.boolean(),
+  }),
+  z.object({
+    memberId: z.string().min(1),
+    name: z.string().min(2).max(120),
+  }),
+]);
 
 async function requireOrgMember(userId: string) {
   const { org, member } = await ensureMembership(userId);
@@ -44,14 +55,13 @@ export async function GET() {
             email: true,
             image: true,
             phone: true,
+            liveAccessGrantedAt: true,
           },
         },
       },
     }),
   );
 
-  // Vendeur : soi-même + personnes qu'il a invitées uniquement.
-  // Owner / admin plateforme : toute la liste.
   let pendingInvites: {
     id: string;
     email: string;
@@ -85,7 +95,6 @@ export async function GET() {
     );
   }
 
-  // Toute boutique (active ou non) = vendeur ; sinon = client / acheteur
   const shopCounts = await withDbRetry(() =>
     prisma.shop.groupBy({
       by: ["ownerUserId"],
@@ -113,10 +122,17 @@ export async function GET() {
         id: m.id,
         role: m.role,
         userId: m.userId,
-        user: m.user,
+        user: {
+          id: m.user.id,
+          name: m.user.name,
+          email: m.user.email,
+          image: m.user.image,
+          phone: m.user.phone,
+        },
         shopCount: shops,
         kind: shops > 0 ? "vendor" : "buyer",
         isMe: m.userId === session.user.id,
+        liveAccessGranted: Boolean(m.user.liveAccessGrantedAt),
       };
     }),
   });
@@ -131,7 +147,7 @@ export async function PATCH(req: Request) {
   const { org, member: actor } = await requireOrgMember(session.user.id);
   if (actor.role !== "owner") {
     return NextResponse.json(
-      { error: "Seul l'owner peut changer un rôle" },
+      { error: "Seul l'owner peut modifier un membre" },
       { status: 403 },
     );
   }
@@ -141,22 +157,63 @@ export async function PATCH(req: Request) {
     const target = await withDbRetry(() =>
       prisma.member.findFirst({
         where: { id: body.memberId, organizationId: org.id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              liveAccessGrantedAt: true,
+            },
+          },
+        },
       }),
     );
     if (!target) {
-      return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Utilisateur introuvable" },
+        { status: 404 },
+      );
     }
     if (target.role === "owner") {
       return NextResponse.json(
-        { error: "Le rôle owner ne peut pas être modifié ici" },
+        { error: "Le compte owner ne peut pas être modifié ici" },
         { status: 400 },
       );
     }
     if (target.userId === session.user.id) {
       return NextResponse.json(
-        { error: "Vous ne pouvez pas modifier votre propre rôle" },
+        { error: "Vous ne pouvez pas modifier votre propre accès ainsi" },
         { status: 400 },
       );
+    }
+
+    if ("liveAccess" in body) {
+      const user = await setLiveAccessGrant({
+        userId: target.userId,
+        granted: body.liveAccess,
+        grantedBy: session.user.id,
+      });
+      return NextResponse.json({
+        ok: true,
+        liveAccessGranted: Boolean(user.liveAccessGrantedAt),
+        memberId: target.id,
+      });
+    }
+
+    if ("name" in body) {
+      const updatedUser = await withDbRetry(() =>
+        prisma.user.update({
+          where: { id: target.userId },
+          data: { name: body.name.trim() },
+          select: { id: true, name: true, email: true },
+        }),
+      );
+      return NextResponse.json({
+        ok: true,
+        user: updatedUser,
+        memberId: target.id,
+      });
     }
 
     const updated = await withDbRetry(() =>

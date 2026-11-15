@@ -45,6 +45,7 @@ export async function GET() {
                 phone: true,
                 image: true,
                 createdAt: true,
+                liveAccessGrantedAt: true,
                 sellerKyc: true,
                 wallet: { select: { balanceCents: true } },
               },
@@ -89,6 +90,7 @@ export async function GET() {
                 createdAt: true,
                 disabledAt: true,
                 disabledReason: true,
+                liveAccessGrantedAt: true,
                 sellerKyc: true,
                 wallet: { select: { balanceCents: true } },
                 _count: { select: { orders: true } },
@@ -104,6 +106,7 @@ export async function GET() {
         .map((s) => s.ownerUserId)
         .filter((id): id is string => Boolean(id)),
     );
+    const memberByUserId = new Map(members.map((m) => [m.userId, m]));
 
     const vendors = shops.map((shop) => {
       const byStatus: Record<string, number> = {};
@@ -111,6 +114,7 @@ export async function GET() {
         byStatus[p.status] = (byStatus[p.status] ?? 0) + 1;
       }
       const { products, _count, owner, ...rest } = shop;
+      const ownerMember = owner ? memberByUserId.get(owner.id) : null;
       return {
         ...rest,
         productsCount: _count.products,
@@ -130,6 +134,9 @@ export async function GET() {
               image: owner.image,
               createdAt: owner.createdAt,
               walletBalanceCents: owner.wallet?.balanceCents ?? 0,
+              liveAccessGranted: Boolean(owner.liveAccessGrantedAt),
+              memberId: ownerMember?.id ?? null,
+              role: ownerMember?.role ?? "member",
               kyc: owner.sellerKyc ? kycPublic(owner.sellerKyc) : null,
             }
           : null,
@@ -152,6 +159,7 @@ export async function GET() {
         ordersCount: m.user._count.orders,
         walletBalanceCents: m.user.wallet?.balanceCents ?? 0,
         canDelete: m.user._count.orders === 0,
+        liveAccessGranted: Boolean(m.user.liveAccessGrantedAt),
         kyc: m.user.sellerKyc ? kycPublic(m.user.sellerKyc) : null,
       }));
 

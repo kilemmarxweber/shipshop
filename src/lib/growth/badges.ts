@@ -217,6 +217,13 @@ export async function hasActiveBadge(
   if (kind === "INFLUENCER") {
     const { isPlatformOwner } = await assertChipShopOwner(userId);
     if (isPlatformOwner) return true;
+    const grant = await withDbRetry(() =>
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { liveAccessGrantedAt: true },
+      }),
+    );
+    if (grant?.liveAccessGrantedAt) return true;
   }
   const row = await withDbRetry(() =>
     prisma.accountBadge.findUnique({
@@ -225,4 +232,31 @@ export async function hasActiveBadge(
     }),
   );
   return Boolean(row?.active);
+}
+
+/** Accès live hors badge (owner boutique / plateforme). */
+export async function setLiveAccessGrant(input: {
+  userId: string;
+  granted: boolean;
+  grantedBy: string;
+}) {
+  return withDbRetry(() =>
+    prisma.user.update({
+      where: { id: input.userId },
+      data: input.granted
+        ? {
+            liveAccessGrantedAt: new Date(),
+            liveAccessGrantedBy: input.grantedBy,
+          }
+        : {
+            liveAccessGrantedAt: null,
+            liveAccessGrantedBy: null,
+          },
+      select: {
+        id: true,
+        liveAccessGrantedAt: true,
+        liveAccessGrantedBy: true,
+      },
+    }),
+  );
 }

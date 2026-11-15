@@ -1,41 +1,42 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import {
-  Archive,
-  CheckCircle2,
-  KeyRound,
-  Package,
-  Pencil,
-  Power,
-  PowerOff,
-  ShieldAlert,
-  Store,
-  Trash2,
-  User,
-  UserCheck,
-} from "lucide-react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { fetchJson } from "@/lib/fetch-json";
-import { formatMoney, cn } from "@/lib/utils";
+import { MediaUploader } from "@/components/media-uploader";
 import { PageLoader } from "@/components/page-loader";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { MediaUploader } from "@/components/media-uploader";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useConfirmDialog } from "@/components/use-confirm-dialog";
 import { usePromptDialog } from "@/components/use-prompt-dialog";
+import { authClient } from "@/lib/auth-client";
+import { fetchJson } from "@/lib/fetch-json";
+import { cn, formatMoney } from "@/lib/utils";
+import {
+    Archive,
+    CheckCircle2,
+    KeyRound,
+    Package,
+    Pencil,
+    Power,
+    PowerOff,
+    Radio,
+    ShieldAlert,
+    Store,
+    Trash2,
+    User,
+    UserCheck,
+} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 type ShopProduct = {
   id: string;
@@ -73,6 +74,9 @@ type Vendor = {
     email: string;
     phone: string | null;
     walletBalanceCents: number;
+    liveAccessGranted?: boolean;
+    memberId?: string | null;
+    role?: string;
     kyc: {
       id: string;
       status: string;
@@ -93,6 +97,7 @@ type Client = {
   disabledAt: string | null;
   disabledReason: string | null;
   canDelete?: boolean;
+  liveAccessGranted?: boolean;
   kyc: { id: string; status: string } | null;
 };
 
@@ -124,23 +129,45 @@ export default function AdminVendorsPage() {
   const [editing, setEditing] = useState<ShopProduct | null>(null);
   const [productBusy, setProductBusy] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [editingVendorOwner, setEditingVendorOwner] = useState<{
+    id: string;
+    memberId: string | null;
+    name: string;
+    email: string;
+    phone: string | null;
+    role: string;
+    liveAccessGranted: boolean;
+    shopId: string;
+  } | null>(null);
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const { prompt, PromptDialog } = usePromptDialog();
   const [clientBusy, setClientBusy] = useState(false);
   const [republishPicker, setRepublishPicker] =
     useState<RepublishPicker | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isOrgOwner, setIsOrgOwner] = useState(false);
 
   async function load() {
-    const { res, data } = await fetchJson<{
-      vendors?: Vendor[];
-      clients?: Client[];
-      error?: string;
-    }>("/api/admin/vendors");
+    const [{ res, data }, org] = await Promise.all([
+      fetchJson<{
+        vendors?: Vendor[];
+        clients?: Client[];
+        error?: string;
+      }>("/api/admin/vendors"),
+      fetchJson<{ myRole?: string; isOwner?: boolean }>("/api/org/members"),
+    ]);
+    setIsOrgOwner(org.data?.myRole === "owner" || Boolean(org.data?.isOwner));
     if (res.status === 403) {
       setAllowed(false);
       setVendors([]);
       setClients([]);
+      return;
+    }
+    if (!res.ok) {
+      setAllowed(true);
+      setVendors([]);
+      setClients([]);
+      toast.error(data?.error ?? "Impossible de charger les vendeurs");
       return;
     }
     setAllowed(true);
@@ -149,12 +176,22 @@ export default function AdminVendorsPage() {
   }
 
   useEffect(() => {
-    if (!session) {
+    if (!session?.user?.id) {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    load().finally(() => setLoading(false));
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      try {
+        await load();
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [session?.user?.id]);
 
   async function shopAction(
@@ -326,11 +363,13 @@ export default function AdminVendorsPage() {
 
   async function archiveClient(c: Client) {
     const reason =
-      (await prompt({
-        title: "Motif d'archivage",
-        description: "Optionnel",
-        placeholder: "Motif (optionnel)",
-      }))?.trim() || undefined;
+      (
+        await prompt({
+          title: "Motif d'archivage",
+          description: "Optionnel",
+          placeholder: "Motif (optionnel)",
+        })
+      )?.trim() || undefined;
     setClientBusy(true);
     setBusyId(c.id);
     const { res, data } = await fetchJson<{ error?: string }>(
@@ -402,6 +441,71 @@ export default function AdminVendorsPage() {
     load();
   }
 
+  async function changeClientRole(memberId: string, role: "member" | "admin") {
+    if (!isOrgOwner) {
+      toast.error("Seul l'owner peut changer un rôle");
+      return;
+    }
+    setClientBusy(true);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      "/api/org/members",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, role }),
+      },
+    );
+    setClientBusy(false);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Rôle non modifié");
+      return;
+    }
+    toast.success("Rôle mis à jour");
+    if (editingClient?.memberId === memberId) {
+      setEditingClient({ ...editingClient, role });
+    }
+    if (editingVendorOwner?.memberId === memberId) {
+      setEditingVendorOwner({ ...editingVendorOwner, role });
+    }
+    load();
+  }
+
+  async function toggleLiveAccess(
+    memberId: string,
+    liveAccess: boolean,
+    rowId: string,
+  ) {
+    if (!isOrgOwner) {
+      toast.error("Seul l'owner peut accorder l'accès live");
+      return;
+    }
+    setBusyId(rowId);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      "/api/org/members",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, liveAccess }),
+      },
+    );
+    setBusyId(null);
+    if (!res.ok) {
+      toast.error(data?.error ?? "Accès live non modifié");
+      return;
+    }
+    toast.success(liveAccess ? "Accès live accordé" : "Accès live retiré");
+    if (editingClient?.memberId === memberId) {
+      setEditingClient({ ...editingClient, liveAccessGranted: liveAccess });
+    }
+    if (editingVendorOwner?.memberId === memberId) {
+      setEditingVendorOwner({
+        ...editingVendorOwner,
+        liveAccessGranted: liveAccess,
+      });
+    }
+    load();
+  }
+
   async function saveClient() {
     if (!editingClient) return;
     setClientBusy(true);
@@ -418,22 +522,95 @@ export default function AdminVendorsPage() {
         }),
       },
     );
-    setClientBusy(false);
     if (!res.ok) {
+      setClientBusy(false);
       toast.error(data?.error ?? "Échec");
       return;
     }
+    if (
+      isOrgOwner &&
+      editingClient.memberId &&
+      editingClient.role !== "owner" &&
+      (editingClient.role === "member" || editingClient.role === "admin")
+    ) {
+      const roleRes = await fetchJson<{ error?: string }>("/api/org/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId: editingClient.memberId,
+          role: editingClient.role,
+        }),
+      });
+      if (!roleRes.res.ok) {
+        setClientBusy(false);
+        toast.error(roleRes.data?.error ?? "Nom enregistré, rôle non modifié");
+        load();
+        return;
+      }
+    }
+    setClientBusy(false);
     toast.success("Client mis à jour");
     setEditingClient(null);
     load();
   }
 
+  async function saveVendorOwner() {
+    if (!editingVendorOwner) return;
+    setClientBusy(true);
+    const { res, data } = await fetchJson<{ error?: string }>(
+      `/api/admin/users/${editingVendorOwner.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          name: editingVendorOwner.name,
+          email: editingVendorOwner.email,
+          phone: editingVendorOwner.phone,
+        }),
+      },
+    );
+    if (!res.ok) {
+      setClientBusy(false);
+      toast.error(data?.error ?? "Échec");
+      return;
+    }
+    if (
+      isOrgOwner &&
+      editingVendorOwner.memberId &&
+      editingVendorOwner.role !== "owner" &&
+      (editingVendorOwner.role === "member" ||
+        editingVendorOwner.role === "admin")
+    ) {
+      const roleRes = await fetchJson<{ error?: string }>("/api/org/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId: editingVendorOwner.memberId,
+          role: editingVendorOwner.role,
+        }),
+      });
+      if (!roleRes.res.ok) {
+        setClientBusy(false);
+        toast.error(roleRes.data?.error ?? "Nom enregistré, rôle non modifié");
+        load();
+        return;
+      }
+    }
+    setClientBusy(false);
+    toast.success("Vendeur mis à jour");
+    setEditingVendorOwner(null);
+    load();
+  }
+
   async function revokeKyc(kycId: string, rowId: string) {
-    const reason = (await prompt({
-      title: "Révocation KYC",
-      description: "Motif de révocation KYC",
-      placeholder: "Motif",
-    }))?.trim();
+    const reason = (
+      await prompt({
+        title: "Révocation KYC",
+        description: "Motif de révocation KYC",
+        placeholder: "Motif",
+      })
+    )?.trim();
     if (!reason) return;
     setBusyId(rowId);
     const { res, data } = await fetchJson<{ error?: string }>(
@@ -652,13 +829,20 @@ export default function AdminVendorsPage() {
                           "rounded-full px-2 py-0.5 text-[10px] font-bold",
                           kycStatus === "APPROVED" && "bg-trust/15 text-trust",
                           kycStatus === "PENDING" &&
-                            "bg-amber-500/15 text-amber-500",
-                          (kycStatus === "REJECTED" || kycStatus === "NONE") &&
-                            "bg-muted text-muted-foreground",
+                            "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+                          kycStatus === "REJECTED" &&
+                            "bg-destructive/15 text-destructive",
+                          kycStatus === "NONE" &&
+                            "bg-foreground/10 text-foreground/80",
                         )}
                       >
                         KYC {kycStatus}
                       </span>
+                      {v.owner?.liveAccessGranted ? (
+                        <span className="rounded-full bg-[#ff2d45]/15 px-2 py-0.5 text-[10px] font-bold text-[#ff2d45]">
+                          Live
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
                       @{v.slug}
@@ -764,22 +948,95 @@ export default function AdminVendorsPage() {
                     Catalogue
                   </Link>
                   {v.owner && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1"
-                      disabled={busy}
-                      onClick={() =>
-                        resetPassword(
-                          v.owner!.id,
-                          v.id,
-                          `${v.owner!.name} (${v.owner!.email})`,
-                        )
-                      }
-                    >
-                      <KeyRound className="size-3" />
-                      Reset MDP
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1"
+                        disabled={busy || clientBusy}
+                        onClick={() =>
+                          setEditingVendorOwner({
+                            id: v.owner!.id,
+                            memberId: v.owner!.memberId ?? null,
+                            name: v.owner!.name,
+                            email: v.owner!.email,
+                            phone: v.owner!.phone,
+                            role: v.owner!.role ?? "member",
+                            liveAccessGranted: Boolean(
+                              v.owner!.liveAccessGranted,
+                            ),
+                            shopId: v.id,
+                          })
+                        }
+                      >
+                        <Pencil className="size-3" />
+                        Nom / contact
+                      </Button>
+                      {isOrgOwner &&
+                      v.owner.memberId &&
+                      v.owner.role !== "owner" ? (
+                        <>
+                          {(["member", "admin"] as const).map((role) => (
+                            <Button
+                              key={role}
+                              size="sm"
+                              variant={
+                                (v.owner!.role ?? "member") === role
+                                  ? "default"
+                                  : "outline"
+                              }
+                              className="capitalize"
+                              disabled={busy || clientBusy}
+                              onClick={() =>
+                                changeClientRole(v.owner!.memberId!, role)
+                              }
+                            >
+                              {role}
+                            </Button>
+                          ))}
+                          <Button
+                            size="sm"
+                            variant={
+                              v.owner.liveAccessGranted ? "default" : "outline"
+                            }
+                            className={cn(
+                              "gap-1",
+                              v.owner.liveAccessGranted &&
+                                "bg-[#ff2d45] hover:bg-[#ff4056]",
+                            )}
+                            disabled={busy || clientBusy}
+                            onClick={() =>
+                              void toggleLiveAccess(
+                                v.owner!.memberId!,
+                                !v.owner!.liveAccessGranted,
+                                v.id,
+                              )
+                            }
+                          >
+                            <Radio className="size-3" />
+                            {v.owner.liveAccessGranted
+                              ? "Live on"
+                              : "Accès live"}
+                          </Button>
+                        </>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        disabled={busy}
+                        onClick={() =>
+                          resetPassword(
+                            v.owner!.id,
+                            v.id,
+                            `${v.owner!.name} (${v.owner!.email})`,
+                          )
+                        }
+                      >
+                        <KeyRound className="size-3" />
+                        Reset MDP
+                      </Button>
+                    </>
                   )}
                   {v.owner?.kyc?.status === "APPROVED" && v.owner.kyc.id && (
                     <Button
@@ -818,13 +1075,20 @@ export default function AdminVendorsPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-heading font-bold">{c.name}</p>
+                      <p className="truncate font-heading font-bold">
+                        {c.name}
+                      </p>
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
                         Client
                       </span>
                       <span className="rounded-full bg-muted/40 px-2 py-0.5 text-[10px] font-bold capitalize text-muted-foreground">
                         {c.role}
                       </span>
+                      {c.liveAccessGranted ? (
+                        <span className="rounded-full bg-[#ff2d45]/15 px-2 py-0.5 text-[10px] font-bold text-[#ff2d45]">
+                          Live
+                        </span>
+                      ) : null}
                       {c.disabledAt && (
                         <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-bold text-destructive">
                           Archivé
@@ -853,6 +1117,42 @@ export default function AdminVendorsPage() {
                     <Pencil className="size-3" />
                     Modifier
                   </Button>
+                  {isOrgOwner && c.role !== "owner" ? (
+                    <>
+                      {(["member", "admin"] as const).map((role) => (
+                        <Button
+                          key={role}
+                          size="sm"
+                          variant={c.role === role ? "default" : "outline"}
+                          className="capitalize"
+                          disabled={busy || clientBusy}
+                          onClick={() => changeClientRole(c.memberId, role)}
+                        >
+                          {role}
+                        </Button>
+                      ))}
+                      <Button
+                        size="sm"
+                        variant={c.liveAccessGranted ? "default" : "outline"}
+                        className={cn(
+                          "gap-1",
+                          c.liveAccessGranted &&
+                            "bg-[#ff2d45] hover:bg-[#ff4056]",
+                        )}
+                        disabled={busy || clientBusy}
+                        onClick={() =>
+                          void toggleLiveAccess(
+                            c.memberId,
+                            !c.liveAccessGranted,
+                            c.id,
+                          )
+                        }
+                      >
+                        <Radio className="size-3" />
+                        {c.liveAccessGranted ? "Live on" : "Accès live"}
+                      </Button>
+                    </>
+                  ) : null}
                   {c.disabledAt ? (
                     <Button
                       size="sm"
@@ -1041,7 +1341,9 @@ export default function AdminVendorsPage() {
                       }
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{p.title}</p>
+                      <p className="truncate text-sm font-semibold">
+                        {p.title}
+                      </p>
                       <p className="text-[11px] text-muted-foreground">
                         {formatMoney(p.priceCents)} · stock {p.quantity} ·{" "}
                         <span
@@ -1217,6 +1519,141 @@ export default function AdminVendorsPage() {
         </div>
       )}
 
+      {editingVendorOwner && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-4 sm:items-center">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-4">
+            <h2 className="mb-3 font-heading text-lg font-bold">
+              Modifier le vendeur
+            </h2>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>Nom</Label>
+                <Input
+                  value={editingVendorOwner.name}
+                  onChange={(e) =>
+                    setEditingVendorOwner({
+                      ...editingVendorOwner,
+                      name: e.target.value,
+                    })
+                  }
+                  className="bg-surface-2"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>E-mail</Label>
+                <Input
+                  type="email"
+                  value={editingVendorOwner.email}
+                  onChange={(e) =>
+                    setEditingVendorOwner({
+                      ...editingVendorOwner,
+                      email: e.target.value,
+                    })
+                  }
+                  className="bg-surface-2"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Téléphone</Label>
+                <Input
+                  value={editingVendorOwner.phone ?? ""}
+                  onChange={(e) =>
+                    setEditingVendorOwner({
+                      ...editingVendorOwner,
+                      phone: e.target.value || null,
+                    })
+                  }
+                  className="bg-surface-2"
+                />
+              </div>
+              {isOrgOwner &&
+              editingVendorOwner.memberId &&
+              editingVendorOwner.role !== "owner" ? (
+                <div className="space-y-1">
+                  <Label>Rôle (réservé à l&apos;owner)</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(["member", "admin"] as const).map((role) => (
+                      <Button
+                        key={role}
+                        type="button"
+                        size="sm"
+                        variant={
+                          editingVendorOwner.role === role
+                            ? "default"
+                            : "outline"
+                        }
+                        className="capitalize"
+                        onClick={() =>
+                          setEditingVendorOwner({
+                            ...editingVendorOwner,
+                            role,
+                          })
+                        }
+                      >
+                        {role}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {isOrgOwner &&
+              editingVendorOwner.memberId &&
+              editingVendorOwner.role !== "owner" ? (
+                <div className="space-y-1">
+                  <Label>Accès live boutique</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={
+                      editingVendorOwner.liveAccessGranted
+                        ? "default"
+                        : "outline"
+                    }
+                    className={cn(
+                      "gap-1",
+                      editingVendorOwner.liveAccessGranted &&
+                        "bg-[#ff2d45] hover:bg-[#ff4056]",
+                    )}
+                    disabled={clientBusy}
+                    onClick={() =>
+                      void toggleLiveAccess(
+                        editingVendorOwner.memberId!,
+                        !editingVendorOwner.liveAccessGranted,
+                        editingVendorOwner.shopId,
+                      )
+                    }
+                  >
+                    <Radio className="size-3" />
+                    {editingVendorOwner.liveAccessGranted
+                      ? "Live accordé — retirer"
+                      : "Accorder l'accès live"}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    Sans accès owner, le live suit le badge Influenceur.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setEditingVendorOwner(null)}
+              >
+                Annuler
+              </Button>
+              <Button
+                className="flex-[2]"
+                disabled={clientBusy}
+                onClick={saveVendorOwner}
+              >
+                {clientBusy ? "…" : "Enregistrer"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editingClient && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-4 sm:items-center">
           <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-4">
@@ -1264,6 +1701,62 @@ export default function AdminVendorsPage() {
                   className="bg-surface-2"
                 />
               </div>
+              {isOrgOwner && editingClient.role !== "owner" ? (
+                <div className="space-y-1">
+                  <Label>Rôle (réservé à l&apos;owner)</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(["member", "admin"] as const).map((role) => (
+                      <Button
+                        key={role}
+                        type="button"
+                        size="sm"
+                        variant={
+                          editingClient.role === role ? "default" : "outline"
+                        }
+                        className="capitalize"
+                        onClick={() =>
+                          setEditingClient({ ...editingClient, role })
+                        }
+                      >
+                        {role}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {isOrgOwner && editingClient.role !== "owner" ? (
+                <div className="space-y-1">
+                  <Label>Accès live</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={
+                      editingClient.liveAccessGranted ? "default" : "outline"
+                    }
+                    className={cn(
+                      "gap-1",
+                      editingClient.liveAccessGranted &&
+                        "bg-[#ff2d45] hover:bg-[#ff4056]",
+                    )}
+                    disabled={clientBusy}
+                    onClick={() =>
+                      void toggleLiveAccess(
+                        editingClient.memberId,
+                        !editingClient.liveAccessGranted,
+                        editingClient.id,
+                      )
+                    }
+                  >
+                    <Radio className="size-3" />
+                    {editingClient.liveAccessGranted
+                      ? "Live accordé — retirer"
+                      : "Accorder l'accès live"}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    Sans accès owner, le live suit le badge Influenceur.
+                  </p>
+                </div>
+              ) : null}
             </div>
             <div className="mt-4 flex gap-2">
               <Button

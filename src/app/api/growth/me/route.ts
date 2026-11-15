@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
   await refreshAccountBadges(session.user.id);
-  const [badges, missions, rewards] = await Promise.all([
+  const [badges, missions, rewards, meUser] = await Promise.all([
     loadBadgeSnapshot(session.user.id),
     loadMissions(session.user.id),
     withDbRetry(() =>
@@ -21,11 +21,24 @@ export async function GET() {
         take: 8,
       }),
     ),
+    withDbRetry(() =>
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { liveAccessGrantedAt: true },
+      }),
+    ),
   ]);
+  const liveAccessGranted = Boolean(meUser?.liveAccessGrantedAt);
+  const influencerBadge = Boolean(
+    badges.badges?.some((b) => b.kind === "INFLUENCER" && b.active),
+  );
   return NextResponse.json({
     ...badges,
     missions,
     rewards,
     gifts: GIFT_CATALOG,
+    liveAccessGranted,
+    canGoLive:
+      liveAccessGranted || influencerBadge || Boolean(badges.isPlatformOwner),
   });
 }

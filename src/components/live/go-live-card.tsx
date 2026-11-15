@@ -16,6 +16,8 @@ type GrowthMe = {
   subscribers?: number;
   isPlatformOwner?: boolean;
   kycApproved?: boolean;
+  liveAccessGranted?: boolean;
+  canGoLive?: boolean;
 };
 
 type LiveRow = {
@@ -68,7 +70,10 @@ export function GoLiveCard({ className, variant = "profile" }: Props) {
   const influencer = Boolean(
     me?.badges?.some((b) => b.kind === "INFLUENCER" && b.active),
   );
-  const canGoLive = Boolean(influencer || me?.isPlatformOwner);
+  const canGoLive = Boolean(
+    me?.canGoLive ??
+      (me?.liveAccessGranted || influencer || me?.isPlatformOwner),
+  );
   const subscribers = me?.subscribers ?? 0;
   const need = Math.max(0, INFLUENCER_FOLLOWERS - subscribers);
   const studio = variant === "studio";

@@ -3,7 +3,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 /** Bump when schema fields change so HMR doesn't keep a stale PrismaClient. */
-const PRISMA_SCHEMA_REV = 58;
+const PRISMA_SCHEMA_REV = 61;
+const USER_HAS_LIVE_ACCESS =
+  Prisma.UserScalarFieldEnum.liveAccessGrantedAt === "liveAccessGrantedAt";
 const CHALLENGE_HAS_PRODUCT =
   Prisma.DailyChallengeScalarFieldEnum.productId === "productId";
 const CHALLENGE_HAS_PROGRAMMED =
@@ -16,8 +18,7 @@ const SHOP_HAS_HOURS = Prisma.ShopScalarFieldEnum.alwaysOpen === "alwaysOpen";
 const COURIER_HAS_ARCHIVE =
   Prisma.CourierScalarFieldEnum.archivedAt === "archivedAt";
 const SHOP_HAS_PRO_UNTIL = Prisma.ShopScalarFieldEnum.proUntil === "proUntil";
-const SHOP_HAS_SOCIAL =
-  Prisma.ShopScalarFieldEnum.tiktokUrl === "tiktokUrl";
+const SHOP_HAS_SOCIAL = Prisma.ShopScalarFieldEnum.tiktokUrl === "tiktokUrl";
 const PRODUCT_HAS_CREATOR_BPS =
   Prisma.ProductScalarFieldEnum.creatorCommissionBps === "creatorCommissionBps";
 const ORDER_HAS_FEE_BPS =
@@ -118,7 +119,8 @@ function getPrismaClient() {
     CREATOR_LIVE_HAS_BACKDROP &&
     LIVE_HAS_RTC_SIGNAL &&
     PRODUCT_HAS_COMPARE_AT &&
-    HAS_SHOP_REWARD_STATE
+    HAS_SHOP_REWARD_STATE &&
+    USER_HAS_LIVE_ACCESS
   ) {
     return existing;
   }
