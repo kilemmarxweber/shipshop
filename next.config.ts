@@ -23,7 +23,8 @@ const nextConfig: NextConfig = {
     // GC Turbopack en prod seulement — en `next dev` il peut paniquer
     // (stale TaskId / already-collected) après un build.
     turbopackGc: process.env.NODE_ENV === "production",
-    turbopackPluginRuntimeStrategy: "workerThreads",
+    // Node 24 : workerThreads peut abort (N-API / fsevents). childProcesses = défaut sûr.
+    turbopackPluginRuntimeStrategy: "childProcesses",
   },
   async rewrites() {
     return {

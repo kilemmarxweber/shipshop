@@ -247,13 +247,15 @@ cd /var/www/shop/shipshop
 pnpm install --frozen-lockfile
 pnpm prisma migrate deploy
 pm2 stop shipshop
-NODE_OPTIONS='--max-old-space-size=2048' pnpm build
+pnpm build
 pm2 start shipshop
 ```
 
+Le script `pnpm build` fixe déjà `--max-old-space-size=2048` (évite l’OOM au typecheck).
+
 **Exit 137** = le kernel a tué le build (OOM). Ce n’est pas une erreur TypeScript.
 
-- Ne pas mettre `--max-old-space-size=3072` sur un VPS **2 Go** : le heap Node dépasse la RAM → 137.
+- Ne pas forcer `NODE_OPTIONS=--max-old-space-size=3072` sur un VPS **2 Go** : le heap Node dépasse la RAM → 137.
 - Arrêter PM2 pendant le build (l’app + le compilateur se battent pour la RAM).
 - Ajouter du swap si `free -h` montre `Swap: 0` :
 
@@ -288,7 +290,7 @@ Si le process démarre sans les variables : `pm2 restart shipshop --update-env`.
 3. Dossier `/var/www/chipshop-uploads` + droits
 4. `pnpm install --frozen-lockfile`
 5. `pnpm prisma migrate deploy`
-6. `pm2 stop shipshop` puis `NODE_OPTIONS='--max-old-space-size=2048' pnpm build`
+6. `pm2 stop shipshop` puis `pnpm build`
 7. PM2 + Nginx + SSL
 8. Créer le **vrai owner** (pas `demo@chipshop.cd`)
 9. Configurer SMS / WhatsApp dans `/shops/messaging` (clés Infobip / Klambo dans l’UI, pas dans `.env`)
