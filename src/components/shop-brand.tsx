@@ -19,6 +19,7 @@ export function ShopLiveAvatar({
         live ? "ss-shop-live ring-[#FF453A]" : "ring-white",
         className,
       )}
+      data-live={live ? "1" : undefined}
     >
       <span
         className={cn(
@@ -34,7 +35,7 @@ export function ShopLiveAvatar({
         )}
       </span>
       {live ? (
-        <span className="ss-shop-live-label pointer-events-none absolute inset-0 grid place-items-center rounded-full bg-[#FF453A] text-[10px] font-extrabold tracking-[0.04em] text-white">
+        <span className="ss-shop-live-label pointer-events-none absolute inset-0 z-[1] grid place-items-center rounded-full bg-[#FF453A] text-[10px] font-extrabold tracking-[0.04em] text-white">
           LIVE
         </span>
       ) : null}

@@ -16,8 +16,18 @@ export function notifyLiveEnded() {
   }
 }
 
+/** Ping immédiat après démarrage / fin de live (rafraîchit le fil). */
+export function notifyOpenLivesChanged() {
+  invalidateGrowthSurface();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(OPEN_LIVES_EVENT));
+  }
+}
+
 function onlyOpen(rows: FeedLive[] | undefined): FeedLive[] {
-  return (rows ?? []).filter((row) => row.status !== "ENDED");
+  return (rows ?? []).filter(
+    (row) => row.status === "LIVE" || row.status === "PAUSED",
+  );
 }
 
 export function useOpenLives() {
@@ -34,11 +44,13 @@ export function useOpenLives() {
 
     const pull = async () => {
       try {
-        const { data } = await fetchJson<{ lives?: FeedLive[] }>(
+        const { res, data } = await fetchJson<{ lives?: FeedLive[] }>(
           `/api/growth/lives?t=${Date.now()}`,
+          { credentials: "same-origin", cache: "no-store" },
         );
         if (cancelled) return;
-        if (!data || !Array.isArray(data.lives)) {
+        // Challenge HTML / erreur → ne pas vider un cache encore utile ; retry idle.
+        if (!res.ok || !data || !Array.isArray(data.lives)) {
           clear();
           timer = window.setTimeout(() => void pull(), POLL_IDLE_MS);
           return;

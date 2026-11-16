@@ -64,7 +64,10 @@ import { applyExclusiveVideoSound } from "@/lib/feed-video-sound";
 import { fetchJson } from "@/lib/fetch-json";
 import { compactCount } from "@/lib/growth/challenge-look";
 import { useGrowthSurface } from "@/lib/growth/use-growth-surface";
-import { useOpenLives } from "@/lib/growth/use-open-lives";
+import {
+  notifyOpenLivesChanged,
+  useOpenLives,
+} from "@/lib/growth/use-open-lives";
 import { PUBLIC_PAGE_SIZE } from "@/lib/list-cursor";
 import { isVideoUrl } from "@/lib/media";
 import { resetAllPageMedia } from "@/lib/page-media-session";
@@ -532,6 +535,7 @@ export default function FeedPage() {
       if (!res.ok || !data?.live?.id) {
         throw new Error(data?.error ?? "Impossible de démarrer le live");
       }
+      notifyOpenLivesChanged();
       router.push(`/live/${data.live.id}`);
     } catch (cause) {
       toast.error(
@@ -846,10 +850,15 @@ export default function FeedPage() {
           const live = matchOpenLive(openLives, {
             productId: p.id,
             ownerUserId: p.shop.ownerUserId,
+            shopId: p.shop.id,
+            shopSlug: p.shop.slug,
           });
           const showGoLive =
             canShowFeedGoLive(goLiveAccess, p.shop) && !live;
-          const subscribers = p.shop.followersCount ?? p.viewsCount ?? 0;
+          const subscribers =
+            typeof p.shop.followersCount === "number"
+              ? p.shop.followersCount
+              : (p.viewsCount ?? 0);
           return (
             <DwellArticle
               key={`${tab}:${p.id}`}
@@ -965,7 +974,7 @@ export default function FeedPage() {
                         name={p.shop.name}
                         logoUrl={p.shop.logoUrl}
                         live={Boolean(live?.id)}
-                        className="!size-11"
+                        className="size-11"
                       />
                     </button>
                   }

@@ -45,9 +45,10 @@ export function FollowShopButton({
       return (
         <div
           className={cn("relative mb-0.5 flex flex-col items-center", className)}
+          data-feed-shop-rail=""
         >
           <div className="relative">{avatar}</div>
-          <span className="mt-1 text-[11px] font-bold leading-none text-white">
+          <span className="mt-1 text-[11px] font-bold leading-none text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
             {compactCount(Math.max(0, count), locale)}
           </span>
         </div>
@@ -116,12 +117,13 @@ export function FollowShopButton({
       return (
         <div
           className={cn("relative mb-0.5 flex flex-col items-center", className)}
+          data-feed-shop-rail=""
         >
           <div className="relative pb-3.5">
             {avatar}
             {badge}
           </div>
-          <span className="text-[11px] font-bold leading-none text-white">
+          <span className="text-[11px] font-bold leading-none text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
             {compactCount(Math.max(0, count), locale)}
           </span>
         </div>
@@ -131,7 +133,7 @@ export function FollowShopButton({
     return (
       <div className={cn("grid cursor-pointer place-items-center", className)}>
         {badge}
-        <span className="mt-0.5 text-[11px] font-bold text-white">
+        <span className="mt-0.5 text-[11px] font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
           {compactCount(Math.max(0, count), locale)}
         </span>
       </div>

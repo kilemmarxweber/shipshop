@@ -25,7 +25,12 @@ type LiveRow = {
 };
 
 export type EnrichedLiveTeaser = LiveRow & {
-  shop: { name: string; slug?: string; logoUrl?: string | null } | null;
+  shop: {
+    id?: string;
+    name: string;
+    slug?: string;
+    logoUrl?: string | null;
+  } | null;
   hostKind: LiveHostKind;
   hostLabel: string;
 };
@@ -45,6 +50,7 @@ export async function enrichLiveTeasers(
         where: { ownerUserId: { in: hostIds } },
         orderBy: { createdAt: "asc" },
         select: {
+          id: true,
           ownerUserId: true,
           name: true,
           slug: true,
@@ -76,11 +82,12 @@ export async function enrichLiveTeasers(
 
   const shopByOwner = new Map<
     string,
-    { name: string; slug: string; logoUrl: string | null }
+    { id: string; name: string; slug: string; logoUrl: string | null }
   >();
   for (const shop of shops) {
     if (!shop.ownerUserId || shopByOwner.has(shop.ownerUserId)) continue;
     shopByOwner.set(shop.ownerUserId, {
+      id: shop.id,
       name: shop.name,
       slug: shop.slug,
       logoUrl: shop.logoUrl,
@@ -91,14 +98,15 @@ export async function enrichLiveTeasers(
   const influencerIds = new Set(badges.map((row) => row.userId));
 
   return lives.map((row) => {
+    const owned = shopByOwner.get(row.user.id) ?? null;
     const productShop = row.product?.shop
       ? {
+          id: owned?.id,
           name: row.product.shop.name,
           slug: row.product.shop.slug,
           logoUrl: row.product.shop.logoUrl ?? null,
         }
       : null;
-    const owned = shopByOwner.get(row.user.id) ?? null;
     const shop = productShop ?? owned;
     const role = memberByUser.get(row.user.id);
     const hostKind = liveHostKindFromFlags({

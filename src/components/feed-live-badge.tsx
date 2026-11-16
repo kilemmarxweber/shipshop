@@ -12,25 +12,58 @@ import Link from "next/link";
 export type FeedLive = NonNullable<GrowthSurface["lives"]>[number] & {
   hostLabel?: string;
   hostKind?: string;
-  shop?: { name?: string; logoUrl?: string | null } | null;
+  shop?: {
+    id?: string;
+    name?: string;
+    slug?: string;
+    logoUrl?: string | null;
+  } | null;
+  product?: {
+    id?: string;
+    shop?: { name?: string; slug?: string; logoUrl?: string | null } | null;
+  } | null;
   viewerCount?: number;
 };
 
 export function matchOpenLive(
   lives: GrowthSurface["lives"] | undefined,
-  opts: { productId?: string | null; ownerUserId?: string | null },
+  opts: {
+    productId?: string | null;
+    ownerUserId?: string | null;
+    shopId?: string | null;
+    shopSlug?: string | null;
+  },
 ): FeedLive | null {
-  const open = (lives ?? []).filter((row) => row.status !== "ENDED");
+  const open = (lives ?? []).filter(
+    (row) => row.status === "LIVE" || row.status === "PAUSED",
+  ) as FeedLive[];
   if (!open.length) return null;
+
   if (opts.productId) {
-    const hit = open.find((row) => row.product?.id === opts.productId);
-    if (hit) return hit as FeedLive;
+    const byProduct = open.find((row) => row.product?.id === opts.productId);
+    if (byProduct) return byProduct;
   }
   if (opts.ownerUserId) {
-    return (
-      (open.find((row) => row.user?.id === opts.ownerUserId) as FeedLive) ??
-      null
-    );
+    const byOwner = open.find((row) => row.user?.id === opts.ownerUserId);
+    if (byOwner) return byOwner;
+  }
+  if (opts.shopSlug) {
+    const slug = opts.shopSlug.toLowerCase();
+    const bySlug = open.find((row) => {
+      const liveSlug =
+        row.shop?.slug?.toLowerCase() ||
+        row.product?.shop?.slug?.toLowerCase() ||
+        "";
+      return liveSlug === slug;
+    });
+    if (bySlug) return bySlug;
+  }
+  if (opts.shopId) {
+    const byShop = open.find((row) => {
+      const id = (row.shop as { id?: string } | null | undefined)?.id;
+      return id === opts.shopId;
+    });
+    if (byShop) return byShop;
   }
   return null;
 }
@@ -69,18 +102,19 @@ export function FeedGoLiveCluster({
       }}
       disabled={busy}
       aria-label={`LIVE, ${compactCount(shown, locale)} abonnés`}
+      data-feed-golive=""
       className={cn(
-        "feed-live-badge pointer-events-auto absolute right-3 z-40 flex items-center gap-1.5",
-        busy && "opacity-70",
+        "feed-live-badge pointer-events-auto absolute top-[3.15rem] right-3 z-40 flex items-center gap-1.5 sm:top-[3.4rem]",
+        busy && "pointer-events-none opacity-70",
       )}
     >
-      <span className="flex items-center gap-1 rounded-[10px] bg-[#FF453A] px-[9px] py-[5px] text-white">
+      <span className="flex items-center gap-1 rounded-[10px] bg-[#FF453A] px-[9px] py-[5px] text-white shadow-md">
         <AccessPointIcon className="size-[13px] shrink-0" />
         <span className="text-[11px] leading-none font-extrabold tracking-[0.3px]">
           LIVE
         </span>
       </span>
-      <span className="flex items-center gap-1 rounded-[10px] bg-[rgba(12,12,16,0.72)] px-2 py-[5px] text-white">
+      <span className="flex items-center gap-1 rounded-[10px] bg-[rgba(12,12,16,0.72)] px-2 py-[5px] text-white shadow-md">
         <Eye className="size-3 shrink-0" strokeWidth={2} />
         <span className="text-[11px] leading-none font-bold tabular-nums">
           {compactCount(shown, locale)}

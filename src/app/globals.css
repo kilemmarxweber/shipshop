@@ -916,16 +916,25 @@
 .feed-card-chip {
   top: 3.15rem;
 }
-.feed-reel-root .feed-live-badge {
+.feed-reel-root .feed-live-badge,
+.feed-reel-root [data-feed-golive] {
   top: 3.15rem;
+  z-index: 40;
 }
 @media (min-width: 640px) {
   .feed-card-chip {
     top: 3.4rem;
   }
-  .feed-reel-root .feed-live-badge {
+  .feed-reel-root .feed-live-badge,
+  .feed-reel-root [data-feed-golive] {
     top: 3.4rem;
   }
+}
+
+/* Compteur abonnés sous l’avatar : toujours lisible sur le reel */
+.feed-actions-rail [data-feed-shop-rail] {
+  position: relative;
+  z-index: 2;
 }
 
 /* Prix / Acheter : bas libre si − ; collé à la tabbar si + (sans animer la card) */
