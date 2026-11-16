@@ -1526,7 +1526,11 @@ html[data-tabbar-open] .feed-actions-rail {
   .ss-shop-live-label {
     animation: none;
   }
+  .ss-shop-live-face {
+    opacity: 0;
+  }
   .ss-shop-live-label {
-    display: none;
+    opacity: 1;
+    transform: none;
   }
 }

@@ -4,7 +4,15 @@ import { AuthInline } from "@/components/auth-inline";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { DwellArticle } from "@/components/dwell-article";
 import { FeedBuyCard } from "@/components/feed-buy-card";
-import { FeedLiveBadge, matchOpenLive } from "@/components/feed-live-badge";
+import {
+  FeedGoLiveCluster,
+  matchOpenLive,
+  startProductLive,
+} from "@/components/feed-live-badge";
+import {
+  canShowFeedGoLive,
+  useFeedGoLiveAccess,
+} from "@/lib/growth/use-feed-go-live-access";
 import {
     FeedLoadSentinel,
     FeedLoadTrigger,
@@ -137,10 +145,12 @@ export default function FeedPage() {
   const appConfig = useAppConfig();
   const router = useRouter();
   const { data: session } = authClient.useSession();
+  const goLiveAccess = useFeedGoLiveAccess();
   const messagingShopId = useRef<string | null>(null);
   const [tab, setTab] = useState<FeedTab>("foryou");
   const [wantedFlashId, setWantedFlashId] = useState<string | null>(null);
   const [audioEpoch, setAudioEpoch] = useState(0);
+  const [startingLiveId, setStartingLiveId] = useState<string | null>(null);
   useFeedOrientation();
   useResumeFeedSoundWhenVisible();
 
@@ -503,6 +513,35 @@ export default function FeedPage() {
     });
   }
 
+  async function openOrStartLive(
+    product: Product,
+    liveId?: string | null,
+  ) {
+    if (liveId) {
+      router.push(`/live/${liveId}`);
+      return;
+    }
+    if (!session) {
+      setAuthOpen(true);
+      return;
+    }
+    if (startingLiveId === product.id) return;
+    setStartingLiveId(product.id);
+    try {
+      const { res, data } = await startProductLive(product);
+      if (!res.ok || !data?.live?.id) {
+        throw new Error(data?.error ?? "Impossible de démarrer le live");
+      }
+      router.push(`/live/${data.live.id}`);
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "Impossible de démarrer le live",
+      );
+    } finally {
+      setStartingLiveId(null);
+    }
+  }
+
   async function messageShop(product: Product) {
     if (!session) {
       setAuthOpen(true);
@@ -808,6 +847,9 @@ export default function FeedPage() {
             productId: p.id,
             ownerUserId: p.shop.ownerUserId,
           });
+          const showGoLive =
+            canShowFeedGoLive(goLiveAccess, p.shop) && !live;
+          const subscribers = p.shop.followersCount ?? p.viewsCount ?? 0;
           return (
             <DwellArticle
               key={`${tab}:${p.id}`}
@@ -865,7 +907,14 @@ export default function FeedPage() {
                 )}
               </div>
 
-              {live ? <FeedLiveBadge live={live} locale={locale} /> : null}
+              {showGoLive ? (
+                <FeedGoLiveCluster
+                  count={subscribers}
+                  locale={locale}
+                  busy={startingLiveId === p.id}
+                  onPress={() => void openOrStartLive(p, live?.id)}
+                />
+              ) : null}
 
               <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
                 <button
