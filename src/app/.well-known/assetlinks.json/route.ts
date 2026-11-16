@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { ANDROID_PACKAGE } from "@/lib/android-app-link";
 
-export const dynamic = "force-dynamic";
+/** Pas de `export const dynamic` — incompatible avec cacheComponents (Next 16). */
 
 const FINGERPRINT = /^[0-9A-F]{2}(?::[0-9A-F]{2}){31}$/i;
 
