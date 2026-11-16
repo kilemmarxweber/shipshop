@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { matchOpenLive } from "@/components/feed-live-badge";
+import { matchOpenLive, type FeedLive } from "@/components/feed-live-badge";
 import { canShowFeedGoLive } from "@/lib/growth/use-feed-go-live-access";
 
 const live = {
@@ -9,10 +9,13 @@ const live = {
   user: { id: "owner-1", name: "Host" },
   product: {
     id: "prod-1",
+    title: "Produit",
+    images: [],
+    priceCents: 1000,
     shop: { name: "Boutique", slug: "boutique" },
   },
   shop: { id: "shop-1", name: "Boutique", slug: "boutique" },
-};
+} as FeedLive;
 
 assert.equal(
   matchOpenLive([live], { productId: "prod-1" })?.id,

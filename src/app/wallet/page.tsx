@@ -12,6 +12,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import {
     APP_CURRENCIES,
+    DEFAULT_FX,
     parseCurrency,
     walletCents,
     type AppCurrency,
@@ -91,6 +92,9 @@ export default function WalletPage() {
     "BUYER" | "VENDOR" | "COURIER"
   >("BUYER");
   const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [payoutTo, setPayoutTo] = useState<"mine" | "other">("mine");
+  const [otherPayoutPhone, setOtherPayoutPhone] = useState("");
   const [payoutPhone, setPayoutPhone] = useState("");
   const [payoutProvider, setPayoutProvider] = useState<RailProvider>("MPESA");
   const [payoutEdited, setPayoutEdited] = useState(false);
@@ -621,61 +625,154 @@ export default function WalletPage() {
             </button>
           ))}
         </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setPayoutTo("mine")}
+            className={cn(
+              "h-11 rounded-xl text-sm font-semibold",
+              payoutTo === "mine"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-surface-2",
+            )}
+          >
+            Mon numéro
+          </button>
+          <button
+            type="button"
+            onClick={() => setPayoutTo("other")}
+            className={cn(
+              "h-11 rounded-xl text-sm font-semibold",
+              payoutTo === "other"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-surface-2",
+            )}
+          >
+            Autre numéro
+          </button>
+        </div>
         <div className="mt-3">
-          <PhoneField
-            id="payout-phone"
-            label="Numéro qui reçoit le retrait"
-            value={payoutPhone}
-            onChange={(value) => {
-              setPayoutEdited(true);
-              setPayoutPhone(value);
-            }}
-          />
+          {payoutTo === "other" ? (
+            <PhoneField
+              id="payout-phone"
+              label="Numéro du transfert"
+              value={otherPayoutPhone}
+              onChange={setOtherPayoutPhone}
+            />
+          ) : (
+            <PhoneField
+              id="payout-phone"
+              label="Mon numéro"
+              value={payoutPhone}
+              onChange={(value) => {
+                setPayoutEdited(true);
+                setPayoutPhone(value);
+              }}
+            />
+          )}
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            CinetPay envoie la sortie sur le numéro enregistré. Vous pouvez en
-            saisir un autre.
+            {payoutTo === "other"
+              ? "Précise le numéro avant le transfert. CinetPay envoie le fond dessus."
+              : "CinetPay envoie le fond sur ton numéro Mobile Money."}
+          </p>
+        </div>
+        <div className="mt-3 space-y-1">
+          <Label htmlFor="withdraw-amount">Somme à retirer</Label>
+          <Input
+            id="withdraw-amount"
+            inputMode="decimal"
+            value={withdrawAmount}
+            placeholder="0,00"
+            onChange={(event) => setWithdrawAmount(event.target.value)}
+          />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Disponible {formatMoney(pots[withdrawBucket], displayCurrency)}.
+            CinetPay envoie la somme saisie, après les frais.
           </p>
         </div>
         <Button
-          className="mt-3 w-full"
-          disabled={withdrawing || pots[withdrawBucket] <= 0}
+          className="mt-3 h-12 w-full"
+          disabled={withdrawing}
           onClick={async () => {
-            const phone = payoutPhone.trim();
+            const phone = (
+              payoutTo === "other" ? otherPayoutPhone : payoutPhone
+            ).trim();
+            if (payoutTo === "other" && !phone) {
+              toast.error("Précise le numéro du transfert");
+              return;
+            }
             if (!isValidContactPhone(phone)) {
               toast.error("Saisissez le numéro qui reçoit le retrait");
               return;
             }
+            if (displayCurrency === "KW") {
+              toast.error("CinetPay envoie le fond en $US ou en CDF");
+              return;
+            }
+            const available = pots[withdrawBucket];
+            if (available <= 0) {
+              toast.error("Ce fond est vide");
+              return;
+            }
+            const parsed = Number.parseFloat(
+              withdrawAmount.trim().replace(",", "."),
+            );
+            const gross = Number.isFinite(parsed)
+              ? Math.round(parsed * 100)
+              : null;
+            if (gross == null || gross <= 0) {
+              toast.error("Indique la somme à retirer");
+              return;
+            }
+            if (gross > available) {
+              toast.error("Cette somme dépasse le fond");
+              return;
+            }
+            const minimum =
+              displayCurrency === "CDF" ? DEFAULT_FX.cdfPerUsd * 100 : 100;
+            if (gross < minimum) {
+              toast.error(
+                displayCurrency === "CDF"
+                  ? "Minimum 2 400 CDF"
+                  : "Minimum 1 $US",
+              );
+              return;
+            }
             setWithdrawing(true);
             const feePct = withdrawBucket === "VENDOR" ? 0 : 5;
-            const gross = pots[withdrawBucket];
             const fee = Math.floor((gross * feePct) / 100);
-            const intent = `withdraw:${withdrawBucket}:${gross}:${displayCurrency}`;
+            const net = gross - fee;
+            const intent = `withdraw:${withdrawBucket}:${gross}:${displayCurrency}:${phone}`;
             const idempotencyKey = paymentIdempotencyKey(intent);
             try {
-              const { res, data } = await fetchPaymentJson<{ error?: string }>(
-                "/api/wallet/withdraw",
-                {
-                  method: "POST",
+              const { res, data } = await fetchPaymentJson<{
+                error?: string;
+                withdrawal?: { status?: string };
+              }>("/api/wallet/withdraw", {
+                method: "POST",
+                idempotencyKey,
+                replayScope: "WITHDRAW",
+                body: JSON.stringify({
+                  bucket: withdrawBucket,
+                  amountCents: gross,
+                  currency: displayCurrency,
+                  provider: payoutProvider,
+                  phone,
                   idempotencyKey,
-                  replayScope: "WITHDRAW",
-                  body: JSON.stringify({
-                    bucket: withdrawBucket,
-                    amountCents: gross,
-                    currency: displayCurrency,
-                    provider: payoutProvider,
-                    phone,
-                    idempotencyKey,
-                  }),
-                },
-              );
+                }),
+              });
               if (!res.ok) {
                 toast.error(data?.error ?? "Retrait impossible");
                 return;
               }
               clearPaymentIdempotencyKey(intent);
+              const sent = formatMoney(net, displayCurrency);
               toast.success(
-                `Sortie -${formatMoney(gross - fee, displayCurrency)} vers ${phone}`,
+                data?.withdrawal?.status === "PENDING"
+                  ? `CinetPay envoie ${sent}`
+                  : `Retrait de ${sent} enregistré`,
               );
+              setWithdrawAmount("");
               setPots((prev) => ({
                 ...prev,
                 [withdrawBucket]: Math.max(0, prev[withdrawBucket] - gross),
@@ -697,12 +794,7 @@ export default function WalletPage() {
             }
           }}
         >
-          Retirer le pot{" "}
-          {withdrawBucket === "BUYER"
-            ? "à dépenser"
-            : withdrawBucket === "VENDOR"
-              ? "ventes"
-              : "courses"}
+          {payoutTo === "other" ? "Transfert" : "Retirer le fond"}
         </Button>
       </div>
 

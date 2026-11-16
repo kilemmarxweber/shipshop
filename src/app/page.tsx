@@ -853,8 +853,9 @@ export default function FeedPage() {
             shopId: p.shop.id,
             shopSlug: p.shop.slug,
           });
+          const liveId = live?.id ?? null;
           const showGoLive =
-            canShowFeedGoLive(goLiveAccess, p.shop) && !live;
+            canShowFeedGoLive(goLiveAccess, p.shop) && !liveId;
           const subscribers =
             typeof p.shop.followersCount === "number"
               ? p.shop.followersCount
@@ -921,7 +922,7 @@ export default function FeedPage() {
                   count={subscribers}
                   locale={locale}
                   busy={startingLiveId === p.id}
-                  onPress={() => void openOrStartLive(p, live?.id)}
+                  onPress={() => void openOrStartLive(p, liveId)}
                 />
               ) : null}
 
@@ -961,8 +962,8 @@ export default function FeedPage() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (live?.id) {
-                          router.push(`/live/${live.id}`);
+                        if (liveId) {
+                          router.push(`/live/${liveId}`);
                           return;
                         }
                         router.push(`/shop/${p.shop.slug}`);
@@ -973,7 +974,7 @@ export default function FeedPage() {
                       <ShopLiveAvatar
                         name={p.shop.name}
                         logoUrl={p.shop.logoUrl}
-                        live={Boolean(live?.id)}
+                        live={Boolean(liveId)}
                         className="size-11"
                       />
                     </button>
@@ -1043,7 +1044,7 @@ export default function FeedPage() {
                       name={p.shop.name}
                       slug={p.shop.slug}
                       logoUrl={p.shop.logoUrl}
-                      liveId={live?.id}
+                      liveId={liveId}
                       showAt={false}
                       className="min-w-0"
                       nameClassName="text-sm text-white underline-offset-2 hover:underline"
