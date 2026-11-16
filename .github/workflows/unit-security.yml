@@ -34,3 +34,7 @@ jobs:
 
       - name: Unit tests (auth + transfer idempotency + cinetpay)
         run: npm run test:unit
+
+      - name: Newman health checks (sans secret)
+        if: vars.SHIPSHOP_API_URL != ''
+        run: npx --yes newman run postman/ShipShop-API.postman_collection.json --folder Monitoring --env-var baseUrl=${{ vars.SHIPSHOP_API_URL }}

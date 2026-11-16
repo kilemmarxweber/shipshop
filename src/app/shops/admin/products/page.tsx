@@ -13,7 +13,7 @@ import { cn, formatMoney } from "@/lib/utils";
 import { Archive, Eye, Pencil, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 type Product = {
@@ -53,6 +53,8 @@ function AdminProductsInner() {
   const shopIdFilter = searchParams.get("shopId");
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Product | null>(null);
@@ -60,21 +62,35 @@ function AdminProductsInner() {
   const [loading, setLoading] = useState(true);
   const { confirm, ConfirmDialog } = useConfirmDialog();
 
-  async function load(search = q) {
-    const params = new URLSearchParams();
+  async function load(
+    search = q,
+    status: Tab = tab,
+    cursor: string | null = null,
+  ) {
+    const params = new URLSearchParams({ limit: "24" });
     if (search.trim()) params.set("q", search.trim());
     if (shopIdFilter) params.set("shopId", shopIdFilter);
+    if (status !== "all") params.set("status", status);
+    if (cursor) params.set("cursor", cursor);
     const { res, data } = await fetchJson<{
       products?: Product[];
+      nextCursor?: string | null;
       error?: string;
     }>(`/api/admin/products?${params}`, { cache: "no-store" });
     if (res.status === 403) {
       setAllowed(false);
       setProducts([]);
+      setNextCursor(null);
       return;
     }
     setAllowed(true);
-    setProducts(data?.products ?? []);
+    const page = data?.products ?? [];
+    setNextCursor(data?.nextCursor ?? null);
+    setProducts((prev) => {
+      if (!cursor) return page;
+      const seen = new Set(prev.map((row) => row.id));
+      return [...prev, ...page.filter((row) => !seen.has(row.id))];
+    });
   }
 
   useEffect(() => {
@@ -83,13 +99,8 @@ function AdminProductsInner() {
       return;
     }
     setLoading(true);
-    load().finally(() => setLoading(false));
-  }, [session?.user?.id, shopIdFilter]);
-
-  const filtered = useMemo(() => {
-    if (tab === "all") return products;
-    return products.filter((p) => p.status === tab);
-  }, [products, tab]);
+    load(q, tab, null).finally(() => setLoading(false));
+  }, [session?.user?.id, shopIdFilter, tab]);
 
   async function save() {
     if (!editing) return;
@@ -259,17 +270,12 @@ function AdminProductsInner() {
             )}
           >
             {label}
-            {key !== "all" && (
-              <span className="ml-1 opacity-70">
-                ({products.filter((p) => p.status === key).length})
-              </span>
-            )}
           </button>
         ))}
       </div>
 
       <ul className="space-y-3">
-        {filtered.map((p) => (
+        {products.map((p) => (
           <li
             key={p.id}
             className="rounded-2xl border border-border bg-surface p-3"
@@ -394,12 +400,28 @@ function AdminProductsInner() {
             </div>
           </li>
         ))}
-        {filtered.length === 0 && (
+        {products.length === 0 && (
           <p className="py-10 text-center text-sm text-muted-foreground">
             Aucun produit
           </p>
         )}
       </ul>
+      {nextCursor ? (
+        <div className="mt-4 flex justify-center">
+          <Button
+            variant="outline"
+            disabled={loadingMore}
+            onClick={() => {
+              setLoadingMore(true);
+              void load(q, tab, nextCursor).finally(() =>
+                setLoadingMore(false),
+              );
+            }}
+          >
+            {loadingMore ? "Chargement…" : "Afficher la suite"}
+          </Button>
+        </div>
+      ) : null}
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">

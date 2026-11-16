@@ -101,13 +101,15 @@ export async function GET(req: Request) {
   const condition = searchParams.get("condition");
 
   try {
-    await withDbRetry(() =>
+    // Hors du chemin de lecture : sinon « Je cherche » attend le nettoyage
+    // (jusqu’à 40 transactions) avant d’afficher la liste.
+    void withDbRetry(() =>
       prisma.wantedRequest.updateMany({
         where: { status: "OPEN", expiresAt: { lt: new Date() } },
         data: { status: "EXPIRED" },
       }),
-    );
-    await reopenUnpaidWantedMatches();
+    ).catch(() => undefined);
+    void reopenUnpaidWantedMatches();
 
     if (mine) {
       if (!session) {
@@ -136,39 +138,43 @@ export async function GET(req: Request) {
       : 80;
     const cursor = decodeTimeIdCursor(cursorRaw);
 
-    const fetched = await withDbRetry(() =>
-      prisma.wantedRequest.findMany({
-        where: {
-          status: "OPEN",
-          expiresAt: { gt: new Date() },
-          ...(category ? { category } : {}),
-          ...(condition === "NEW_SHOP" || condition === "USED"
-            ? { condition }
-            : {}),
-          ...(cursor ? timeIdCursorWhere(cursor) : {}),
-        },
-        select: listSelect,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        take: limit + 1,
-      }),
-    );
-    const sliced = pageFromRows(fetched, limit);
-    let page = sliced.page;
-    if (session) {
-      const mine = await withDbRetry(() =>
+    const [fetched, ownOpen] = await Promise.all([
+      withDbRetry(() =>
         prisma.wantedRequest.findMany({
           where: {
-            buyerId: session.user.id,
             status: "OPEN",
             expiresAt: { gt: new Date() },
+            ...(category ? { category } : {}),
+            ...(condition === "NEW_SHOP" || condition === "USED"
+              ? { condition }
+              : {}),
+            ...(cursor ? timeIdCursorWhere(cursor) : {}),
           },
           select: listSelect,
-          orderBy: { createdAt: "desc" },
-          take: WANTED_OPEN_LIMIT,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit + 1,
         }),
-      );
+      ),
+      session
+        ? withDbRetry(() =>
+            prisma.wantedRequest.findMany({
+              where: {
+                buyerId: session.user.id,
+                status: "OPEN",
+                expiresAt: { gt: new Date() },
+              },
+              select: listSelect,
+              orderBy: { createdAt: "desc" },
+              take: WANTED_OPEN_LIMIT,
+            }),
+          )
+        : Promise.resolve([]),
+    ]);
+    const sliced = pageFromRows(fetched, limit);
+    let page = sliced.page;
+    if (ownOpen.length) {
       const seen = new Set(page.map((row) => row.id));
-      page = [...mine.filter((row) => !seen.has(row.id)), ...page];
+      page = [...ownOpen.filter((row) => !seen.has(row.id)), ...page];
     }
     return NextResponse.json({
       requests: page,

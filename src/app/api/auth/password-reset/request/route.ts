@@ -10,10 +10,17 @@ import {
   generateOtpCode,
   hashOtp,
   parseResetIdentifier,
+  passwordResetAck,
+  passwordResetAttemptsIdentifier,
   passwordResetIdentifier,
-  PASSWORD_RESET_TTL_MINUTES,
+  passwordResetTtlMinutes,
 } from "@/lib/password-reset";
+import {
+  passwordResetRateLimited,
+  takePasswordResetRate,
+} from "@/lib/password-reset-rate";
 import { prisma, withDbRetry } from "@/lib/prisma";
+import { logSecurityEvent } from "@/lib/security/security-events";
 
 const schema = z.object({
   identifier: z.string().trim().min(3).max(120),
@@ -38,6 +45,10 @@ export async function POST(req: Request) {
     );
   }
 
+  const subject = parsed.kind === "email" ? parsed.email : parsed.phone;
+  const limited = await takePasswordResetRate(req, "request", subject);
+  if (!limited.allowed) return passwordResetRateLimited(limited);
+
   const user = await withDbRetry(() =>
     prisma.user.findFirst({
       where:
@@ -48,28 +59,23 @@ export async function POST(req: Request) {
     }),
   );
 
-  if (!user) {
-    return NextResponse.json(
-      {
-        error: "Aucun compte trouvé avec cet identifiant",
-        code: "ACCOUNT_NOT_FOUND",
-      },
-      { status: 404 },
-    );
-  }
+  // Même réponse qu'un envoi réussi : ne pas révéler si le compte existe.
+  if (!user) return NextResponse.json(passwordResetAck());
 
   const code = generateOtpCode();
+  const minutes = passwordResetTtlMinutes();
   const otpId = passwordResetIdentifier(user.id);
+  const attemptsId = passwordResetAttemptsIdentifier(user.id);
   await withDbRetry(() =>
     prisma.$transaction(async (tx) => {
       await tx.verification.deleteMany({
-        where: { identifier: otpId },
+        where: { identifier: { in: [otpId, attemptsId] } },
       });
       await tx.verification.create({
         data: {
           identifier: otpId,
           value: hashOtp(code),
-          expiresAt: expiresAtFromNow(),
+          expiresAt: expiresAtFromNow(minutes),
         },
       });
     }),
@@ -79,79 +85,34 @@ export async function POST(req: Request) {
     `ShipShop — code de réinitialisation\n\n` +
     `Bonjour ${user.name},\n` +
     `Votre code OTP est : ${code}\n` +
-    `Il expire dans ${PASSWORD_RESET_TTL_MINUTES} minutes.`;
+    `Il expire dans ${minutes} minutes.`;
 
-  const channels: {
-    email?: { ok: boolean; provider?: string; error?: string };
-    whatsapp?: { ok: boolean; provider?: string; error?: string };
-    sms?: { ok: boolean; provider?: string; error?: string };
-  } = {};
-
-  if (parsed.kind === "email") {
-    try {
-      const result = await sendDirectEmail({
+  try {
+    if (parsed.kind === "email") {
+      await sendDirectEmail({
         to: user.email,
         subject: "ShipShop — code OTP",
         title: "Code de réinitialisation",
         text,
       });
-      channels.email = { ok: true, provider: result.provider };
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Envoi e-mail impossible";
-      channels.email = {
-        ok: false,
-        error: message,
-      };
-      if (message.includes("désactivé")) {
-        return NextResponse.json(
-          {
-            error:
-              "Canal e-mail désactivé. Activez l'e-mail ou utilisez le téléphone.",
-            code: "EMAIL_DISABLED",
-          },
-          { status: 400 },
-        );
-      }
-      return NextResponse.json(
-        { error: "Impossible d'envoyer l'OTP par e-mail", code: "OTP_SEND_FAILED" },
-        { status: 502 },
-      );
-    }
-  } else {
-    try {
-      const wa = await sendDirectWhatsapp(user.phone || parsed.phone, text);
-      channels.whatsapp = { ok: true, provider: wa.provider };
-    } catch (waError) {
-      channels.whatsapp = {
-        ok: false,
-        error: waError instanceof Error ? waError.message : "Envoi WhatsApp impossible",
-      };
+    } else {
+      const phone = user.phone || parsed.phone;
       try {
-        const sms = await sendDirectSms(user.phone || parsed.phone, text);
-        channels.sms = { ok: true, provider: sms.provider };
-      } catch (smsError) {
-        channels.sms = {
-          ok: false,
-          error: smsError instanceof Error ? smsError.message : "Envoi SMS impossible",
-        };
-        return NextResponse.json(
-          { error: "Impossible d'envoyer l'OTP au téléphone", code: "OTP_SEND_FAILED" },
-          { status: 502 },
-        );
+        await sendDirectWhatsapp(phone, text);
+      } catch {
+        await sendDirectSms(phone, text);
       }
     }
+  } catch {
+    logSecurityEvent({
+      type: "password_reset_send_failed",
+      severity: "moderate",
+      endpoint: "/api/auth/password-reset/request",
+      method: "POST",
+      userId: user.id,
+      detail: { channel: parsed.kind },
+    });
   }
 
-  return NextResponse.json({
-    ok: true,
-    expiresInMinutes: PASSWORD_RESET_TTL_MINUTES,
-    delivery:
-      parsed.kind === "email"
-        ? "email"
-        : channels.whatsapp?.ok
-          ? "whatsapp"
-          : "sms",
-    channels,
-  });
+  return NextResponse.json(passwordResetAck());
 }

@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { assertChipShopOwner } from "@/lib/kyc";
+import {
+    decodeTimeIdCursor,
+    pageFromRows,
+    parseListLimit,
+    PUBLIC_PAGE_MAX,
+    timeIdCursorWhere,
+} from "@/lib/list-cursor";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
@@ -23,8 +30,10 @@ export async function GET(req: Request) {
     const status = searchParams.get("status");
     const q = searchParams.get("q")?.trim();
     const shopId = searchParams.get("shopId");
+    const limit = parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_MAX);
+    const cursor = decodeTimeIdCursor(searchParams.get("cursor"));
 
-    const products = await withDbRetry(() =>
+    const fetched = await withDbRetry(() =>
       prisma.product.findMany({
         where: {
           shop: { organizationId: org.id },
@@ -41,8 +50,20 @@ export async function GET(req: Request) {
                 ],
               }
             : {}),
+          ...(cursor ? timeIdCursorWhere(cursor) : {}),
         },
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          priceCents: true,
+          currency: true,
+          quantity: true,
+          status: true,
+          category: true,
+          images: true,
+          location: true,
+          createdAt: true,
           shop: {
             select: {
               id: true,
@@ -55,13 +76,14 @@ export async function GET(req: Request) {
           },
           _count: { select: { orders: true, likes: true } },
         },
-        orderBy: { updatedAt: "desc" },
-        take: 200,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
       }),
     );
+    const sliced = pageFromRows(fetched, limit);
 
     return NextResponse.json({
-      products: products.map((p) => {
+      products: sliced.page.map((p) => {
         const { _count, ...rest } = p;
         return {
           ...rest,
@@ -70,6 +92,7 @@ export async function GET(req: Request) {
           canDelete: _count.orders === 0,
         };
       }),
+      nextCursor: sliced.nextCursor,
     });
   } catch (error) {
     const message =

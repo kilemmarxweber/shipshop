@@ -23,6 +23,7 @@ import { LiveStageComposer } from "@/components/live/live-stage-composer";
 import { LiveStageOverlays } from "@/components/live/live-stage-overlays";
 import { LiveVideoFilterPicker } from "@/components/live/live-video-filter-picker";
 import {
+    LiveConnectionBadge,
     LiveVideoStudioGrade,
     liveVideoFilterStyle,
 } from "@/components/live/live-video-studio-grade";
@@ -31,8 +32,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
+import { defaultFacePose } from "@/lib/growth/live-face-tracking";
 import { newOverlayId, type LiveOverlay } from "@/lib/growth/live-overlays";
 import { type LivePublisherPeer } from "@/lib/growth/live-rtc-shared";
+import { openSelfieStream } from "@/lib/growth/live-selfie-capture";
 import {
     LIVE_HEARTBEAT_HIDDEN_MS,
     LIVE_HEARTBEAT_MS,
@@ -48,6 +51,7 @@ import {
     normalizeStageLayout,
     type LiveStageLayoutId,
 } from "@/lib/growth/live-stage-layout";
+import { useLiveFacePose } from "@/lib/growth/use-live-face-pose";
 import { useLiveRtc } from "@/lib/growth/use-live-rtc";
 import { useLiveSfu } from "@/lib/growth/use-live-sfu";
 import { notifyLiveEnded } from "@/lib/growth/use-open-lives";
@@ -954,6 +958,18 @@ export default function LiveRoomPage({
     if (sfu.failed) setSfuGaveUp(true);
   }, [sfu.failed]);
   const sfuEnabled = sfuPreferred && !sfu.failed;
+  const faceTrackingOn = Boolean(
+    isHost && live && live.status !== "ENDED" && live.status !== "PAUSED",
+  );
+  const { pose: localFacePose } = useLiveFacePose({
+    enabled: faceTrackingOn,
+    hz: 20,
+  });
+  const sendFacePose = sfu.sendFacePose;
+  useEffect(() => {
+    if (!faceTrackingOn || !sfuEnabled) return;
+    sendFacePose(localFacePose);
+  }, [faceTrackingOn, localFacePose, sendFacePose, sfuEnabled]);
 
   const mesh = useLiveRtc({
     liveId: id,
@@ -1047,19 +1063,7 @@ export default function LiveRoomPage({
     let cancelled = false;
     async function syncHostAv() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            frameRate: { ideal: 24, max: 30 },
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
+        const stream = await openSelfieStream();
         if (cancelled || liveIdRef.current !== id) {
           stopStream(stream);
           return;
@@ -1178,19 +1182,7 @@ export default function LiveRoomPage({
     let cancelled = false;
     async function syncGuestAv() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: 480 },
-            height: { ideal: 360 },
-            frameRate: { ideal: 20, max: 24 },
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
+        const stream = await openSelfieStream();
         if (cancelled || liveIdRef.current !== id) {
           stopStream(stream);
           return;
@@ -1594,6 +1586,9 @@ export default function LiveRoomPage({
   const selected = overlays.find((o) => o.id === selectedOverlayId);
   const chats = live.chats ?? [];
   const videoFilterStyle = liveVideoFilterStyle(live.videoFilter);
+  const stagePose = isHost
+    ? localFacePose
+    : (sfu.remoteFacePose ?? defaultFacePose());
   const stageLayout = normalizeStageLayout(live.stageLayout);
   const guestJoinLocked = Boolean(live.guestJoinLocked);
   const showStageChrome = !ended && !isHost;
@@ -1756,7 +1751,11 @@ export default function LiveRoomPage({
                       ? live.videoFilter
                       : null
                 }
+                pose={stagePose}
               />
+              {isHost && !ended && sfuEnabled ? (
+                <LiveConnectionBadge quality={sfu.connectionQuality} />
+              ) : null}
             </>
           }
         />

@@ -148,6 +148,17 @@ SMTP_PASS="..."
 CONTACT_NAME=ShipShop
 CONTACT_EMAIL=contact@klambocore.com
 CONTACT_PHONE=+243971651881
+
+# OTP reset (défaut 15 si omis)
+PASSWORD_RESET_TTL_MINUTES=15
+
+# Sentry (vide = pas de remontée). Auth token seulement sur la machine de build.
+SENTRY_DSN=
+NEXT_PUBLIC_SENTRY_DSN=
+SENTRY_ENVIRONMENT=production
+SENTRY_ORG=
+SENTRY_PROJECT=
+# SENTRY_AUTH_TOKEN=
 ```
 
 Notes :
@@ -281,6 +292,7 @@ Si le process démarre sans les variables : `pm2 restart shipshop --update-env`.
 7. PM2 + Nginx + SSL
 8. Créer le **vrai owner** (pas `demo@chipshop.cd`)
 9. Configurer SMS / WhatsApp dans `/shops/messaging` (clés Infobip / Klambo dans l’UI, pas dans `.env`)
+10. Santé : `GET /api/health` et `GET /api/ready` (Postgres). Moniteurs UptimeRobot : `UPTIMEROBOT_API_KEY=... node scripts/uptimerobot-monitors.mjs`
 
 ---
 

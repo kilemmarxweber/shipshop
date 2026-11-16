@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import {
+  androidShareDecision,
+  installPageHtml,
+  sharedAppPath,
+} from "./lib/android-app-link";
+
 function originAllowed(origin: string) {
   if (
     origin === "shipshop://" ||
@@ -38,7 +44,41 @@ function corsHeaders(origin: string) {
   };
 }
 
+function androidShareGate(request: NextRequest) {
+  const path = sharedAppPath(request.nextUrl.pathname);
+  if (!path) return null;
+  const decision = androidShareDecision({
+    method: request.method,
+    pathname: request.nextUrl.pathname,
+    web: request.nextUrl.searchParams.get("web") === "1",
+    userAgent: request.headers.get("user-agent") ?? "",
+    rsc: request.headers.get("rsc") === "1",
+    prefetch: Boolean(
+      request.headers.get("next-router-prefetch") ||
+      request.headers.get("next-router-segment-prefetch"),
+    ),
+    accept: request.headers.get("accept") ?? "",
+    secFetchDest: request.headers.get("sec-fetch-dest"),
+  });
+  if (decision !== "open-app") return null;
+  return new NextResponse(
+    request.method === "HEAD" ? null : installPageHtml(path),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "private, no-store",
+        Vary: "User-Agent",
+        "X-Robots-Tag": "noindex",
+      },
+    },
+  );
+}
+
 export function proxy(request: NextRequest) {
+  const share = androidShareGate(request);
+  if (share) return share;
+
   const origin = request.headers.get("origin");
   const allowed = Boolean(origin && originAllowed(origin));
   if (request.method === "OPTIONS") {
@@ -57,5 +97,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  matcher: ["/api/:path*", "/product/:path*", "/shop/:path*", "/live/:path*"],
 };

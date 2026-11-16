@@ -41,6 +41,10 @@ yarn-error.log*
 /public/.env
 !.env.example
 
+# Sentry upload (jeton de build)
+.sentryclirc
+sentry.properties
+
 # vercel
 .vercel
 

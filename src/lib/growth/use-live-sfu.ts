@@ -2,16 +2,28 @@
 
 import { fetchJson } from "@/lib/fetch-json";
 import {
-    ConnectionState,
-    Room,
-    RoomEvent,
-    Track,
-    type LocalTrackPublication,
-    type RemoteParticipant,
-    type RemoteTrack,
-    type RemoteTrackPublication,
+  ConnectionQuality,
+  ConnectionState,
+  Room,
+  RoomEvent,
+  Track,
+  type LocalTrackPublication,
+  type RemoteParticipant,
+  type RemoteTrack,
+  type RemoteTrackPublication,
 } from "livekit-client";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import {
+  decodeFacePose,
+  encodeFacePose,
+  parseFacePosePayload,
+  type FacePose,
+} from "@/lib/growth/live-face-tracking";
+import {
+  buildLiveRoomOptions,
+  DEFAULT_LIVE_QUALITY,
+} from "@/lib/growth/live-quality";
 
 type RemoteStreamMap = Record<string, MediaStream>;
 
@@ -93,6 +105,10 @@ export function useLiveSfu(opts: {
     useState<RemoteStreamMap>({});
   const [failed, setFailed] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>(
+    ConnectionQuality.Unknown,
+  );
+  const [remoteFacePose, setRemoteFacePose] = useState<FacePose | null>(null);
 
   const roomRef = useRef<Room | null>(null);
   const publishedIdsRef = useRef<Set<string>>(new Set());
@@ -112,10 +128,7 @@ export function useLiveSfu(opts: {
     let cancelled = false;
     setFailed(false);
     publishedIdsRef.current.clear();
-    const room = new Room({
-      adaptiveStream: true,
-      dynacast: true,
-    });
+    const room = new Room(buildLiveRoomOptions(DEFAULT_LIVE_QUALITY));
     roomRef.current = room;
 
     const markFailed = (reason: string, error?: unknown) => {
@@ -235,6 +248,7 @@ export function useLiveSfu(opts: {
             continue;
           }
           try {
+            if (track.kind === "video") track.contentHint = "detail";
             await r.localParticipant.publishTrack(track, {
               source:
                 track.kind === "video"
@@ -262,13 +276,35 @@ export function useLiveSfu(opts: {
       }
     };
 
+    const onFaceData = (
+      payload: Uint8Array,
+      _participant?: RemoteParticipant,
+      _kind?: unknown,
+      topic?: string,
+    ) => {
+      if (topic !== "ss-face" || isPublisherRef.current) return;
+      const packet = parseFacePosePayload(new TextDecoder().decode(payload));
+      if (!packet) return;
+      setRemoteFacePose(decodeFacePose(packet));
+    };
+
+    const onQuality = (
+      quality: ConnectionQuality,
+      participant: { isLocal: boolean },
+    ) => {
+      if (participant.isLocal) setConnectionQuality(quality);
+    };
+
     room
       .on(RoomEvent.TrackSubscribed, onSubscribed)
       .on(RoomEvent.TrackUnsubscribed, onUnsubscribed)
       .on(RoomEvent.ParticipantDisconnected, onParticipantDisconnected)
+      .on(RoomEvent.DataReceived, onFaceData)
+      .on(RoomEvent.ConnectionQualityChanged, onQuality)
       .on(RoomEvent.Disconnected, () => {
         publishedIdsRef.current.clear();
         setScreenSharing(false);
+        setConnectionQuality(ConnectionQuality.Unknown);
       })
       .on(RoomEvent.TrackPublished, () => {
         ingestExisting();
@@ -327,6 +363,8 @@ export function useLiveSfu(opts: {
       setRemoteStreams({});
       setRemoteScreenStreams({});
       setScreenSharing(false);
+      setRemoteFacePose(null);
+      setConnectionQuality(ConnectionQuality.Unknown);
       void room.disconnect();
       if (roomRef.current === room) roomRef.current = null;
     };
@@ -394,6 +432,7 @@ export function useLiveSfu(opts: {
           continue;
         }
         try {
+          if (track.kind === "video") track.contentHint = "detail";
           await room.localParticipant.publishTrack(track, {
             source:
               track.kind === "video"
@@ -438,11 +477,26 @@ export function useLiveSfu(opts: {
     }
   }, []);
 
+  const sendFacePose = useCallback((pose: FacePose) => {
+    const room = roomRef.current;
+    if (!room || room.state !== ConnectionState.Connected) return;
+    const bytes = new TextEncoder().encode(
+      JSON.stringify(encodeFacePose(pose)),
+    );
+    void room.localParticipant.publishData(bytes, {
+      reliable: false,
+      topic: "ss-face",
+    });
+  }, []);
+
   return {
     remoteStreams,
     remoteScreenStreams,
     failed,
     screenSharing,
+    connectionQuality,
+    remoteFacePose,
+    sendFacePose,
     startScreenShare,
     stopScreenShare,
   };

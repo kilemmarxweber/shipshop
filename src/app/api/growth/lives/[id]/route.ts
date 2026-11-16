@@ -49,11 +49,8 @@ import {
     isLiveStageLayoutId,
     normalizeStageLayout,
 } from "@/lib/growth/live-stage-layout";
-import { isLiveVideoFilterId } from "@/lib/growth/live-video-filters";
-import {
-    leaveLiveViewer,
-    pingLiveViewer
-} from "@/lib/growth/live-viewers";
+import { isLiveVideoFilterValue } from "@/lib/growth/live-video-filters";
+import { leaveLiveViewer, pingLiveViewer } from "@/lib/growth/live-viewers";
 import { idempotencyFrom } from "@/lib/payments/ledger";
 import { prisma, withDbRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -925,10 +922,17 @@ export async function POST(
     }
     const raw = json.filter;
     let videoFilter: string | null = null;
-    if (raw == null || raw === "" || raw === "natural") {
+    if (
+      raw == null ||
+      raw === "" ||
+      raw === "natural" ||
+      raw === "none" ||
+      raw === "naturel"
+    ) {
       videoFilter = null;
-    } else if (isLiveVideoFilterId(raw) && raw !== "natural") {
-      videoFilter = raw;
+    } else if (typeof raw === "string" && isLiveVideoFilterValue(raw)) {
+      // id simple ou combo teint+accessoire (`studio+glasses`)
+      videoFilter = raw === "natural" ? null : raw;
     } else {
       return NextResponse.json({ error: "Filtre invalide" }, { status: 400 });
     }

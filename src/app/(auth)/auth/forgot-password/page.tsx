@@ -97,7 +97,7 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    toast.success("Mot de passe temporaire validé. Connecte-toi pour définir ton mot de passe final.");
+    toast.success("Mot de passe mis à jour. Connecte-toi avec le nouveau mot de passe.");
     router.push(`/auth/login?identifier=${encodeURIComponent(identifier.trim())}`);
   }
 
