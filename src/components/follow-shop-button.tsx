@@ -43,9 +43,11 @@ export function FollowShopButton({
   if (isOwnShop) {
     if (icon && avatar) {
       return (
-        <div className={cn("relative flex flex-col items-center", className)}>
-          {avatar}
-          <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+        <div
+          className={cn("relative mb-0.5 flex flex-col items-center", className)}
+        >
+          <div className="relative">{avatar}</div>
+          <span className="mt-1 text-[11px] font-bold leading-none text-white">
             {compactCount(Math.max(0, count), locale)}
           </span>
         </div>
@@ -89,7 +91,7 @@ export function FollowShopButton({
         className={cn(
           "grid place-items-center rounded-full border-2 border-white text-white transition hover:scale-105 active:scale-95",
           avatar
-            ? "absolute bottom-3.5 left-1/2 z-[2] size-[22px] -translate-x-1/2"
+            ? "absolute bottom-0 left-1/2 z-[2] size-[22px] -translate-x-1/2"
             : "size-10 sm:size-12",
           followedByMe ? "bg-[#FF4D8D]" : "bg-[#FF453A]",
         )}
@@ -102,7 +104,9 @@ export function FollowShopButton({
         }
       >
         <Icon
-          className={avatar ? (followedByMe ? "size-2.5" : "size-3.5") : "size-5"}
+          className={
+            avatar ? (followedByMe ? "size-2.5" : "size-3.5") : "size-5"
+          }
           strokeWidth={2.6}
         />
       </button>
@@ -111,14 +115,13 @@ export function FollowShopButton({
     if (avatar) {
       return (
         <div
-          className={cn(
-            "relative mb-0.5 flex flex-col items-center pb-3.5",
-            className,
-          )}
+          className={cn("relative mb-0.5 flex flex-col items-center", className)}
         >
-          {avatar}
-          {badge}
-          <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+          <div className="relative pb-3.5">
+            {avatar}
+            {badge}
+          </div>
+          <span className="text-[11px] font-bold leading-none text-white">
             {compactCount(Math.max(0, count), locale)}
           </span>
         </div>
@@ -128,7 +131,7 @@ export function FollowShopButton({
     return (
       <div className={cn("grid cursor-pointer place-items-center", className)}>
         {badge}
-        <span className="mt-0.5 text-[10px] font-bold text-white drop-shadow">
+        <span className="mt-0.5 text-[11px] font-bold text-white">
           {compactCount(Math.max(0, count), locale)}
         </span>
       </div>

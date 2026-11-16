@@ -38,7 +38,12 @@ export function useOpenLives() {
           `/api/growth/lives?t=${Date.now()}`,
         );
         if (cancelled) return;
-        const next = onlyOpen(data?.lives);
+        if (!data || !Array.isArray(data.lives)) {
+          clear();
+          timer = window.setTimeout(() => void pull(), POLL_IDLE_MS);
+          return;
+        }
+        const next = onlyOpen(data.lives);
         setLives(next);
         clear();
         timer = window.setTimeout(
