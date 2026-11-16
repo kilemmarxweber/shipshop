@@ -3,15 +3,12 @@
 import {
     defaultFacePose,
     eyeDistance,
-    midEyesPoint,
-    propSizeCqw,
     type FacePose,
     type Vec2,
 } from "@/lib/growth/live-face-tracking";
 import {
     liveVideoFilterCss,
-    parseLiveVideoFilterCombo,
-    type LiveVideoFilter,
+    resolveLiveVideoFilter,
 } from "@/lib/growth/live-video-filters";
 import { cn } from "@/lib/utils";
 import type { CSSProperties } from "react";
@@ -23,188 +20,20 @@ function clamp(n: number, min: number, max: number) {
 function stickerStyle(
   pose: FacePose,
   point: Vec2,
+  scale: number,
   opacity: number,
-  opts?: {
-    tx?: string;
-    ty?: string;
-    scaleX?: number;
-    scaleY?: number;
-    scale?: number;
-  },
 ): CSSProperties {
   const rot = (pose.roll * 180) / Math.PI;
-  const tx = opts?.tx ?? "-50%";
-  const ty = opts?.ty ?? "-50%";
-  const sx = opts?.scaleX ?? opts?.scale ?? 1;
-  const sy = opts?.scaleY ?? opts?.scale ?? 1;
+  const sizeScale = clamp(pose.width / 0.42, 0.75, 1.45) * scale;
   return {
     left: `${point.x * 100}%`,
     top: `${point.y * 100}%`,
     opacity,
-    transform: `translate(${tx}, ${ty}) rotate(${rot}deg) scale(${sx}, ${sy})`,
+    transform: `translate(-50%, -50%) rotate(${rot}deg) scale(${sizeScale})`,
   };
 }
 
-function PropStickers({
-  prop,
-  face,
-  opacity,
-}: {
-  prop: LiveVideoFilter;
-  face: FacePose;
-  opacity: number;
-}) {
-  if (!prop.emoji) return null;
-  const midEyes = midEyesPoint(face);
-  const eyeSpan = eyeDistance(face);
-  const glassesScaleX = clamp(eyeSpan / 0.22, 1.08, 1.55);
-
-  if (prop.id === "sparkle") {
-    const spark = propSizeCqw(face, "head") * 0.28;
-    const sparklePts = [
-      { x: face.headTop.x - 0.12, y: face.headTop.y + 0.02 },
-      { x: face.headTop.x + 0.1, y: face.headTop.y },
-      { x: face.leftEye.x - 0.08, y: face.leftEye.y - 0.06 },
-      { x: face.rightEye.x + 0.08, y: face.rightEye.y - 0.06 },
-      { x: face.nose.x, y: face.nose.y + 0.12 },
-    ];
-    return (
-      <>
-        {sparklePts.map((pt, i) => (
-          <span
-            key={`${pt.x}-${i}`}
-            className="absolute animate-pulse text-amber-200"
-            style={{
-              ...stickerStyle(face, pt, opacity),
-              fontSize: `${spark + (i % 3) * 4}cqw`,
-            }}
-          >
-            ✦
-          </span>
-        ))}
-      </>
-    );
-  }
-
-  if (prop.anchor === "ears" || prop.id === "earrings") {
-    const earSize = propSizeCqw(face, "earLeft");
-    return (
-      <>
-        {face.leftEarVisible ? (
-          <div
-            className="absolute drop-shadow-lg leading-none"
-            style={{
-              ...stickerStyle(face, face.leftEar, opacity),
-              fontSize: `${earSize}cqw`,
-            }}
-          >
-            {prop.emoji}
-          </div>
-        ) : null}
-        {face.rightEarVisible ? (
-          <div
-            className="absolute drop-shadow-lg leading-none"
-            style={{
-              ...stickerStyle(face, face.rightEar, opacity),
-              fontSize: `${earSize}cqw`,
-            }}
-          >
-            {prop.emoji}
-          </div>
-        ) : null}
-      </>
-    );
-  }
-
-  if (prop.kind === "animation" && prop.id !== "sparkle") {
-    const earSize = propSizeCqw(face, "earLeft", 1.1);
-    return (
-      <>
-        {face.leftEarVisible ? (
-          <div
-            className="absolute animate-pulse leading-none"
-            style={{
-              ...stickerStyle(face, face.leftEar, opacity),
-              fontSize: `${earSize}cqw`,
-            }}
-          >
-            {prop.emoji}
-          </div>
-        ) : null}
-        {face.rightEarVisible ? (
-          <div
-            className="absolute animate-pulse leading-none"
-            style={{
-              ...stickerStyle(face, face.rightEar, opacity),
-              fontSize: `${earSize}cqw`,
-            }}
-          >
-            {prop.emoji}
-          </div>
-        ) : null}
-      </>
-    );
-  }
-
-  if (prop.kind !== "overlay") return null;
-
-  // Chapeau / couronne : sommet du crâne, largeur ≈ visage.
-  if (prop.anchor === "head") {
-    const headSize = propSizeCqw(face, "head", 1.15);
-    return (
-      <div
-        className="absolute drop-shadow-lg leading-none"
-        style={{
-          ...stickerStyle(face, face.headTop, opacity, {
-            tx: "-50%",
-            ty: "-88%",
-            scaleX: 1.08,
-            scaleY: 1.02,
-          }),
-          fontSize: `${headSize}cqw`,
-        }}
-      >
-        {prop.emoji}
-      </div>
-    );
-  }
-
-  // Lunettes : milieu des yeux, largeur calée sur l’écart oculaire.
-  if (prop.anchor === "eyes") {
-    const glassesSize = propSizeCqw(face, "eyes", 1.2);
-    return (
-      <div
-        className="absolute drop-shadow-lg leading-none"
-        style={{
-          ...stickerStyle(face, midEyes, opacity, {
-            tx: "-50%",
-            ty: "-42%",
-            scaleX: glassesScaleX,
-            scaleY: 0.92,
-          }),
-          fontSize: `${glassesSize}cqw`,
-        }}
-      >
-        {prop.emoji}
-      </div>
-    );
-  }
-
-  const faceSize = propSizeCqw(face, "face");
-  return (
-    <div
-      className="absolute drop-shadow-lg leading-none"
-      style={{
-        ...stickerStyle(face, face.center, opacity),
-        fontSize: `${faceSize}cqw`,
-      }}
-    >
-      {prop.emoji}
-    </div>
-  );
-}
-
-/** Grade couleur + stickers ancrés — teint et accessoire simultanés (`studio+glasses`). */
+/** Grade couleur + stickers ancrés au visage (uniquement si filtre ≠ naturel). */
 export function LiveVideoStudioGrade({
   filterId,
   pose,
@@ -214,33 +43,48 @@ export function LiveVideoStudioGrade({
   pose?: FacePose | null;
   className?: string;
 }) {
-  const combo = parseLiveVideoFilterCombo(filterId);
-  if (!combo.tone && !combo.prop) return null;
+  const row = resolveLiveVideoFilter(filterId);
+  if (row.id === "natural") return null;
 
   const face = pose ?? defaultFacePose();
   const opacity = face.confidence >= 0.35 ? face.confidence : 0;
-  const tone = combo.tone;
-  const prop = combo.prop;
+  const eyeScale = clamp(eyeDistance(face) / 0.24, 0.8, 1.5);
+  const midEyes = {
+    x: (face.leftEye.x + face.rightEye.x) / 2,
+    y: (face.leftEye.y + face.rightEye.y) / 2,
+  };
+  const anchorPoint =
+    row.anchor === "head"
+      ? face.headTop
+      : row.anchor === "eyes"
+        ? midEyes
+        : row.anchor === "nose"
+          ? face.nose
+          : face.center;
+
+  const sparklePts = [
+    { x: face.headTop.x - 0.12, y: face.headTop.y + 0.04 },
+    { x: face.headTop.x + 0.1, y: face.headTop.y + 0.02 },
+    { x: face.leftEye.x - 0.08, y: face.leftEye.y - 0.06 },
+    { x: face.rightEye.x + 0.08, y: face.rightEye.y - 0.06 },
+    { x: face.nose.x, y: face.nose.y + 0.12 },
+  ];
 
   return (
     <div
-      className={cn(
-        "pointer-events-none absolute inset-0 z-[2] [container-type:size]",
-        className,
-      )}
+      className={cn("pointer-events-none absolute inset-0 z-[2]", className)}
       aria-hidden
     >
-      {tone?.grade ? (
+      {row.grade ? (
         <div
           className="absolute inset-0 mix-blend-soft-light"
-          style={{ backgroundImage: tone.grade }}
+          style={{ backgroundImage: row.grade }}
         />
       ) : null}
-      {tone &&
-      (tone.id === "studio" || tone.id === "soft" || tone.id === "warm") ? (
+      {row.id === "studio" || row.id === "soft" || row.id === "warm" ? (
         <div className="absolute inset-0 bg-[rgba(255,175,145,0.05)] mix-blend-overlay" />
       ) : null}
-      {tone?.id === "blush" || prop?.id === "blush" ? (
+      {row.id === "blush" ? (
         <>
           <span
             className="absolute h-7 w-14 rounded-full bg-[rgba(255,120,140,0.22)]"
@@ -250,6 +94,7 @@ export function LiveVideoStudioGrade({
                 x: face.center.x - face.width * 0.28,
                 y: face.center.y + 0.04,
               },
+              1,
               opacity,
             )}
           />
@@ -261,12 +106,79 @@ export function LiveVideoStudioGrade({
                 x: face.center.x + face.width * 0.28,
                 y: face.center.y + 0.04,
               },
+              1,
               opacity,
             )}
           />
         </>
       ) : null}
-      {prop ? <PropStickers prop={prop} face={face} opacity={opacity} /> : null}
+      {row.kind === "overlay" && row.emoji && row.anchor !== "ears" ? (
+        <div
+          className="absolute text-[clamp(2.5rem,8vw,3.75rem)] drop-shadow-lg"
+          style={stickerStyle(
+            face,
+            anchorPoint,
+            row.anchor === "eyes" ? eyeScale : 1,
+            opacity,
+          )}
+        >
+          {row.emoji}
+        </div>
+      ) : null}
+      {(row.anchor === "ears" || row.id === "earrings") && row.emoji ? (
+        <>
+          {face.leftEarVisible ? (
+            <div
+              className="absolute text-[clamp(1.5rem,4vw,2.25rem)] drop-shadow-lg"
+              style={stickerStyle(face, face.leftEar, 0.85, opacity)}
+            >
+              {row.emoji}
+            </div>
+          ) : null}
+          {face.rightEarVisible ? (
+            <div
+              className="absolute text-[clamp(1.5rem,4vw,2.25rem)] drop-shadow-lg"
+              style={stickerStyle(face, face.rightEar, 0.85, opacity)}
+            >
+              {row.emoji}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {row.kind === "animation" && row.emoji && row.id !== "sparkle" ? (
+        <>
+          {face.leftEarVisible ? (
+            <div
+              className="absolute animate-pulse text-[clamp(1.75rem,5vw,2.5rem)]"
+              style={stickerStyle(face, face.leftEar, 1, opacity)}
+            >
+              {row.emoji}
+            </div>
+          ) : null}
+          {face.rightEarVisible ? (
+            <div
+              className="absolute animate-pulse text-[clamp(1.75rem,5vw,2.5rem)]"
+              style={stickerStyle(face, face.rightEar, 1, opacity)}
+            >
+              {row.emoji}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {row.id === "sparkle"
+        ? sparklePts.map((pt, i) => (
+            <span
+              key={`${pt.x}-${i}`}
+              className="absolute animate-pulse text-amber-200"
+              style={{
+                ...stickerStyle(face, pt, 1, opacity),
+                fontSize: `${14 + (i % 3) * 6}px`,
+              }}
+            >
+              ✦
+            </span>
+          ))
+        : null}
     </div>
   );
 }

@@ -25,7 +25,7 @@ import { cn, formatMoney } from "@/lib/utils";
 import { Archive, CheckCircle2, Eye, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type Product = {
@@ -65,8 +65,6 @@ function SellerProductsInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [shops, setShops] = useState<ShopOption[]>([]);
   const [shopId, setShopId] = useState(searchParams.get("shopId") ?? "");
   const [platform, setPlatform] = useState(false);
@@ -77,26 +75,14 @@ function SellerProductsInner() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { confirm, ConfirmDialog } = useConfirmDialog();
 
-  async function load(
-    selected = shopId,
-    status: Tab = tab,
-    cursor: string | null = null,
-  ) {
-    const params = new URLSearchParams({ mine: "1", limit: "24" });
+  async function load(selected = shopId) {
+    const params = new URLSearchParams({ mine: "1" });
     if (selected) params.set("shopId", selected);
-    if (status !== "all") params.set("status", status);
-    if (cursor) params.set("cursor", cursor);
-    const { data } = await fetchJson<{
-      products?: Product[];
-      nextCursor?: string | null;
-    }>(`/api/products?${params}`, { cache: "no-store" });
-    const page = data?.products ?? [];
-    setNextCursor(data?.nextCursor ?? null);
-    setProducts((prev) => {
-      if (!cursor) return page;
-      const seen = new Set(prev.map((row) => row.id));
-      return [...prev, ...page.filter((row) => !seen.has(row.id))];
-    });
+    const { data } = await fetchJson<{ products?: Product[] }>(
+      `/api/products?${params}`,
+      { cache: "no-store" },
+    );
+    setProducts(data?.products ?? []);
   }
 
   useEffect(() => {
@@ -110,8 +96,13 @@ function SellerProductsInner() {
   }, [session]);
 
   useEffect(() => {
-    if (session) void load(shopId, tab, null);
-  }, [session, shopId, tab]);
+    if (session) void load(shopId);
+  }, [session, shopId]);
+
+  const filtered = useMemo(() => {
+    if (tab === "all") return products;
+    return products.filter((p) => p.status === tab);
+  }, [products, tab]);
 
   async function save() {
     if (!editing) return;
@@ -335,16 +326,20 @@ function SellerProductsInner() {
             )}
           >
             {label}
+            {key !== "all" && (
+              <span className="ml-1 opacity-70">
+                ({products.filter((p) => p.status === key).length})
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       <ul className="space-y-3">
-        {products.map((p) => (
+        {filtered.map((p) => (
           <li
             key={p.id}
             className="rounded-2xl border border-border bg-surface p-3"
-            style={{ contentVisibility: "auto", containIntrinsicSize: "140px" }}
           >
             <div className="flex gap-3">
               <div
@@ -466,7 +461,7 @@ function SellerProductsInner() {
             </div>
           </li>
         ))}
-        {products.length === 0 && (
+        {filtered.length === 0 && (
           <p className="py-10 text-center text-sm text-muted-foreground">
             Aucun produit —{" "}
             <Link href="/publish" className="text-primary">
@@ -475,22 +470,6 @@ function SellerProductsInner() {
           </p>
         )}
       </ul>
-      {nextCursor ? (
-        <div className="mt-4 flex justify-center">
-          <Button
-            variant="outline"
-            disabled={loadingMore}
-            onClick={() => {
-              setLoadingMore(true);
-              void load(shopId, tab, nextCursor).finally(() =>
-                setLoadingMore(false),
-              );
-            }}
-          >
-            {loadingMore ? "Chargement…" : "Afficher la suite"}
-          </Button>
-        </div>
-      ) : null}
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">

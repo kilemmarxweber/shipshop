@@ -3,11 +3,7 @@
 import { usePageBack } from "@/components/back-nav-context";
 import { BuyProductSheet } from "@/components/buy-product-sheet";
 import { FeedBuyCard } from "@/components/feed-buy-card";
-import {
-    FeedGoLiveCluster,
-    matchOpenLive,
-    startProductLive,
-} from "@/components/feed-live-badge";
+import { matchOpenLive } from "@/components/feed-live-badge";
 import { FeedSoundtrackPlayer } from "@/components/feed-soundtrack-player";
 import { FollowShopButton } from "@/components/follow-shop-button";
 import { useI18n, type MessagePath } from "@/components/i18n-provider";
@@ -141,7 +137,6 @@ function ShopInner() {
   const [category, setCategory] = useState<string | null>(null);
   const [showAddress, setShowAddress] = useState(false);
   const [manageBusyId, setManageBusyId] = useState<string | null>(null);
-  const [startingLiveId, setStartingLiveId] = useState<string | null>(null);
   const [soundById, setSoundById] = useState<Record<string, VideoSoundState>>(
     {},
   );
@@ -280,27 +275,6 @@ function ShopInner() {
       known: known.has(c.id),
     }));
   }, [shop, t]);
-
-  async function launchLive(product: Product) {
-    if (startingLiveId) return;
-    if (!session) {
-      router.push("/auth/login");
-      return;
-    }
-    setStartingLiveId(product.id);
-    try {
-      const { res, data } = await startProductLive(product);
-      if (!res.ok || !data?.live?.id) {
-        toast.error(data?.error ?? "Impossible de lancer le live.");
-        return;
-      }
-      router.push(`/live/${data.live.id}`);
-    } catch {
-      toast.error("Impossible de lancer le live.");
-    } finally {
-      setStartingLiveId(null);
-    }
-  }
 
   async function toggleLike(product: Product) {
     if (!session) {
@@ -790,15 +764,6 @@ function ShopInner() {
                     {p.category}
                   </span>
                 </div>
-
-                {isOwnShop && !live ? (
-                  <FeedGoLiveCluster
-                    count={shop?.followersCount ?? 0}
-                    locale={locale}
-                    busy={startingLiveId === p.id}
-                    onPress={() => void launchLive(p)}
-                  />
-                ) : null}
 
                 <div className="feed-actions-rail absolute right-2.5 z-20 flex flex-col items-center gap-3.5 sm:right-3 sm:gap-4">
                   {isOwnShop && (
