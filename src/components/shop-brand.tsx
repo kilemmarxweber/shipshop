@@ -15,12 +15,19 @@ export function ShopLiveAvatar({
   return (
     <span
       className={cn(
-        "relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-[#222] text-xs font-bold text-white ring-2",
-        live ? "ss-shop-live ring-[#FF453A]" : "ring-white",
+        "relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-trust text-xs font-bold text-white ring-2",
+        live
+          ? "ss-shop-live overflow-visible ring-[#E11D48]"
+          : "overflow-visible ring-white",
         className,
       )}
     >
-      <span className="absolute inset-0 grid place-items-center overflow-hidden rounded-full">
+      <span
+        className={cn(
+          "grid size-full place-items-center overflow-hidden rounded-full",
+          live && "ss-shop-live-face absolute inset-0",
+        )}
+      >
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoUrl} alt="" className="size-full object-cover" />
@@ -29,7 +36,7 @@ export function ShopLiveAvatar({
         )}
       </span>
       {live ? (
-        <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-full bg-[#FF453A] text-[10px] font-extrabold tracking-[0.04em] text-white">
+        <span className="ss-shop-live-label pointer-events-none absolute inset-0 grid place-items-center rounded-full bg-[#E11D48] text-[8px] font-extrabold tracking-[0.12em] text-white">
           LIVE
         </span>
       ) : null}

@@ -916,13 +916,8 @@
 .feed-card-chip {
   top: 3.15rem;
 }
-.feed-live-badge {
-  top: 0.75rem;
-  z-index: 40;
-}
 .feed-reel-root .feed-live-badge {
   top: 3.15rem;
-  z-index: 40;
 }
 @media (min-width: 640px) {
   .feed-card-chip {
@@ -930,7 +925,6 @@
   }
   .feed-reel-root .feed-live-badge {
     top: 3.4rem;
-    z-index: 40;
   }
 }
 
@@ -1466,12 +1460,10 @@ html[data-tabbar-open] .feed-actions-rail {
 @keyframes ss-shop-live-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 69, 58, 0.7);
-    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7);
   }
   50% {
-    box-shadow: 0 0 0 7px rgba(255, 69, 58, 0);
-    transform: scale(1.07);
+    box-shadow: 0 0 0 7px rgba(225, 29, 72, 0);
   }
 }
 @keyframes ss-shop-pulse {
@@ -1534,11 +1526,7 @@ html[data-tabbar-open] .feed-actions-rail {
   .ss-shop-live-label {
     animation: none;
   }
-  .ss-shop-live-face {
-    opacity: 0;
-  }
   .ss-shop-live-label {
-    opacity: 1;
-    transform: none;
+    display: none;
   }
 }

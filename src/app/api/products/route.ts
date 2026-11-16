@@ -9,6 +9,7 @@ import {
     decodeTimeIdCursor,
     pageFromRows,
     parseListLimit,
+    PUBLIC_PAGE_MAX,
     PUBLIC_PAGE_SIZE,
     timeIdCursorWhere,
 } from "@/lib/list-cursor";
@@ -220,11 +221,10 @@ export async function GET(req: Request) {
     });
     if (blocked) return blocked;
     const paginated = searchParams.has("limit") || Boolean(cursorRaw);
-    // Catalogue public : jamais de dump 80 items sans pagination (anti-scraping).
+    // Catalogue public : jamais de dump sans pagination (anti-scraping).
+    // Catalogue vendeur (owner / membre) : même fenêtre, jamais de take figé.
     const limit = mine
-      ? paginated
-        ? parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_SIZE)
-        : 80
+      ? parseListLimit(searchParams.get("limit"), PUBLIC_PAGE_MAX)
       : parseListLimit(
           searchParams.get("limit"),
           paginated ? PUBLIC_PAGE_SIZE : PUBLIC_CATALOG_HARD_MAX,
@@ -238,7 +238,8 @@ export async function GET(req: Request) {
       const { where: shopWhere, isPlatform } = await managedShopsWhere(
         session.user.id,
       );
-      if (!isPlatform) {
+      // Une seule fois par ouverture de liste, pas à chaque page de scroll.
+      if (!isPlatform && !cursor) {
         await withDbRetry(() =>
           prisma.shop.updateMany({
             where: {
@@ -251,7 +252,7 @@ export async function GET(req: Request) {
           }),
         );
       }
-      const products = await withDbRetry(() =>
+      const fetched = await withDbRetry(() =>
         prisma.product.findMany({
           where: {
             shop: {
@@ -261,8 +262,22 @@ export async function GET(req: Request) {
             ...(status
               ? { status: status as "ACTIVE" | "DRAFT" | "SOLD" | "HIDDEN" }
               : {}),
+            ...(cursor ? timeIdCursorWhere(cursor) : {}),
           },
-          include: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            priceCents: true,
+            currency: true,
+            quantity: true,
+            status: true,
+            category: true,
+            images: true,
+            colors: true,
+            sizes: true,
+            location: true,
+            createdAt: true,
             shop: {
               select: {
                 id: true,
@@ -270,37 +285,22 @@ export async function GET(req: Request) {
                 slug: true,
                 logoUrl: true,
                 ownerUserId: true,
-                lat: true,
-                lng: true,
               },
             },
-            _count: {
-              select: {
-                likes: true,
-                comments: true,
-                shares: true,
-                orders: true,
-              },
-            },
-            soundtrack: {
-              select: {
-                id: true,
-                title: true,
-                audioUrl: true,
-                durationMs: true,
-              },
-            },
+            _count: { select: { orders: true } },
           },
-          orderBy: { createdAt: "desc" },
-          take: 100,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit + 1,
         }),
       );
-      const soldRows = products.length
+      const sliced = pageFromRows(fetched, limit);
+      const page = sliced.page;
+      const soldRows = page.length
         ? await withDbRetry(() =>
             prisma.order.groupBy({
               by: ["productId"],
               where: {
-                productId: { in: products.map((p) => p.id) },
+                productId: { in: page.map((p) => p.id) },
                 status: SOLD_ORDER_STATUS_FILTER,
               },
               _count: { _all: true },
@@ -311,16 +311,14 @@ export async function GET(req: Request) {
         soldRows.map((row) => [row.productId, row._count._all]),
       );
       return NextResponse.json({
-        products: products.map(({ _count, ...rest }) => ({
+        products: page.map(({ _count, ...rest }) => ({
           ...rest,
-          likesCount: _count.likes,
-          commentsCount: _count.comments,
-          sharesCount: _count.shares,
           ordersCount: _count.orders,
           soldCount: soldMap.get(rest.id) ?? 0,
           canDelete: _count.orders === 0,
           likedByMe: false,
         })),
+        nextCursor: sliced.nextCursor,
       });
     }
 
