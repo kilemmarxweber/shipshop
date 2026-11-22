@@ -2,6 +2,12 @@ export const CATEGORIES = [
   { id: "Tech", label: "Tech", fill: "bg-[#0A84FF]", gradient: "bg-[#0A84FF]" },
   { id: "Mode", label: "Mode", fill: "bg-[#FF375F]", gradient: "bg-[#FF375F]" },
   {
+    id: "Aliment",
+    label: "Aliment",
+    fill: "bg-[#FF9500]",
+    gradient: "bg-[#FF9500]",
+  },
+  {
     id: "Maison",
     label: "Maison",
     fill: "bg-[#64D2FF]",
@@ -18,6 +24,12 @@ export const CATEGORIES = [
     label: "Beauté",
     fill: "bg-[#BF5AF2]",
     gradient: "bg-[#BF5AF2]",
+  },
+  {
+    id: "Coiffure",
+    label: "Coiffure",
+    fill: "bg-[#FF6482]",
+    gradient: "bg-[#FF6482]",
   },
   { id: "Auto", label: "Auto", fill: "bg-[#636366]", gradient: "bg-[#636366]" },
   {

@@ -1,22 +1,25 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { mapAuthError } from "@/lib/auth-errors";
-import { emailFromPhone, registerSchema } from "@/lib/auth-register";
 import { AuthPrefsBar } from "@/components/auth-prefs-bar";
 import { BackButton } from "@/components/back-button";
-import { PhoneField } from "@/components/phone-field";
 import { useI18n } from "@/components/i18n-provider";
+import { PhoneField } from "@/components/phone-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authClient } from "@/lib/auth-client";
+import { mapAuthError } from "@/lib/auth-errors";
+import { emailFromPhone, registerSchema } from "@/lib/auth-register";
+import { safeNextPath } from "@/lib/safe-next";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNextPath(searchParams.get("next"));
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -59,7 +62,7 @@ export default function RegisterPage() {
       return;
     }
     toast.success(t("auth.registerWelcome"));
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 
@@ -68,8 +71,12 @@ export default function RegisterPage() {
       <BackButton fallbackHref="/auth/login" />
       <AuthPrefsBar />
       <div className="mb-8 text-center">
-        <h1 className="font-heading text-2xl font-bold">{t("auth.registerTitle")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t("auth.registerHint")}</p>
+        <h1 className="font-heading text-2xl font-bold">
+          {t("auth.registerTitle")}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("auth.registerHint")}
+        </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
@@ -114,7 +121,9 @@ export default function RegisterPage() {
         {phoneTaken ? (
           <div className="rounded-xl border border-primary/35 bg-primary/10 p-3 text-xs">
             <p className="font-semibold text-primary">{t("auth.phoneTaken")}</p>
-            <p className="mt-1 text-muted-foreground">{t("auth.phoneTakenHelp")}</p>
+            <p className="mt-1 text-muted-foreground">
+              {t("auth.phoneTakenHelp")}
+            </p>
             <Link
               href={`/auth/forgot-password?identifier=${encodeURIComponent(phone)}`}
               className="mt-2 inline-flex text-sm font-semibold text-primary underline"

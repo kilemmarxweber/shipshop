@@ -1,28 +1,30 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { AuthPrefsBar } from "@/components/auth-prefs-bar";
+import { BackButton } from "@/components/back-button";
+import { useI18n } from "@/components/i18n-provider";
+import { PhoneField } from "@/components/phone-field";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { mapAuthError } from "@/lib/auth-errors";
 import { fetchJson } from "@/lib/fetch-json";
 import {
-  isValidContactPhone,
-  looksLikeEmail,
-  looksLikeEmailInput,
+    isValidContactPhone,
+    looksLikeEmail,
+    looksLikeEmailInput,
 } from "@/lib/phone";
-import { AuthPrefsBar } from "@/components/auth-prefs-bar";
-import { BackButton } from "@/components/back-button";
-import { PhoneField } from "@/components/phone-field";
-import { useI18n } from "@/components/i18n-provider";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { safeNextPath } from "@/lib/safe-next";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const next = safeNextPath(searchParams.get("next"));
   const { t } = useI18n();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -71,7 +73,7 @@ export default function LoginPage() {
     }
 
     toast.success(t("auth.welcome"));
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 
@@ -88,8 +90,12 @@ export default function LoginPage() {
             className="size-14 object-contain"
           />
         </div>
-        <h1 className="font-heading text-2xl font-bold">{t("auth.loginTitle")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t("auth.loginHint")}</p>
+        <h1 className="font-heading text-2xl font-bold">
+          {t("auth.loginTitle")}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("auth.loginHint")}
+        </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
@@ -112,7 +118,10 @@ export default function LoginPage() {
             className="h-11 bg-muted"
           />
           <div className="text-right">
-            <Link href="/auth/forgot-password" className="text-xs font-medium text-primary">
+            <Link
+              href="/auth/forgot-password"
+              className="text-xs font-medium text-primary"
+            >
               {t("auth.forgotLink")}
             </Link>
           </div>
@@ -128,7 +137,14 @@ export default function LoginPage() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         {t("auth.noAccount")}{" "}
-        <Link href="/auth/register" className="font-semibold text-primary">
+        <Link
+          href={
+            searchParams.get("next")
+              ? `/auth/register?next=${encodeURIComponent(next)}`
+              : "/auth/register"
+          }
+          className="font-semibold text-primary"
+        >
           {t("auth.createAccount")}
         </Link>
       </p>

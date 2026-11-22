@@ -113,6 +113,33 @@ export async function runFfmpeg(
   return runFfmpegWithBin(bin, args, timeoutMs);
 }
 
+/** stderr ffmpeg, y compris les filtres qui réussissent (volumedetect). */
+export async function ffmpegText(args: string[], timeoutMs: number) {
+  const bin = (await resolveFfmpegBin()) || ffmpegBin();
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn(/*turbopackIgnore: true*/ bin, args, {
+      windowsHide: true,
+      env: process.env,
+    });
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("ffmpeg timeout"));
+    }, timeoutMs);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", () => {
+      clearTimeout(timer);
+      resolve(stderr);
+    });
+  });
+}
+
 function parseDurationMs(stderr: string) {
   const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderr);
   if (!m) return null;

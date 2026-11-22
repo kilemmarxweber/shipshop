@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { composeAddress } from "@/lib/address";
-import { authClient } from "@/lib/auth-client";
 import { reverseGeocode } from "@/lib/browser-geolocation";
 import { CATEGORIES } from "@/lib/categories";
 import { fetchJson } from "@/lib/fetch-json";
@@ -42,6 +41,7 @@ import { notifyNewListing } from "@/lib/new-listing-events";
 import { PRESET_COLORS, PRESET_SIZES, colorHex } from "@/lib/product-options";
 import { isPublicUploadPath } from "@/lib/upload-url";
 import { useAppConfig } from "@/lib/use-app-config";
+import { useRequireSession } from "@/lib/use-require-session";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -112,7 +112,7 @@ function PublishInner() {
   const searchParams = useSearchParams();
   const { t } = useI18n();
   const appConfig = useAppConfig();
-  const { data: session, isPending } = authClient.useSession();
+  const { session, isPending, allowed } = useRequireSession();
   const mode = searchParams.get("mode");
   const [step, setStep] = useState(1);
   const [shops, setShops] = useState<Shop[]>([]);
@@ -210,24 +210,8 @@ function PublishInner() {
     );
   }
 
-  if (isPending) {
+  if (isPending || !allowed || !session) {
     return <PageLoader />;
-  }
-
-  if (!session) {
-    return (
-      <div className="px-5 py-16 text-center">
-        <p className="text-muted-foreground">
-          Connectez-vous pour publier une annonce
-        </p>
-        <Link
-          href="/auth/login"
-          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
-        >
-          Connexion
-        </Link>
-      </div>
-    );
   }
 
   if (mode !== "sell") {

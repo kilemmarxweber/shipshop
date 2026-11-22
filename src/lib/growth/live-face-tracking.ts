@@ -29,9 +29,16 @@ export type FacePose = {
   nose: Vec2;
   leftEar: Vec2;
   rightEar: Vec2;
+  /** Joues pour blush / maquillage. */
+  leftCheek: Vec2;
+  rightCheek: Vec2;
   /** Oreille masquée par la tête (occlusion). */
   leftEarVisible: boolean;
   rightEarVisible: boolean;
+  /**
+   * true = landmarks mesurés (MediaPipe) — ne pas reconstruire via rebuildAnchors.
+   */
+  tracked?: boolean;
 };
 
 export type FaceAnchorId =
@@ -59,7 +66,7 @@ export type FaceAnchorStyle = {
 
 /** Pose selfie studio par défaut (cadrage vertical typique, visage assez grand). */
 export function defaultFacePose(now = Date.now()): FacePose {
-  return {
+  return rebuildAnchors({
     confidence: 0.88,
     timestamp: now,
     center: { x: 0.5, y: 0.4 },
@@ -74,9 +81,12 @@ export function defaultFacePose(now = Date.now()): FacePose {
     nose: { x: 0.5, y: 0.45 },
     leftEar: { x: 0.18, y: 0.4 },
     rightEar: { x: 0.82, y: 0.4 },
+    leftCheek: { x: 0.32, y: 0.48 },
+    rightCheek: { x: 0.68, y: 0.48 },
     leftEarVisible: true,
     rightEarVisible: true,
-  };
+    tracked: false,
+  });
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -182,15 +192,21 @@ export class FacePoseSmoother {
       nose: raw.nose,
       leftEar: raw.leftEar,
       rightEar: raw.rightEar,
+      leftCheek: raw.leftCheek,
+      rightCheek: raw.rightCheek,
       leftEarVisible: raw.yaw > -0.55,
       rightEarVisible: raw.yaw < 0.55,
+      tracked: raw.tracked,
     };
 
-    // Recalcule ancres à partir du centre/taille lissés + orientation.
-    const rebuilt = rebuildAnchors(smoothed);
-    this.last = rebuilt;
+    // Landmarks MediaPipe : garder les points réels (yeux / joues).
+    // Idle / packet : reconstruire les ancres depuis centre + angles.
+    const next = raw.tracked
+      ? withDerivedCheeks(smoothed)
+      : rebuildAnchors(smoothed);
+    this.last = next;
     this.holdUntil = t + 420;
-    return rebuilt;
+    return next;
   }
 
   reset() {
@@ -249,6 +265,22 @@ function rebuildAnchors(pose: FacePose): FacePose {
     center,
     roll,
   );
+  const leftCheek = rotateAround(
+    {
+      x: center.x - halfW * 0.42 + yawShift,
+      y: center.y + halfH * 0.12 + pitchShift,
+    },
+    center,
+    roll,
+  );
+  const rightCheek = rotateAround(
+    {
+      x: center.x + halfW * 0.42 + yawShift,
+      y: center.y + halfH * 0.12 + pitchShift,
+    },
+    center,
+    roll,
+  );
 
   return {
     ...pose,
@@ -258,8 +290,28 @@ function rebuildAnchors(pose: FacePose): FacePose {
     nose,
     leftEar,
     rightEar,
+    leftCheek,
+    rightCheek,
     leftEarVisible: pose.yaw > -0.55,
     rightEarVisible: pose.yaw < 0.55,
+    tracked: false,
+  };
+}
+
+/** Complète les joues si absentes (landmarks MediaPipe partiels). */
+function withDerivedCheeks(pose: FacePose): FacePose {
+  if (pose.leftCheek && pose.rightCheek) return pose;
+  const eye = eyeDistance(pose);
+  return {
+    ...pose,
+    leftCheek: pose.leftCheek ?? {
+      x: pose.leftEye.x - eye * 0.12,
+      y: pose.leftEye.y + eye * 0.55,
+    },
+    rightCheek: pose.rightCheek ?? {
+      x: pose.rightEye.x + eye * 0.12,
+      y: pose.rightEye.y + eye * 0.55,
+    },
   };
 }
 
@@ -286,6 +338,8 @@ const MP = {
   rightEar: 454,
   forehead: 10,
   chin: 152,
+  leftCheek: 50,
+  rightCheek: 280,
 } as const;
 
 export function poseFromMediaPipeLandmarks(
@@ -301,6 +355,8 @@ export function poseFromMediaPipeLandmarks(
   const rightEar = get(MP.rightEar);
   const forehead = get(MP.forehead);
   const chin = get(MP.chin);
+  const leftCheekLm = get(MP.leftCheek);
+  const rightCheekLm = get(MP.rightCheek);
   if (
     !nose ||
     !leftEye ||
@@ -324,8 +380,21 @@ export function poseFromMediaPipeLandmarks(
   const roll = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
   const yaw = clamp(((leftEar.z ?? 0) - (rightEar.z ?? 0)) * 1.8, -1.1, 1.1);
   const pitch = clamp(((nose.y - center.y) / height) * 2.2, -0.9, 0.9);
+  const headTop = {
+    x: forehead.x,
+    y: clamp(forehead.y - height * 0.08, 0, 1),
+  };
+  const leftCheek = leftCheekLm ?? {
+    x: leftEye.x - eyeDist * 0.12,
+    y: leftEye.y + eyeDist * 0.55,
+  };
+  const rightCheek = rightCheekLm ?? {
+    x: rightEye.x + eyeDist * 0.12,
+    y: rightEye.y + eyeDist * 0.55,
+  };
 
-  return rebuildAnchors({
+  // Ne pas rebuildAnchors : on garde les vrais yeux / joues MediaPipe.
+  return {
     confidence: 0.95,
     timestamp,
     center,
@@ -334,15 +403,39 @@ export function poseFromMediaPipeLandmarks(
     roll,
     yaw,
     pitch,
-    headTop: forehead,
+    headTop,
     leftEye,
     rightEye,
     nose,
     leftEar,
     rightEar,
-    leftEarVisible: true,
-    rightEarVisible: true,
-  });
+    leftCheek,
+    rightCheek,
+    leftEarVisible: yaw > -0.55,
+    rightEarVisible: yaw < 0.55,
+    tracked: true,
+  };
+}
+
+/** Miroir horizontal (selfie CSS scaleX(-1) vs buffer caméra). */
+export function mirrorFacePose(pose: FacePose): FacePose {
+  const mx = (p: Vec2): Vec2 => ({ x: 1 - p.x, y: p.y });
+  return {
+    ...pose,
+    center: mx(pose.center),
+    roll: -pose.roll,
+    yaw: -pose.yaw,
+    headTop: mx(pose.headTop),
+    leftEye: mx(pose.rightEye),
+    rightEye: mx(pose.leftEye),
+    nose: mx(pose.nose),
+    leftEar: mx(pose.rightEar),
+    rightEar: mx(pose.leftEar),
+    leftCheek: mx(pose.rightCheek),
+    rightCheek: mx(pose.leftCheek),
+    leftEarVisible: pose.rightEarVisible,
+    rightEarVisible: pose.leftEarVisible,
+  };
 }
 
 /** Micro-mouvement naturel quand aucun détecteur n’est branché (pas de double caméra). */

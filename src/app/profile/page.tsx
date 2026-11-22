@@ -34,6 +34,7 @@ import {
 } from "@/lib/order-events";
 import { orderStatusLabel } from "@/lib/order-status-label";
 import { isValidContactPhone } from "@/lib/phone";
+import { useRequireSession } from "@/lib/use-require-session";
 import { cn, formatMoney } from "@/lib/utils";
 import { notifyWalletUpdated, WALLET_UPDATED_EVENT } from "@/lib/wallet-events";
 import {
@@ -88,7 +89,7 @@ const IMAGE_TYPES = new Set([
 ]);
 
 export default function ProfilePage() {
-  const { data: session, isPending } = authClient.useSession();
+  const { session, isPending, allowed } = useRequireSession();
   const { t } = useI18n();
   usePageBack({ fallbackHref: "/" });
   const userId = session?.user?.id;
@@ -323,33 +324,8 @@ export default function ProfilePage() {
     await refreshCommerce();
   }
 
-  if (isPending) {
+  if (isPending || !allowed || !session) {
     return <PageLoader />;
-  }
-
-  if (!session) {
-    return (
-      <div className="px-5 py-16 text-center">
-        <p className="font-heading text-lg font-bold">Votre profil Chip Shop</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Compte obligatoire pour acheter et vendre
-        </p>
-        <div className="mt-6 flex justify-center gap-3">
-          <Link
-            href="/auth/login"
-            className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
-          >
-            Connexion
-          </Link>
-          <Link
-            href="/auth/register"
-            className="inline-flex h-9 items-center rounded-lg bg-secondary px-4 text-sm font-medium"
-          >
-            S&apos;inscrire
-          </Link>
-        </div>
-      </div>
-    );
   }
 
   const displayName = profile?.name ?? session.user.name ?? "Utilisateur";

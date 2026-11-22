@@ -14,6 +14,7 @@ import { authClient } from "@/lib/auth-client";
 import { CART_UPDATED_EVENT, cartCountFromEvent } from "@/lib/cart-events";
 import { fetchJson } from "@/lib/fetch-json";
 import { useBindPageMediaSession } from "@/lib/page-media-session";
+import { loginHref } from "@/lib/safe-next";
 import { armFeedSoundUnlock, enableFeedSound } from "@/lib/try-play-media";
 import { cn } from "@/lib/utils";
 import {
@@ -219,10 +220,13 @@ export function AppShell({
                       </Link>
                     )}
                     <Link
-                      href={session ? "/profile" : "/auth/login"}
+                      href={session ? "/profile" : loginHref("/profile")}
                       prefetch={false}
                       onClick={(event) =>
-                        onChromeNav(event, session ? "/profile" : "/auth/login")
+                        onChromeNav(
+                          event,
+                          session ? "/profile" : loginHref("/profile"),
+                        )
                       }
                       className="grid size-9 place-items-center overflow-hidden rounded-full border border-border bg-muted/50"
                       aria-label={t("nav.profile")}
@@ -290,7 +294,7 @@ export function AppShell({
                     const Icon = item.icon;
                     const isPublish = item.href === "/publish";
                     const href =
-                      isPublish && !session ? "/auth/login" : item.href;
+                      isPublish && !session ? loginHref("/publish") : item.href;
                     return (
                       <Link
                         key={item.href}
