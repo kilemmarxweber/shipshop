@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  poseFromMediaPipeLandmarks,
-  type FaceLandmarkPoint,
-  type FacePose,
+    poseFromMediaPipeLandmarks,
+    type FaceLandmarkPoint,
+    type FacePose,
 } from "@/lib/growth/live-face-tracking";
 
 const WASM =

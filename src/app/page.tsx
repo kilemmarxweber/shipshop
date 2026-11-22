@@ -870,6 +870,7 @@ export default function FeedPage() {
             >
               <ProductImageCarousel
                 images={p.images}
+                fit="cover"
                 overlay
                 className="absolute inset-0"
                 muted={mediaSound(p.id).muted}

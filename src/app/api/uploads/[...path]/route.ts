@@ -1,11 +1,11 @@
+import {
+    findUploadedFilePath,
+    relativeUploadPathFromUrl,
+} from "@/lib/upload-file.server";
+import { toPublicUploadPath } from "@/lib/upload-url";
 import { createReadStream, type ReadStream } from "fs";
 import { stat } from "fs/promises";
 import path from "path";
-import {
-  findUploadedFilePath,
-  relativeUploadPathFromUrl,
-} from "@/lib/upload-file.server";
-import { toPublicUploadPath } from "@/lib/upload-url";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -55,7 +55,8 @@ function parseByteRange(header: string | null, size: number) {
     start = Number(match[1]);
     end = hasEnd ? Number(match[2]) : size - 1;
   }
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return "invalid" as const;
+  if (!Number.isFinite(start) || !Number.isFinite(end))
+    return "invalid" as const;
   if (start >= size || start < 0 || end < start) return "invalid" as const;
   return { start, end: Math.min(end, size - 1) };
 }
@@ -184,6 +185,8 @@ async function fileResponse(
     "Accept-Ranges": "bytes",
     "Cache-Control": "public, max-age=31536000, immutable",
     "Content-Disposition": "inline",
+    "Access-Control-Allow-Origin": "*",
+    "Cross-Origin-Resource-Policy": "cross-origin",
   });
   if (partial) {
     headers.set("Content-Range", `bytes ${start}-${end}/${size}`);

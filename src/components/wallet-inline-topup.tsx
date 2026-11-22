@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useI18n } from "@/components/i18n-provider";
+import { PhoneField } from "@/components/phone-field";
+import { Button } from "@/components/ui/button";
 import { fetchJson } from "@/lib/fetch-json";
 import { composePhone, isValidContactPhone, splitPhone } from "@/lib/phone";
 import { formatMoney } from "@/lib/utils";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
-import { PhoneField } from "@/components/phone-field";
-import { useI18n } from "@/components/i18n-provider";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 const PROVIDERS = [
   { id: "MPESA" as const, label: "M-Pesa" },
@@ -30,10 +30,9 @@ export function WalletInlineTopUp({
   onFunded,
 }: Props) {
   const { t } = useI18n();
-  const gap = Math.max(100, neededCents - balanceCents);
-  const [provider, setProvider] = useState<(typeof PROVIDERS)[number]["id"]>(
-    "MPESA",
-  );
+  const gap = Math.max(500, neededCents - balanceCents);
+  const [provider, setProvider] =
+    useState<(typeof PROVIDERS)[number]["id"]>("MPESA");
   const [phone, setPhone] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [ussdHint, setUssdHint] = useState<string | null>(null);
@@ -126,9 +125,7 @@ export function WalletInlineTopUp({
         </span>
         . {t("buy.topUpHint")}
       </p>
-      <p className="text-[11px] text-muted-foreground">
-        {t("buy.heldLine")}
-      </p>
+      <p className="text-[11px] text-muted-foreground">{t("buy.heldLine")}</p>
       <div className="grid grid-cols-3 gap-2">
         {PROVIDERS.map((p) => (
           <button
@@ -146,9 +143,7 @@ export function WalletInlineTopUp({
         ))}
       </div>
       <PhoneField value={phone} onChange={setPhone} />
-      {ussdHint ? (
-        <p className="text-xs text-trust">{ussdHint}</p>
-      ) : null}
+      {ussdHint ? <p className="text-xs text-trust">{ussdHint}</p> : null}
       {pendingId ? (
         <Button
           type="button"

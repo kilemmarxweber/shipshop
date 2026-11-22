@@ -504,6 +504,8 @@ export function decodeFacePose(
     nose: { x: packet.x, y: packet.y },
     leftEar: { x: packet.x, y: packet.y },
     rightEar: { x: packet.x, y: packet.y },
+    leftCheek: { x: packet.x, y: packet.y },
+    rightCheek: { x: packet.x, y: packet.y },
     leftEarVisible: true,
     rightEarVisible: true,
   });
@@ -655,7 +657,10 @@ export function blendFacePose(a: FacePose, b: FacePose, t: number): FacePose {
     nose: a.nose,
     leftEar: a.leftEar,
     rightEar: a.rightEar,
+    leftCheek: a.leftCheek,
+    rightCheek: a.rightCheek,
     leftEarVisible: b.leftEarVisible,
     rightEarVisible: b.rightEarVisible,
+    tracked: false,
   });
 }

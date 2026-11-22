@@ -12,7 +12,6 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import {
     APP_CURRENCIES,
-    DEFAULT_FX,
     parseCurrency,
     walletCents,
     type AppCurrency,
@@ -332,8 +331,14 @@ export default function WalletPage() {
       return;
     }
     const cents = Math.round(parseFloat(amount) * 100);
-    if (!Number.isFinite(cents) || cents < 100) {
-      toast.error("Montant invalide");
+    if (!Number.isFinite(cents) || cents < 500) {
+      toast.error(
+        currency === "CDF"
+          ? "Minimum 5 CDF"
+          : currency === "KW"
+            ? "Minimum 5 KW"
+            : "Minimum 5 $US",
+      );
       return;
     }
     const key = paymentIdempotencyKey(payIntent);
@@ -687,7 +692,8 @@ export default function WalletPage() {
           />
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Disponible {formatMoney(pots[withdrawBucket], displayCurrency)}.
-            CinetPay envoie la somme saisie, après les frais.
+            Minimum 5 {displayCurrency === "CDF" ? "CDF" : "$US"}, sans
+            conversion. CinetPay envoie la somme saisie, après les frais.
           </p>
         </div>
         <Button
@@ -728,13 +734,9 @@ export default function WalletPage() {
               toast.error("Cette somme dépasse le fond");
               return;
             }
-            const minimum =
-              displayCurrency === "CDF" ? DEFAULT_FX.cdfPerUsd * 100 : 100;
-            if (gross < minimum) {
+            if (gross < 500) {
               toast.error(
-                displayCurrency === "CDF"
-                  ? "Minimum 2 400 CDF"
-                  : "Minimum 1 $US",
+                displayCurrency === "CDF" ? "Minimum 5 CDF" : "Minimum 5 $US",
               );
               return;
             }
@@ -955,7 +957,7 @@ export default function WalletPage() {
           </Label>
           <Input
             type="number"
-            min="1"
+            min="5"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="h-11 bg-surface-2 font-heading text-lg font-bold"

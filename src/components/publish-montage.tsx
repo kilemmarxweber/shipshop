@@ -1,57 +1,56 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
-} from "react";
-import {
-  BadgeDollarSign,
-  Blend,
-  Check,
-  Eraser,
-  EyeOff,
-  ImageIcon,
-  Loader2,
-  MousePointer2,
-  Pause,
-  Pipette,
-  Play,
-  RotateCcw,
-  ScanSearch,
-  Search,
-  Store,
-  Trash2,
-  Type,
-  Undo2,
-  Upload,
-  Globe2,
-} from "lucide-react";
-import { toast } from "sonner";
-import { fetchJson } from "@/lib/fetch-json";
-import { isVideoUrl } from "@/lib/media";
-import {
-  clampSoundtrackStartMs,
-  formatClipClock,
-  LOCAL_SOUNDTRACK_ID,
-  MONTAGE_MAX_MS,
-  SOUNDTRACK_SOURCE_MAX_SECONDS,
-  SLIDE_MOTIONS,
-  encodeSlideMotion,
-  parseSlideMotion,
-  slideshowWindow,
-  type SlideMotion,
-} from "@/lib/montage";
-import { useAppConfig } from "@/lib/use-app-config";
-import { VIDEO_INPUT_MAX_BYTES } from "@/lib/media";
-import { uploadCompressedMedia } from "@/lib/compress-media";
-import { cn, formatMoney } from "@/lib/utils";
 import { useI18n } from "@/components/i18n-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { uploadCompressedMedia } from "@/lib/compress-media";
+import { fetchJson } from "@/lib/fetch-json";
+import { isVideoUrl, VIDEO_INPUT_MAX_BYTES } from "@/lib/media";
+import {
+    clampSoundtrackStartMs,
+    encodeSlideMotion,
+    formatClipClock,
+    LOCAL_SOUNDTRACK_ID,
+    MONTAGE_MAX_MS,
+    parseSlideMotion,
+    SLIDE_MOTIONS,
+    slideshowWindow,
+    SOUNDTRACK_SOURCE_MAX_SECONDS,
+    type SlideMotion,
+} from "@/lib/montage";
+import { useAppConfig } from "@/lib/use-app-config";
+import { cn, formatMoney } from "@/lib/utils";
+import {
+    BadgeDollarSign,
+    Blend,
+    Check,
+    Eraser,
+    EyeOff,
+    Globe2,
+    ImageIcon,
+    Loader2,
+    MousePointer2,
+    Pause,
+    Pipette,
+    Play,
+    RotateCcw,
+    ScanSearch,
+    Search,
+    Store,
+    Trash2,
+    Type,
+    Undo2,
+    Upload,
+} from "lucide-react";
+import {
+    useEffect,
+    useRef,
+    useState,
+    type ReactNode,
+    type PointerEvent as ReactPointerEvent,
+} from "react";
+import { toast } from "sonner";
 
 type Track = {
   id: string;
@@ -104,7 +103,9 @@ function probeMediaDurationMs(url: string): Promise<number> {
     el.onloadedmetadata = () => {
       const d = el.duration;
       if (Number.isFinite(d) && d > 0.4) {
-        done(Math.min(Math.round(d * 1000), SOUNDTRACK_SOURCE_MAX_SECONDS * 1000));
+        done(
+          Math.min(Math.round(d * 1000), SOUNDTRACK_SOURCE_MAX_SECONDS * 1000),
+        );
         return;
       }
       done(MONTAGE_MAX_MS);
@@ -210,7 +211,11 @@ function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
   };
 }
 
-function canvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number): Point {
+function canvasPoint(
+  canvas: HTMLCanvasElement,
+  clientX: number,
+  clientY: number,
+): Point {
   const rect = canvas.getBoundingClientRect();
   return {
     x: ((clientX - rect.left) / rect.width) * canvas.width,
@@ -218,7 +223,11 @@ function canvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number
   };
 }
 
-function samplePixel(ctx: CanvasRenderingContext2D, x: number, y: number): Rgb | null {
+function samplePixel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+): Rgb | null {
   const px = ctx.getImageData(
     Math.max(0, Math.min(ctx.canvas.width - 1, Math.round(x))),
     Math.max(0, Math.min(ctx.canvas.height - 1, Math.round(y))),
@@ -317,7 +326,13 @@ function sampleRectBorder(
   let b = 0;
   let n = 0;
   for (const p of pts) {
-    if (p.x < 0 || p.y < 0 || p.x >= ctx.canvas.width || p.y >= ctx.canvas.height) continue;
+    if (
+      p.x < 0 ||
+      p.y < 0 ||
+      p.x >= ctx.canvas.width ||
+      p.y >= ctx.canvas.height
+    )
+      continue;
     const c = samplePixel(ctx, p.x, p.y);
     if (!c) continue;
     r += c.r;
@@ -498,7 +513,9 @@ function SoundtrackClipEditor({
           {formatClipClock(start)} → {formatClipClock(end)}
         </p>
       </div>
-      <p className="text-[11px] text-muted-foreground">{t("montage.clipHint")}</p>
+      <p className="text-[11px] text-muted-foreground">
+        {t("montage.clipHint")}
+      </p>
       <div className="relative h-2 overflow-hidden rounded-full bg-muted">
         <span
           className="absolute inset-y-0 rounded-full bg-primary"
@@ -523,7 +540,11 @@ function SoundtrackClipEditor({
         variant={playing ? "secondary" : "default"}
         onClick={togglePlay}
       >
-        {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+        {playing ? (
+          <Pause className="size-3.5" />
+        ) : (
+          <Play className="size-3.5" />
+        )}
         {playing ? t("montage.clipPause") : t("montage.clipPlay")}
       </Button>
     </div>
@@ -587,8 +608,7 @@ function MontageSlidesPanel({
       copy[i] = encodeSlideMotion(cycle[0]!);
     } else {
       const at = cycle.indexOf(current);
-      copy[i] =
-        at >= cycle.length - 1 ? "" : encodeSlideMotion(cycle[at + 1]!);
+      copy[i] = at >= cycle.length - 1 ? "" : encodeSlideMotion(cycle[at + 1]!);
     }
     onMotions(copy);
   }
@@ -604,7 +624,9 @@ function MontageSlidesPanel({
   return (
     <div className="space-y-2 rounded-xl border border-border bg-surface-2/60 p-3">
       <p className="text-xs font-semibold">{t("montage.slidesTitle")}</p>
-      <p className="text-[11px] text-muted-foreground">{t("montage.slidesHint")}</p>
+      <p className="text-[11px] text-muted-foreground">
+        {t("montage.slidesHint")}
+      </p>
       <div className="relative overflow-hidden rounded-lg bg-black aspect-[4/5] max-h-64">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -617,9 +639,7 @@ function MontageSlidesPanel({
           )}
           data-motion={motion}
           style={
-            motion
-              ? { ["--ss-ms" as string]: `${win.slot}ms` }
-              : undefined
+            motion ? { ["--ss-ms" as string]: `${win.slot}ms` } : undefined
           }
         />
         <p className="absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white tabular-nums">
@@ -709,6 +729,9 @@ export function PublishMontage({
   const lastPtRef = useRef<Point | null>(null);
   const [importing, setImporting] = useState(false);
   const [clipPlaying, setClipPlaying] = useState(false);
+  const [cut, setCut] = useState<"image" | "montage" | "silent">("image");
+  const autoSound = useRef(false);
+  const rememberedSound = useRef<string | null>(null);
   const [overlays, setOverlays] = useState<ImageOverlay[]>([]);
   const [activeOverlayId, setActiveOverlayId] = useState<string | null>(null);
   const dragRef = useRef<{
@@ -720,8 +743,7 @@ export function PublishMontage({
   } | null>(null);
 
   const firstImage = images.find((u) => !isVideoUrl(u)) ?? null;
-  const activeOverlay =
-    overlays.find((o) => o.id === activeOverlayId) ?? null;
+  const activeOverlay = overlays.find((o) => o.id === activeOverlayId) ?? null;
 
   const searchSeeded = useRef(false);
   useEffect(() => {
@@ -733,10 +755,68 @@ export function PublishMontage({
   }, [productTitle]);
 
   useEffect(() => {
-    fetchJson<{ soundtracks?: Track[] }>("/api/soundtracks").then(({ data }) => {
-      setTracks(data?.soundtracks ?? []);
-    });
+    fetchJson<{ soundtracks?: Track[] }>("/api/soundtracks").then(
+      ({ data }) => {
+        setTracks(data?.soundtracks ?? []);
+      },
+    );
   }, []);
+
+  useEffect(() => {
+    if (autoSound.current || tracks.length === 0) return;
+    if (cut === "silent") {
+      autoSound.current = true;
+      return;
+    }
+    const hasStill = images.some((url) => !isVideoUrl(url));
+    if (!hasStill) return;
+    if (soundtrackId) {
+      autoSound.current = true;
+      rememberedSound.current = soundtrackId;
+      return;
+    }
+    autoSound.current = true;
+    const index = tracks.length >= 4 && Math.random() < 0.5 ? 3 : 0;
+    const track = tracks[index] ?? tracks[0];
+    if (!track) return;
+    rememberedSound.current = track.id;
+    onLocalClip(null);
+    onSoundtrackId(track.id);
+    onSoundtrackStartMs(0);
+  }, [
+    images,
+    onLocalClip,
+    onSoundtrackId,
+    onSoundtrackStartMs,
+    soundtrackId,
+    tracks,
+    cut,
+  ]);
+
+  function chooseCut(next: "image" | "montage" | "silent") {
+    if (soundtrackId) rememberedSound.current = soundtrackId;
+    if (next === "silent") {
+      onSoundtrackId(null);
+      onSoundtrackStartMs(0);
+      onImageMotions(images.map(() => ""));
+      setCut("silent");
+      return;
+    }
+    const id = rememberedSound.current ?? tracks[0]?.id ?? null;
+    if (id) {
+      onLocalClip(null);
+      onSoundtrackId(id);
+      onSoundtrackStartMs(0);
+    }
+    onImageMotions(
+      next === "montage"
+        ? images.map((url) =>
+            isVideoUrl(url) ? "" : encodeSlideMotion("zoom-in"),
+          )
+        : images.map(() => ""),
+    );
+    setCut(next);
+  }
 
   function snapshotFrom(ctx: CanvasRenderingContext2D) {
     const shot = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -792,7 +872,9 @@ export function PublishMontage({
   }, [firstImage]);
 
   function ctx2d() {
-    return canvasRef.current?.getContext("2d", { willReadFrequently: true }) ?? null;
+    return (
+      canvasRef.current?.getContext("2d", { willReadFrequently: true }) ?? null
+    );
   }
 
   function boxPx(s: Suggestion, canvas: HTMLCanvasElement) {
@@ -823,7 +905,13 @@ export function PublishMontage({
     ctx.filter = `blur(${Math.max(6, Math.min(w, h) * 0.12)}px)`;
     ctx.fillStyle = rgbCss(color, 1);
     ctx.beginPath();
-    ctx.roundRect(x - pad, y - pad, w + pad * 2, h + pad * 2, Math.min(w, h) * 0.2);
+    ctx.roundRect(
+      x - pad,
+      y - pad,
+      w + pad * 2,
+      h + pad * 2,
+      Math.min(w, h) * 0.2,
+    );
     ctx.fill();
     ctx.restore();
   }
@@ -1051,7 +1139,10 @@ export function PublishMontage({
       const resImg = await fetch(firstImage);
       const blob = await resImg.blob();
       const form = new FormData();
-      form.append("file", new File([blob], "frame.jpg", { type: blob.type || "image/jpeg" }));
+      form.append(
+        "file",
+        new File([blob], "frame.jpg", { type: blob.type || "image/jpeg" }),
+      );
       const { data } = await fetchJson<{ suggestions?: Suggestion[] }>(
         "/api/media/suggest-cleanup",
         { method: "POST", body: form },
@@ -1101,7 +1192,9 @@ export function PublishMontage({
 
     const hit = suggestions.find((s) => {
       const b = boxPx(s, canvas);
-      return pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h;
+      return (
+        pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h
+      );
     });
     setSelected(hit?.id ?? null);
   }
@@ -1171,10 +1264,16 @@ export function PublishMontage({
       const maxBytes = video ? VIDEO_INPUT_MAX_BYTES : AUDIO_INPUT_MAX_BYTES;
       if (file.size <= 0 || file.size > maxBytes) {
         throw new Error(
-          video ? "Vidéo trop lourde (max 100 Mo)" : "Fichier audio trop lourd (max 25 Mo)",
+          video
+            ? "Vidéo trop lourde (max 100 Mo)"
+            : "Fichier audio trop lourd (max 25 Mo)",
         );
       }
-      const title = file.name.replace(/\.[^.]+$/, "").trim().slice(0, 80) || "Import";
+      const title =
+        file.name
+          .replace(/\.[^.]+$/, "")
+          .trim()
+          .slice(0, 80) || "Import";
       await adoptLocalFile(file, title);
     } catch (error) {
       toast.error(
@@ -1220,7 +1319,9 @@ export function PublishMontage({
         `/api/soundtracks/fetch?identifier=${encodeURIComponent(hit.identifier)}&file=${encodeURIComponent(hit.file)}`,
       );
       if (!res.ok) {
-        const err = (await res.json().catch(() => null)) as { error?: string } | null;
+        const err = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         throw new Error(err?.error ?? t("montage.fetchOnline"));
       }
       const blob = await res.blob();
@@ -1250,9 +1351,7 @@ export function PublishMontage({
       if (!blob) throw new Error("export");
       const file = new File([blob], "montage.jpg", { type: "image/jpeg" });
       const uploaded = await uploadCompressedMedia(file, "product");
-      onImagesChange(
-        images.map((u) => (u === firstImage ? uploaded.url : u)),
-      );
+      onImagesChange(images.map((u) => (u === firstImage ? uploaded.url : u)));
       toast.success(t("montage.apply"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("montage.apply"));
@@ -1432,8 +1531,32 @@ export function PublishMontage({
           {importing ? t("montage.importing") : t("montage.importDevice")}
         </Button>
         {localClip && soundtrackId === LOCAL_SOUNDTRACK_ID && (
-          <p className="text-[11px] text-muted-foreground">{t("montage.tempOnly")}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {t("montage.tempOnly")}
+          </p>
         )}
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["image", t("montage.cutImage")],
+              ["montage", t("montage.cutMontage")],
+              ["silent", t("montage.cutSilent")],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => chooseCut(id)}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold ${
+                cut === id
+                  ? "border-primary bg-primary text-white"
+                  : "border-border"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-2">
           {localClip && (
             <button
@@ -1491,16 +1614,19 @@ export function PublishMontage({
             clipMs={appConfig.clipMs}
           />
         )}
-        {images.length > 0 && (
-          <MontageSlidesPanel
-            images={images}
-            motions={imageMotions}
-            onMotions={onImageMotions}
-            playing={clipPlaying && Boolean(selectedTrack)}
-            clipMs={appConfig.clipMs}
-            maxImages={appConfig.maxImages}
-            motionList={appConfig.motions}
-          />
+        {images.length > 0 && cut === "montage" && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold">{t("montage.excerpt")}</p>
+            <MontageSlidesPanel
+              images={images}
+              motions={imageMotions}
+              onMotions={onImageMotions}
+              playing
+              clipMs={appConfig.clipMs}
+              maxImages={appConfig.maxImages}
+              motionList={appConfig.motions}
+            />
+          </div>
         )}
       </div>
 
@@ -1603,7 +1729,9 @@ export function PublishMontage({
                       type="button"
                       aria-label={t("montage.resizeOverlay")}
                       className="absolute right-0 bottom-0 z-30 size-4 translate-x-1/3 translate-y-1/3 rounded-full border-2 border-white bg-primary shadow"
-                      onPointerDown={(e) => onOverlayPointerDown(e, o, "resize")}
+                      onPointerDown={(e) =>
+                        onOverlayPointerDown(e, o, "resize")
+                      }
                       onPointerMove={onOverlayPointerMove}
                       onPointerUp={onOverlayPointerUp}
                       onPointerCancel={onOverlayPointerUp}

@@ -5,7 +5,15 @@ import { fromUsdCents, parseCurrency, shopFxRates, toUsdCents } from "@/lib/mone
 export const SALE_FEE_USD_CENTS = 50;
 export const SHIPPING_FEE_USD_CENTS = 50;
 export const WITHDRAWAL_FEE_BPS = 500; // 5%
-export const MIN_WITHDRAWAL_USD_CENTS = 100;
+/** 5.00 in the currency the user chose. Not converted between USD and local money. */
+export const MIN_CASH_MOVE_CENTS = 500;
+export const MIN_WITHDRAWAL_USD_CENTS = MIN_CASH_MOVE_CENTS;
+
+export function minCashMoveLabel(currency?: string | null) {
+  if (currency === "CDF") return "Minimum 5 CDF";
+  if (currency === "KW") return "Minimum 5 KW";
+  return "Minimum 5 $US";
+}
 
 /** Commission cible initiale (5 %). Hors paiement / livraison / taxes. */
 export const SALE_FEE_BPS_DEFAULT = 500;

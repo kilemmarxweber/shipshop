@@ -1,15 +1,13 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { getSession } from "@/lib/session";
 import { APP_CURRENCIES } from "@/lib/money";
-import {
-  confirmDeposit,
-  initiateDeposit,
-} from "@/lib/payments/mobile-money";
 import { auditFromRequest, idempotencyFrom } from "@/lib/payments/ledger";
+import { confirmDeposit, initiateDeposit } from "@/lib/payments/mobile-money";
+import { MIN_CASH_MOVE_CENTS } from "@/lib/platform-fees";
+import { getSession } from "@/lib/session";
+import { NextResponse } from "next/server";
+import { z, ZodError } from "zod";
 
 const initiateSchema = z.object({
-  amountCents: z.number().int().min(100),
+  amountCents: z.number().int().min(MIN_CASH_MOVE_CENTS, "Minimum 5"),
   provider: z.enum(["MPESA", "ORANGE", "AIRTEL"]),
   phone: z.string().min(10).max(24),
   currency: z.enum(APP_CURRENCIES).default("USD"),
@@ -56,6 +54,9 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: "Minimum 5" }, { status: 400 });
+    }
     const message = error instanceof Error ? error.message : "Erreur wallet";
     return NextResponse.json({ error: message }, { status: 400 });
   }

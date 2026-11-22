@@ -181,6 +181,9 @@ export type Messages = {
     seeAddress: string;
     copyLink: string;
     share: string;
+    qr: string;
+    qrHint: string;
+    shareQr: string;
     message: string;
     logo: string;
     logoHint: string;
@@ -426,6 +429,10 @@ export type Messages = {
     clipPlay: string;
     clipPause: string;
     clipHint: string;
+    cutImage: string;
+    cutMontage: string;
+    cutSilent: string;
+    excerpt: string;
     importOk: string;
     undo: string;
     pickColor: string;
@@ -683,6 +690,9 @@ const fr: Messages = {
     seeAddress: "Voir l'adresse",
     copyLink: "Copier le lien",
     share: "Partager",
+    qr: "Code QR",
+    qrHint: "Colle ce code au mur. Un scan ouvre la boutique et son catalogue.",
+    shareQr: "Partager le code",
     message: "Message",
     logo: "Logo boutique",
     logoHint: "Image carrée — visible partout avec le nom de la boutique",
@@ -937,6 +947,10 @@ const fr: Messages = {
     clipPause: "Pause",
     clipHint:
       "Faites glisser pour choisir la minute jouée. Écoutez avant de publier.",
+    cutImage: "Image avec son",
+    cutMontage: "Montage avec son",
+    cutSilent: "Sans son",
+    excerpt: "Extrait du montage",
     importOk: "Son importé — choisissez 1 minute",
     undo: "Annuler",
     pickColor: "Pipette (couleur de fond)",
@@ -1198,6 +1212,9 @@ const en: Messages = {
     seeAddress: "See address",
     copyLink: "Copy link",
     share: "Share",
+    qr: "QR code",
+    qrHint: "Stick it on the wall. A scan opens the shop and its catalog.",
+    shareQr: "Share the code",
     message: "Message",
     logo: "Shop logo",
     logoHint: "Square image — shown wherever the shop name appears",
@@ -1449,6 +1466,10 @@ const en: Messages = {
     clipPlay: "Play clip",
     clipPause: "Pause",
     clipHint: "Drag to choose which minute plays. Listen before publishing.",
+    cutImage: "Image with sound",
+    cutMontage: "Montage with sound",
+    cutSilent: "No sound",
+    excerpt: "Montage excerpt",
     importOk: "Sound imported — pick 1 minute",
     undo: "Undo",
     pickColor: "Eyedropper (background color)",
@@ -1710,6 +1731,9 @@ const pt: Messages = {
     seeAddress: "Ver morada",
     copyLink: "Copiar link",
     share: "Partilhar",
+    qr: "Código QR",
+    qrHint: "Cola-o na parede. Um scan abre a loja e o catálogo.",
+    shareQr: "Partilhar o código",
     message: "Mensagem",
     logo: "Logótipo da loja",
     logoHint: "Imagem quadrada — visível com o nome da loja",
@@ -1961,6 +1985,10 @@ const pt: Messages = {
     clipPlay: "Ouvir o excerto",
     clipPause: "Pausa",
     clipHint: "Arraste para escolher o minuto. Ouça antes de publicar.",
+    cutImage: "Imagem com som",
+    cutMontage: "Montagem com som",
+    cutSilent: "Sem som",
+    excerpt: "Excerto da montagem",
     importOk: "Som importado — escolha 1 minuto",
     undo: "Desfazer",
     pickColor: "Conta-gotas (cor de fundo)",

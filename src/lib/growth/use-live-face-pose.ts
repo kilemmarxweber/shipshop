@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  FacePoseSmoother,
-  idleStudioPose,
-  type FacePose,
+    FacePoseSmoother,
+    idleStudioPose,
+    type FacePose,
 } from "@/lib/growth/live-face-tracking";
 import { startVideoFaceTracking } from "@/lib/growth/mediapipe-face-landmarker";
 
@@ -52,17 +52,16 @@ export function useLiveFacePose(opts?: {
     return stop;
   }, [enabled, video, seed, smoother]);
 
-  // Idle uniquement si pas de tracking vidéo actif
+  // Idle si pas de vidéo, ou si MediaPipe n’a rien publié récemment
   useEffect(() => {
     if (!enabled) return;
-    if (video) return;
     const ms = Math.max(33, Math.round(1000 / hz));
     const id = setInterval(() => {
       if (Date.now() < trackedUntil.current) return;
       setPose(smoother.push(idleStudioPose(Date.now(), seed)));
     }, ms);
     return () => clearInterval(id);
-  }, [enabled, hz, seed, smoother, video]);
+  }, [enabled, hz, seed, smoother]);
 
   function ingestPose(raw: FacePose) {
     trackedUntil.current = Date.now() + 600;

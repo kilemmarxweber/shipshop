@@ -17,8 +17,10 @@ assert.equal(verifyCinetPayNotifyToken(null, token), false);
 
 assert.equal(assertCinetPayAmount(10_000, "CDF"), 100);
 assert.equal(assertCinetPayAmount(10_000, "USD"), 100);
+assert.equal(assertCinetPayAmount(500, "CDF"), 5);
+assert.equal(assertCinetPayAmount(500, "USD"), 5);
 assert.throws(() => assertCinetPayAmount(250, "USD"), /entier/);
-assert.throws(() => assertCinetPayAmount(500, "CDF"), /100 et 2 500 000/);
+assert.throws(() => assertCinetPayAmount(400, "USD"), /5 et 2 500 000/);
 assert.throws(() => assertCinetPayAmount(10_000, "KW"), /CDF et USD/);
 
 assert.equal(cinetPayPhone("0812345678"), "+243812345678");

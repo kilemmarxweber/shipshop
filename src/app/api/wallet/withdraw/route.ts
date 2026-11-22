@@ -1,4 +1,4 @@
-import { parseCurrency, shopFxRates, walletCents } from "@/lib/money";
+import { parseCurrency, walletCents } from "@/lib/money";
 import { isCinetPayConfigured } from "@/lib/payments/cinetpay";
 import { sendCinetPayPayout } from "@/lib/payments/cinetpay-transfer";
 import {
@@ -10,22 +10,22 @@ import {
     replayIfComplete,
 } from "@/lib/payments/idempotent-op";
 import { idempotencyFrom } from "@/lib/payments/ledger";
+import { revertUnsentWithdrawal } from "@/lib/payments/revert-withdrawal";
 import {
-    MIN_WITHDRAWAL_USD_CENTS,
-    amountUsdCents,
+    MIN_CASH_MOVE_CENTS,
+    minCashMoveLabel,
     withdrawalFeeCents,
 } from "@/lib/platform-fees";
 import { creditTreasury } from "@/lib/platform-ledger";
-import { revertUnsentWithdrawal } from "@/lib/payments/revert-withdrawal";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateWallet, getSession } from "@/lib/session";
 import { applyBucketDelta, getBucketCents } from "@/lib/wallet-buckets";
-import { NextResponse, after } from "next/server";
-import { z } from "zod";
+import { after, NextResponse } from "next/server";
+import { z, ZodError } from "zod";
 
 const schema = z.object({
   bucket: z.enum(["BUYER", "VENDOR", "COURIER"]),
-  amountCents: z.number().int().positive(),
+  amountCents: z.number().int().min(MIN_CASH_MOVE_CENTS, "Minimum 5"),
   currency: z.enum(["USD", "CDF", "KW"]).optional(),
   provider: z.enum(["MPESA", "ORANGE", "AIRTEL"]),
   phone: z.string().min(8).max(40),
@@ -71,10 +71,9 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    const usd = amountUsdCents(body.amountCents, currency, shopFxRates());
-    if (usd < MIN_WITHDRAWAL_USD_CENTS) {
+    if (body.amountCents < MIN_CASH_MOVE_CENTS) {
       return NextResponse.json(
-        { error: "Minimum 1 $US par retrait" },
+        { error: minCashMoveLabel(currency) },
         { status: 400 },
       );
     }
@@ -219,7 +218,11 @@ export async function POST(req: Request) {
             try {
               await revertUnsentWithdrawal(withdrawal.id);
             } catch (revertError) {
-              console.error("[cinetpay-payout-revert]", withdrawal.id, revertError);
+              console.error(
+                "[cinetpay-payout-revert]",
+                withdrawal.id,
+                revertError,
+              );
             }
           }
         })();
@@ -242,6 +245,9 @@ export async function POST(req: Request) {
         { error: "Un retrait est déjà en cours sur ce pot" },
         { status: 409 },
       );
+    }
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: "Minimum 5" }, { status: 400 });
     }
     const message =
       error instanceof Error ? error.message : "Retrait impossible";

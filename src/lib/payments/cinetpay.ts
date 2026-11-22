@@ -114,7 +114,7 @@ export function cinetpayCallbackOrigin() {
   return raw.replace(/\/$/, "");
 }
 
-/** Integer major units, 100 to 2_500_000. CDF and USD only (cinetpay-js). */
+/** Integer major units, 5 to 2_500_000. CDF and USD only, no FX conversion. */
 export function assertCinetPayAmount(
   amountCents: number,
   currency: AppCurrency,
@@ -128,8 +128,8 @@ export function assertCinetPayAmount(
     throw new Error("Le montant CinetPay doit être un nombre entier");
   }
   const major = amountCents / 100;
-  if (major < 100 || major > 2_500_000) {
-    throw new Error("Le montant CinetPay doit être entre 100 et 2 500 000");
+  if (major < 5 || major > 2_500_000) {
+    throw new Error("Le montant CinetPay doit être entre 5 et 2 500 000");
   }
   return major;
 }

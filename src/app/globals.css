@@ -1163,8 +1163,6 @@ html[data-tabbar-open] .feed-actions-rail {
   object-position: center;
   filter: brightness(1.1) contrast(1.08) saturate(1.06);
   image-rendering: auto;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
   pointer-events: none;
   user-select: none;
 }

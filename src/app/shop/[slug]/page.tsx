@@ -13,6 +13,7 @@ import { ProductImageCarousel } from "@/components/product-image-carousel";
 import { ShareMenu } from "@/components/share-menu";
 import { ShopBrand, ShopLiveAvatar } from "@/components/shop-brand";
 import { ShopHoursNotice } from "@/components/shop-hours-notice";
+import { ShopQrButton } from "@/components/shop-qr-dialog";
 import { ShopSocialLinks } from "@/components/shop-social-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -608,6 +609,7 @@ function ShopInner() {
             <Share2 className="size-4" aria-hidden />
             <span className="sr-only">{t("shop.share")}</span>
           </ShareMenu>
+          <ShopQrButton url={shopUrl} name={shop.name} />
           <Button
             type="button"
             size="icon"

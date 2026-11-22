@@ -3,6 +3,8 @@
 import {
     defaultFacePose,
     eyeDistance,
+    midEyesPoint,
+    propSizeCqw,
     type FacePose,
     type Vec2,
 } from "@/lib/growth/live-face-tracking";
@@ -20,20 +22,28 @@ function clamp(n: number, min: number, max: number) {
 function stickerStyle(
   pose: FacePose,
   point: Vec2,
-  scale: number,
   opacity: number,
+  opts?: {
+    tx?: string;
+    ty?: string;
+    scaleX?: number;
+    scaleY?: number;
+  },
 ): CSSProperties {
   const rot = (pose.roll * 180) / Math.PI;
-  const sizeScale = clamp(pose.width / 0.42, 0.75, 1.45) * scale;
+  const tx = opts?.tx ?? "-50%";
+  const ty = opts?.ty ?? "-50%";
+  const sx = opts?.scaleX ?? 1;
+  const sy = opts?.scaleY ?? 1;
   return {
     left: `${point.x * 100}%`,
     top: `${point.y * 100}%`,
     opacity,
-    transform: `translate(-50%, -50%) rotate(${rot}deg) scale(${sizeScale})`,
+    transform: `translate(${tx}, ${ty}) rotate(${rot}deg) scale(${sx}, ${sy})`,
   };
 }
 
-/** Grade couleur + stickers ancrés au visage (uniquement si filtre ≠ naturel). */
+/** Grade couleur + stickers / blush ancrés aux landmarks (MediaPipe ou idle). */
 export function LiveVideoStudioGrade({
   filterId,
   pose,
@@ -48,19 +58,9 @@ export function LiveVideoStudioGrade({
 
   const face = pose ?? defaultFacePose();
   const opacity = face.confidence >= 0.35 ? face.confidence : 0;
-  const eyeScale = clamp(eyeDistance(face) / 0.24, 0.8, 1.5);
-  const midEyes = {
-    x: (face.leftEye.x + face.rightEye.x) / 2,
-    y: (face.leftEye.y + face.rightEye.y) / 2,
-  };
-  const anchorPoint =
-    row.anchor === "head"
-      ? face.headTop
-      : row.anchor === "eyes"
-        ? midEyes
-        : row.anchor === "nose"
-          ? face.nose
-          : face.center;
+  const midEyes = midEyesPoint(face);
+  const eyeSpan = eyeDistance(face);
+  const glassesScaleX = clamp(eyeSpan / 0.22, 1.08, 1.55);
 
   const sparklePts = [
     { x: face.headTop.x - 0.12, y: face.headTop.y + 0.04 },
@@ -70,9 +70,19 @@ export function LiveVideoStudioGrade({
     { x: face.nose.x, y: face.nose.y + 0.12 },
   ];
 
+  const headSize = propSizeCqw(face, "head", 1.15);
+  const glassesSize = propSizeCqw(face, "eyes", 1.25);
+  const earSize = propSizeCqw(face, "earLeft");
+  const faceSize = propSizeCqw(face, "face");
+  const blushW = clamp(face.width * 42, 14, 28);
+  const blushH = clamp(face.height * 18, 7, 14);
+
   return (
     <div
-      className={cn("pointer-events-none absolute inset-0 z-[2]", className)}
+      className={cn(
+        "pointer-events-none absolute inset-0 z-[2] [container-type:size]",
+        className,
+      )}
       aria-hidden
     >
       {row.grade ? (
@@ -84,95 +94,152 @@ export function LiveVideoStudioGrade({
       {row.id === "studio" || row.id === "soft" || row.id === "warm" ? (
         <div className="absolute inset-0 bg-[rgba(255,175,145,0.05)] mix-blend-overlay" />
       ) : null}
+
       {row.id === "blush" ? (
         <>
           <span
-            className="absolute h-7 w-14 rounded-full bg-[rgba(255,120,140,0.22)]"
-            style={stickerStyle(
-              face,
-              {
-                x: face.center.x - face.width * 0.28,
-                y: face.center.y + 0.04,
-              },
-              1,
-              opacity,
-            )}
+            className="absolute rounded-full bg-[rgba(255,110,130,0.34)] mix-blend-multiply blur-[1px]"
+            style={{
+              ...stickerStyle(face, face.leftCheek, opacity * 0.95, {
+                tx: "-50%",
+                ty: "-50%",
+              }),
+              width: `${blushW}cqw`,
+              height: `${blushH}cqw`,
+            }}
           />
           <span
-            className="absolute h-7 w-14 rounded-full bg-[rgba(255,120,140,0.22)]"
-            style={stickerStyle(
-              face,
-              {
-                x: face.center.x + face.width * 0.28,
-                y: face.center.y + 0.04,
-              },
-              1,
-              opacity,
-            )}
+            className="absolute rounded-full bg-[rgba(255,110,130,0.34)] mix-blend-multiply blur-[1px]"
+            style={{
+              ...stickerStyle(face, face.rightCheek, opacity * 0.95, {
+                tx: "-50%",
+                ty: "-50%",
+              }),
+              width: `${blushW}cqw`,
+              height: `${blushH}cqw`,
+            }}
+          />
+          <div
+            className="absolute inset-0 mix-blend-soft-light"
+            style={{
+              background: `radial-gradient(ellipse at ${face.center.x * 100}% ${face.center.y * 100}%, rgba(255,200,190,${0.16 * opacity}) 0%, transparent 42%)`,
+            }}
           />
         </>
       ) : null}
-      {row.kind === "overlay" && row.emoji && row.anchor !== "ears" ? (
+
+      {row.kind === "overlay" && row.emoji && row.anchor === "head" ? (
         <div
-          className="absolute text-[clamp(2.5rem,8vw,3.75rem)] drop-shadow-lg"
-          style={stickerStyle(
-            face,
-            anchorPoint,
-            row.anchor === "eyes" ? eyeScale : 1,
-            opacity,
-          )}
+          className="absolute drop-shadow-lg leading-none"
+          style={{
+            ...stickerStyle(face, face.headTop, opacity, {
+              tx: "-50%",
+              ty: "-88%",
+              scaleX: 1.08,
+              scaleY: 1.02,
+            }),
+            fontSize: `${headSize}cqw`,
+          }}
         >
           {row.emoji}
         </div>
       ) : null}
+
+      {row.kind === "overlay" && row.emoji && row.anchor === "eyes" ? (
+        <div
+          className="absolute drop-shadow-lg leading-none"
+          style={{
+            ...stickerStyle(face, midEyes, opacity, {
+              tx: "-50%",
+              ty: "-42%",
+              scaleX: glassesScaleX,
+              scaleY: 0.92,
+            }),
+            fontSize: `${glassesSize}cqw`,
+          }}
+        >
+          {row.emoji}
+        </div>
+      ) : null}
+
+      {row.kind === "overlay" &&
+      row.emoji &&
+      row.anchor !== "ears" &&
+      row.anchor !== "head" &&
+      row.anchor !== "eyes" ? (
+        <div
+          className="absolute drop-shadow-lg leading-none"
+          style={{
+            ...stickerStyle(face, face.center, opacity),
+            fontSize: `${faceSize}cqw`,
+          }}
+        >
+          {row.emoji}
+        </div>
+      ) : null}
+
       {(row.anchor === "ears" || row.id === "earrings") && row.emoji ? (
         <>
           {face.leftEarVisible ? (
             <div
-              className="absolute text-[clamp(1.5rem,4vw,2.25rem)] drop-shadow-lg"
-              style={stickerStyle(face, face.leftEar, 0.85, opacity)}
+              className="absolute drop-shadow-lg leading-none"
+              style={{
+                ...stickerStyle(face, face.leftEar, opacity),
+                fontSize: `${earSize}cqw`,
+              }}
             >
               {row.emoji}
             </div>
           ) : null}
           {face.rightEarVisible ? (
             <div
-              className="absolute text-[clamp(1.5rem,4vw,2.25rem)] drop-shadow-lg"
-              style={stickerStyle(face, face.rightEar, 0.85, opacity)}
+              className="absolute drop-shadow-lg leading-none"
+              style={{
+                ...stickerStyle(face, face.rightEar, opacity),
+                fontSize: `${earSize}cqw`,
+              }}
             >
               {row.emoji}
             </div>
           ) : null}
         </>
       ) : null}
+
       {row.kind === "animation" && row.emoji && row.id !== "sparkle" ? (
         <>
           {face.leftEarVisible ? (
             <div
-              className="absolute animate-pulse text-[clamp(1.75rem,5vw,2.5rem)]"
-              style={stickerStyle(face, face.leftEar, 1, opacity)}
+              className="absolute animate-pulse leading-none"
+              style={{
+                ...stickerStyle(face, face.leftEar, opacity),
+                fontSize: `${earSize * 1.1}cqw`,
+              }}
             >
               {row.emoji}
             </div>
           ) : null}
           {face.rightEarVisible ? (
             <div
-              className="absolute animate-pulse text-[clamp(1.75rem,5vw,2.5rem)]"
-              style={stickerStyle(face, face.rightEar, 1, opacity)}
+              className="absolute animate-pulse leading-none"
+              style={{
+                ...stickerStyle(face, face.rightEar, opacity),
+                fontSize: `${earSize * 1.1}cqw`,
+              }}
             >
               {row.emoji}
             </div>
           ) : null}
         </>
       ) : null}
+
       {row.id === "sparkle"
         ? sparklePts.map((pt, i) => (
             <span
               key={`${pt.x}-${i}`}
               className="absolute animate-pulse text-amber-200"
               style={{
-                ...stickerStyle(face, pt, 1, opacity),
-                fontSize: `${14 + (i % 3) * 6}px`,
+                ...stickerStyle(face, pt, opacity),
+                fontSize: `${headSize * 0.28 + (i % 3) * 4}cqw`,
               }}
             >
               ✦

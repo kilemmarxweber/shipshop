@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { getAppName } from "@/lib/app-name";
 import { parseCurrency, walletCents, type AppCurrency } from "@/lib/money";
+import { MIN_CASH_MOVE_CENTS, minCashMoveLabel } from "@/lib/platform-fees";
 import {
     assertCinetPayAmount,
     checkCinetPayPayment,
@@ -203,8 +204,10 @@ function simulatedPayerPhone(raw: string) {
 export async function initiateDeposit(input: DepositInput) {
   await expireStaleMovements();
   const key = parseIdempotencyKey(input.idempotencyKey);
-  if (input.amountCents < 100) throw new Error("Montant minimum: 1");
   const currency = parseCurrency(input.currency);
+  if (input.amountCents < MIN_CASH_MOVE_CENTS) {
+    throw new Error(minCashMoveLabel(currency));
+  }
   const live = isCinetPayConfigured();
   const amountMajor = live
     ? assertCinetPayAmount(input.amountCents, currency)

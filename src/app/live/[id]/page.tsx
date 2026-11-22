@@ -32,7 +32,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
-import { defaultFacePose } from "@/lib/growth/live-face-tracking";
+import {
+    defaultFacePose,
+    mirrorFacePose,
+} from "@/lib/growth/live-face-tracking";
 import { newOverlayId, type LiveOverlay } from "@/lib/growth/live-overlays";
 import { type LivePublisherPeer } from "@/lib/growth/live-rtc-shared";
 import { openSelfieStream } from "@/lib/growth/live-selfie-capture";
@@ -961,13 +964,18 @@ export default function LiveRoomPage({
   const faceTrackingOn = Boolean(
     isHost && live && live.status !== "ENDED" && live.status !== "PAUSED",
   );
+  const [trackVideoEl, setTrackVideoEl] = useState<HTMLVideoElement | null>(
+    null,
+  );
   const { pose: localFacePose } = useLiveFacePose({
     enabled: faceTrackingOn,
     hz: 20,
+    video: faceTrackingOn ? trackVideoEl : null,
   });
   const sendFacePose = sfu.sendFacePose;
   useEffect(() => {
     if (!faceTrackingOn || !sfuEnabled) return;
+    // Espace caméra (non miroir) pour les spectateurs.
     sendFacePose(localFacePose);
   }, [faceTrackingOn, localFacePose, sendFacePose, sfuEnabled]);
 
@@ -1586,8 +1594,10 @@ export default function LiveRoomPage({
   const selected = overlays.find((o) => o.id === selectedOverlayId);
   const chats = live.chats ?? [];
   const videoFilterStyle = liveVideoFilterStyle(live.videoFilter);
+  // Host : vidéo en miroir → pose miroir pour coller aux yeux / joues à l’écran.
+  // Viewer : flux distant non miroir → pose caméra telle quelle.
   const stagePose = isHost
-    ? localFacePose
+    ? mirrorFacePose(localFacePose)
     : (sfu.remoteFacePose ?? defaultFacePose());
   const stageLayout = normalizeStageLayout(live.stageLayout);
   const guestJoinLocked = Boolean(live.guestJoinLocked);
@@ -1691,7 +1701,10 @@ export default function LiveRoomPage({
                 </div>
               ) : showHostLocalVideo ? (
                 <video
-                  ref={videoRef}
+                  ref={(el) => {
+                    videoRef.current = el;
+                    setTrackVideoEl(el);
+                  }}
                   muted
                   autoPlay
                   {...iosInlineVideo}

@@ -444,11 +444,16 @@ export function ProductImageCarousel({
   const lastTapRef = useRef(0);
   const pendingTapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [likeBurst, setLikeBurst] = useState(false);
+  const [coldPosterFailed, setColdPosterFailed] = useState(false);
 
   const hasVideo = list.some((url) => isVideoUrl(url));
   const currentIsVideo = isVideoUrl(list[index] ?? "");
   const coverSrc = list[0];
   const imagesKey = list.join("\n");
+
+  useEffect(() => {
+    setColdPosterFailed(false);
+  }, [imagesKey]);
 
   useEffect(() => {
     const urls = imagesKey.split("\n");
@@ -756,7 +761,7 @@ export function ProductImageCarousel({
       ? feedActiveIds.has(feedId)
       : inView;
   const cardMayPlay = pageLive && !userPaused && (forcePlay || slotActive);
-  const coldShell = feedWarm === false;
+  const coldShell = feedWarm === false && !coldPosterFailed;
   const shellPoster = isVideoUrl(coverSrc ?? "")
     ? videoPosterUrl(coverSrc!)
     : coverSrc;
@@ -785,6 +790,11 @@ export function ProductImageCarousel({
           alt=""
           draggable={false}
           className="absolute inset-0 size-full object-cover"
+          onError={() => {
+            setColdPosterFailed(true);
+            setNearView(true);
+            setStickyWarm(true);
+          }}
         />
       ) : null}
       {coldShell
