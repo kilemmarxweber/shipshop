@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { ISSUE_TYPE_LABELS, qrImageUrl } from "@/lib/handover";
-import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fees";
+import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fee-math";
 import { formatMoney, cn } from "@/lib/utils";
 import { notifyWalletUpdated } from "@/lib/wallet-events";
 import {

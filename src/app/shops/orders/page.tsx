@@ -8,7 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
 import { QrScanCamera } from "@/components/qr-scan-camera";
 import { parseHandoverQrPayload } from "@/lib/handover";
-import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fees";
+import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fee-math";
 import {
   CANCEL_REASONS,
   type CancelReasonCode,

@@ -198,13 +198,16 @@ export async function purchaseTickets(input: {
         },
       });
       await ensureTreasury(tx);
-      if (unit.platformFeeCents > 0) {
+      if (unit.platformFeeCents > 0 || unit.organizerCents > 0) {
         await creditTreasury(tx, {
           amountCents: unit.platformFeeCents,
           currency,
           kind: "TICKET",
           ticketId: ticket.id,
           actorUserId: input.buyerUserId,
+          grossFeeCents: unit.platformFeeCents,
+          providerCostCents: 0,
+          partnerShareCents: unit.organizerCents,
         });
       }
       if (unit.organizerCents > 0) {

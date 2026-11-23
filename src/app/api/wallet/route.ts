@@ -5,7 +5,11 @@ import { getOrCreateWallet, getSession } from "@/lib/session";
 import { expireStaleMovements, flushNotifyOutbox } from "@/lib/payments/ledger";
 import { getBucketCents } from "@/lib/wallet-buckets";
 import { APP_CURRENCIES, parseCurrency } from "@/lib/money";
-import { MIN_CASH_MOVE_CENTS } from "@/lib/platform-fees";
+import {
+  getPlatformFeeSettings,
+  MIN_CASH_MOVE_CENTS,
+  publicFeeSettings,
+} from "@/lib/platform-fees";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -57,6 +61,8 @@ export async function GET(req: Request) {
     ]),
   );
 
+  const feeSettings = await getPlatformFeeSettings();
+
   return NextResponse.json({
     wallet,
     pots,
@@ -85,5 +91,6 @@ export async function GET(req: Request) {
       minDepositCents: MIN_CASH_MOVE_CENTS,
       minWithdrawCents: MIN_CASH_MOVE_CENTS,
     },
+    fees: publicFeeSettings(feeSettings),
   });
 }

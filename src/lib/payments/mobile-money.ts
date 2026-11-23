@@ -1,7 +1,13 @@
 import { Prisma } from "@/generated/prisma/client";
 import { getAppName } from "@/lib/app-name";
 import { parseCurrency, walletCents, type AppCurrency } from "@/lib/money";
-import { MIN_CASH_MOVE_CENTS, minCashMoveLabel } from "@/lib/platform-fees";
+import {
+    getPlatformFeeSettings,
+    MIN_CASH_MOVE_CENTS,
+    minCashMoveLabel,
+    splitCashMoveFee,
+} from "@/lib/platform-fees";
+import { creditTreasury } from "@/lib/platform-ledger";
 import {
     assertCinetPayAmount,
     checkCinetPayPayment,
@@ -695,6 +701,16 @@ export async function postAwaitingMovement(
 
     const currency = asCurrency(movement.currency);
     const creditUserId = movement.beneficiaryUserId ?? movement.payerUserId;
+    const feeSettings = await getPlatformFeeSettings();
+    const depositSplit = splitCashMoveFee(
+      movement.amountCents,
+      feeSettings.depositFeeBps,
+      feeSettings.depositCinetPayBps,
+    );
+    const creditCents = Math.max(
+      0,
+      movement.amountCents - depositSplit.grossFeeCents,
+    );
     const payerWallet = await tx.wallet.findUnique({
       where: { userId: movement.payerUserId },
     });
@@ -709,7 +725,7 @@ export async function postAwaitingMovement(
       tx,
       creditUserId,
       currency,
-      movement.amountCents,
+      creditCents,
     );
 
     const pending = await tx.walletTransaction.findFirst({
@@ -724,6 +740,13 @@ export async function postAwaitingMovement(
       ...asMeta(pending.metadata),
       confirmedAt: new Date().toISOString(),
       simulated: opts?.simulated === true,
+      grossCents: movement.amountCents,
+      feeCents: depositSplit.grossFeeCents,
+      creditCents,
+      providerCostCents: depositSplit.providerCostCents,
+      netPlatformCents: depositSplit.netAmountCents,
+      feeBps: depositSplit.feeBps,
+      providerBps: depositSplit.providerBps,
     };
 
     const payerUpdated = await tx.walletTransaction.update({
@@ -743,7 +766,7 @@ export async function postAwaitingMovement(
           walletId: credited.wallet.id,
           movementId: movement.id,
           type: "TRANSFER_IN",
-          amountCents: movement.amountCents,
+          amountCents: creditCents,
           currency,
           provider: pending.provider,
           phone: pending.phone,
@@ -756,6 +779,19 @@ export async function postAwaitingMovement(
             beneficiaryUserId: movement.beneficiaryUserId,
           },
         },
+      });
+    }
+
+    if (depositSplit.grossFeeCents > 0 || depositSplit.providerCostCents > 0) {
+      await creditTreasury(tx, {
+        amountCents: depositSplit.netAmountCents,
+        currency,
+        kind: "DEPOSIT",
+        actorUserId: movement.payerUserId,
+        grossFeeCents: depositSplit.grossFeeCents,
+        providerCostCents: depositSplit.providerCostCents,
+        feeBpsSnapshot: depositSplit.feeBps,
+        providerBpsSnapshot: depositSplit.providerBps,
       });
     }
 
@@ -773,7 +809,7 @@ export async function postAwaitingMovement(
     const notifyPayload = {
       payerUserId: movement.payerUserId,
       beneficiaryUserId: movement.beneficiaryUserId,
-      amountCents: movement.amountCents,
+      amountCents: creditCents,
       currency,
       reference: movement.providerReference,
       payerBalanceAfter: movement.beneficiaryUserId
@@ -859,6 +895,12 @@ export async function transferFromBalance(input: {
     );
   }
 
+  const feeSettings = await getPlatformFeeSettings();
+  const internalFee = Math.floor(
+    (input.amountCents * feeSettings.transferInternalFeeBps) / 10_000,
+  );
+  const creditCents = Math.max(0, input.amountCents - internalFee);
+
   try {
     const result = await prisma.$transaction(async (tx) => {
       const payerWallet = await tx.wallet.findUnique({
@@ -892,7 +934,7 @@ export async function transferFromBalance(input: {
         tx,
         beneficiaryId,
         currency,
-        input.amountCents,
+        creditCents,
       );
 
       const reference = `BAL-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -902,6 +944,10 @@ export async function transferFromBalance(input: {
         beneficiaryUserId: beneficiaryId,
         beneficiaryName: beneficiary.name,
         idempotencyKey: key,
+        feeCents: internalFee,
+        creditCents,
+        feeBps: feeSettings.transferInternalFeeBps,
+        rail: "INTERNAL" as const,
       };
 
       const movement = await tx.moneyMovement.create({
@@ -939,7 +985,7 @@ export async function transferFromBalance(input: {
           walletId: credit.wallet.id,
           movementId: movement.id,
           type: "TRANSFER_IN",
-          amountCents: input.amountCents,
+          amountCents: creditCents,
           currency,
           provider: "INTERNAL",
           reference: `${reference}-IN`,
@@ -952,10 +998,23 @@ export async function transferFromBalance(input: {
         },
       });
 
+      if (internalFee > 0) {
+        await creditTreasury(tx, {
+          amountCents: internalFee,
+          currency,
+          kind: "TRANSFER_INTERNAL",
+          actorUserId: input.payerUserId,
+          grossFeeCents: internalFee,
+          providerCostCents: 0,
+          feeBpsSnapshot: feeSettings.transferInternalFeeBps,
+          providerBpsSnapshot: 0,
+        });
+      }
+
       await enqueueWalletOutbox(tx, movement.id, {
         payerUserId: input.payerUserId,
         beneficiaryUserId: beneficiaryId,
-        amountCents: input.amountCents,
+        amountCents: creditCents,
         currency,
         reference,
         payerBalanceAfter: payerDebit.nextCents,

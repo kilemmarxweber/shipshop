@@ -1,21 +1,21 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  BarChart3,
-  Package,
-  TrendingUp,
-  Wallet,
-} from "lucide-react";
+import { useI18n } from "@/components/i18n-provider";
+import { ShopPicker } from "@/components/shop-picker";
 import { authClient } from "@/lib/auth-client";
 import { fetchJson } from "@/lib/fetch-json";
-import { formatMoney, cn } from "@/lib/utils";
-import { useI18n } from "@/components/i18n-provider";
 import { orderStatusLabel } from "@/lib/order-status-label";
-import { ShopPicker } from "@/components/shop-picker";
+import { cn, formatMoney } from "@/lib/utils";
+import {
+    AlertTriangle,
+    ArrowLeft,
+    BarChart3,
+    Package,
+    TrendingUp,
+    Wallet,
+} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 type Period = "7d" | "30d" | "90d" | "all";
 
@@ -42,9 +42,19 @@ type Report = {
     inProgressCount: number;
     orderCount: number;
   };
-  series: { date: string; label: string; revenueCents: number; orders: number }[];
+  series: {
+    date: string;
+    label: string;
+    revenueCents: number;
+    orders: number;
+  }[];
   weekdayHeat: { day: string; revenueCents: number; orders: number }[];
-  hourHeat: { hour: number; label: string; revenueCents: number; orders: number }[];
+  hourHeat: {
+    hour: number;
+    label: string;
+    revenueCents: number;
+    orders: number;
+  }[];
   insights: {
     peakWeekday: string | null;
     peakWeekdayCents: number;
@@ -114,11 +124,7 @@ type AttentionOrder = {
   buyer: { name: string };
 };
 
-function LineChart({
-  series,
-}: {
-  series: Report["series"];
-}) {
+function LineChart({ series }: { series: Report["series"] }) {
   const w = 320;
   const h = 120;
   const pad = 8;
@@ -126,9 +132,7 @@ function LineChart({
   const points = series.map((s, i) => {
     const x =
       pad +
-      (series.length <= 1
-        ? w / 2
-        : (i / (series.length - 1)) * (w - pad * 2));
+      (series.length <= 1 ? w / 2 : (i / (series.length - 1)) * (w - pad * 2));
     const y = h - pad - (s.revenueCents / max) * (h - pad * 2);
     return `${x},${y}`;
   });
@@ -246,16 +250,20 @@ export default function ReportsPage() {
   }, [session, period, shopId]);
 
   const weekdayMax = useMemo(
-    () => Math.max(1, ...(report?.weekdayHeat.map((d) => d.revenueCents) ?? [1])),
+    () =>
+      Math.max(1, ...(report?.weekdayHeat.map((d) => d.revenueCents) ?? [1])),
     [report],
   );
   const hourBusy = useMemo(() => {
     const hours = report?.hourHeat ?? [];
     const max = Math.max(1, ...hours.map((h) => h.orders));
-    return hours.filter((h) => h.orders > 0).slice(0, 24).map((h) => ({
-      ...h,
-      intensity: h.orders / max,
-    }));
+    return hours
+      .filter((h) => h.orders > 0)
+      .slice(0, 24)
+      .map((h) => ({
+        ...h,
+        intensity: h.orders / max,
+      }));
   }, [report]);
 
   if (!session) {
@@ -377,24 +385,33 @@ export default function ReportsPage() {
                   </span>
                 </p>
                 <p>
-                  Livraisons 0,50 × {platform.summary.shippingCount}
+                  Livraisons (part SS) × {platform.summary.shippingCount}
                   <br />
                   <span className="font-bold">
                     {formatMoney(platform.summary.shippingUsdCents, "USD")}
                   </span>
                 </p>
                 <p>
-                  Retraits 5 %
+                  Retraits / versements
                   <br />
                   <span className="font-bold">
-                    {formatMoney(platform.summary.withdrawalUsdCents, "USD")}
+                    {formatMoney(
+                      (platform.summary.withdrawalUsdCents ?? 0) +
+                        ((platform.summary as { depositUsdCents?: number })
+                          .depositUsdCents ?? 0),
+                      "USD",
+                    )}
                   </span>
                 </p>
                 <p>
-                  Total USD
+                  Net ShipShop
                   <br />
                   <span className="font-bold text-trust">
-                    {formatMoney(platform.summary.totalUsdCents, "USD")}
+                    {formatMoney(
+                      (platform as { totals?: { netUsdCents?: number } }).totals
+                        ?.netUsdCents ?? platform.summary.totalUsdCents,
+                      "USD",
+                    )}
                   </span>
                 </p>
               </div>
@@ -412,7 +429,8 @@ export default function ReportsPage() {
           <div className="mb-4 rounded-2xl border border-border bg-surface p-4">
             <p className="text-sm font-bold">Funnel contenu → achat</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              GMV {formatMoney(report.summary.gmvCents ?? report.summary.soldCents)}
+              GMV{" "}
+              {formatMoney(report.summary.gmvCents ?? report.summary.soldCents)}
               {" · "}
               panier moyen {formatMoney(report.summary.aovCents ?? 0)}
               {" · "}
@@ -436,7 +454,9 @@ export default function ReportsPage() {
               <p>
                 Achats
                 <br />
-                <span className="font-bold">{report.funnel?.purchase ?? 0}</span>
+                <span className="font-bold">
+                  {report.funnel?.purchase ?? 0}
+                </span>
                 <span className="text-muted-foreground">
                   {" "}
                   ({((report.funnel?.cardToBuyBps ?? 0) / 100).toFixed(1)} %)
@@ -454,28 +474,34 @@ export default function ReportsPage() {
               </ul>
             ) : (
               <p className="mt-2 text-[11px] text-muted-foreground">
-                ShipNeeds reste gratuit — l&apos;intention d&apos;achat alimente le reco.
+                ShipNeeds reste gratuit — l&apos;intention d&apos;achat alimente
+                le reco.
               </p>
             )}
             {report.shopsPro ? (
-              <p className="mt-2 text-[11px] text-trust">ShipPro actif — outils étendus.</p>
+              <p className="mt-2 text-[11px] text-trust">
+                ShipPro actif — outils étendus.
+              </p>
             ) : (
               <p className="mt-2 text-[11px] text-muted-foreground">
-                ShipPro est optionnel (productivité, pas l&apos;accès au marché).
+                ShipPro est optionnel (productivité, pas l&apos;accès au
+                marché).
               </p>
             )}
           </div>
 
           {(report.insights.peakWeekday || report.insights.peakHour) && (
             <div className="mb-4 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-xs">
-              <p className="font-bold text-primary">Pics d&apos;achats en ligne</p>
+              <p className="font-bold text-primary">
+                Pics d&apos;achats en ligne
+              </p>
               <p className="mt-1 text-muted-foreground">
                 Meilleur jour :{" "}
                 <span className="font-semibold text-white">
                   {report.insights.peakWeekday ?? "—"}
                 </span>{" "}
-                ({formatMoney(report.insights.peakWeekdayCents)}) · Heure
-                forte :{" "}
+                ({formatMoney(report.insights.peakWeekdayCents)}) · Heure forte
+                :{" "}
                 <span className="font-semibold text-white">
                   {report.insights.peakHour ?? "—"}
                 </span>{" "}

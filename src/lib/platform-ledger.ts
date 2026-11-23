@@ -1,9 +1,18 @@
-import type { Prisma } from "@/generated/prisma/client";
+import type { PlatformFeeKind, Prisma } from "@/generated/prisma/client";
 import type { AppCurrency } from "@/lib/money";
 import { parseCurrency, shopFxRates } from "@/lib/money";
 import { amountUsdCents } from "@/lib/platform-fees";
 
 type Tx = Prisma.TransactionClient;
+
+export type PlatformFeeLedgerKind =
+  | "SALE"
+  | "SHIPPING"
+  | "WITHDRAWAL"
+  | "TICKET"
+  | "DEPOSIT"
+  | "TRANSFER_EXTERNAL"
+  | "TRANSFER_INTERNAL";
 
 function treasuryKey(currency: AppCurrency) {
   if (currency === "CDF") return "cdfCents" as const;
@@ -22,9 +31,10 @@ export async function ensureTreasury(tx: Tx) {
 export async function creditTreasury(
   tx: Tx,
   input: {
+    /** Montant crédité en treasury (= net ShipShop). */
     amountCents: number;
     currency: string;
-    kind: "SALE" | "SHIPPING" | "WITHDRAWAL" | "TICKET";
+    kind: PlatformFeeLedgerKind;
     orderId?: string | null;
     withdrawalId?: string | null;
     shopId?: string | null;
@@ -32,23 +42,53 @@ export async function creditTreasury(
     ticketId?: string | null;
     actorUserId?: string | null;
     fx?: ReturnType<typeof shopFxRates>;
+    grossFeeCents?: number;
+    providerCostCents?: number;
+    partnerShareCents?: number;
+    feeBpsSnapshot?: number | null;
+    providerBpsSnapshot?: number | null;
   },
 ) {
-  if (input.amountCents <= 0) return null;
+  const netAmountCents = Math.max(0, input.amountCents);
+  if (
+    netAmountCents <= 0 &&
+    (input.grossFeeCents ?? 0) <= 0 &&
+    (input.partnerShareCents ?? 0) <= 0 &&
+    (input.providerCostCents ?? 0) <= 0
+  ) {
+    return null;
+  }
+
   const currency = parseCurrency(input.currency);
   const fx = input.fx ?? shopFxRates();
-  const usd = amountUsdCents(input.amountCents, currency, fx);
+  const grossFeeCents = Math.max(0, input.grossFeeCents ?? netAmountCents);
+  const providerCostCents = Math.max(0, input.providerCostCents ?? 0);
+  const partnerShareCents = Math.max(0, input.partnerShareCents ?? 0);
+  const usd = amountUsdCents(netAmountCents, currency, fx);
+
   await ensureTreasury(tx);
-  const row = await tx.platformTreasury.update({
-    where: { id: "chipshop" },
-    data: { [treasuryKey(currency)]: { increment: input.amountCents } },
-  });
+  let row = null as Awaited<ReturnType<typeof tx.platformTreasury.update>> | null;
+  if (netAmountCents > 0) {
+    row = await tx.platformTreasury.update({
+      where: { id: "chipshop" },
+      data: { [treasuryKey(currency)]: { increment: netAmountCents } },
+    });
+  } else {
+    row = await tx.platformTreasury.findUnique({ where: { id: "chipshop" } });
+  }
+
   const fee = await tx.platformFee.create({
     data: {
-      kind: input.kind,
-      amountCents: input.amountCents,
+      kind: input.kind as PlatformFeeKind,
+      amountCents: netAmountCents,
       currency,
       amountUsdCents: usd,
+      grossFeeCents,
+      providerCostCents,
+      netAmountCents,
+      partnerShareCents,
+      feeBpsSnapshot: input.feeBpsSnapshot ?? null,
+      providerBpsSnapshot: input.providerBpsSnapshot ?? null,
       orderId: input.orderId ?? null,
       withdrawalId: input.withdrawalId ?? null,
       shopId: input.shopId ?? null,
@@ -63,11 +103,16 @@ export async function creditTreasury(
       action: `PLATFORM_FEE_${input.kind}`,
       detail: {
         feeId: fee.id,
-        amountCents: input.amountCents,
+        amountCents: netAmountCents,
+        grossFeeCents,
+        providerCostCents,
+        partnerShareCents,
         currency,
         orderId: input.orderId ?? null,
         withdrawalId: input.withdrawalId ?? null,
         ticketId: input.ticketId ?? null,
+        feeBpsSnapshot: input.feeBpsSnapshot ?? null,
+        providerBpsSnapshot: input.providerBpsSnapshot ?? null,
       },
     },
   });
@@ -113,10 +158,12 @@ export async function reverseTicketFee(tx: Tx, ticketId: string) {
   if (!fee || fee.reversedAt) return null;
   const currency = parseCurrency(fee.currency);
   await ensureTreasury(tx);
-  await tx.platformTreasury.update({
-    where: { id: "chipshop" },
-    data: { [treasuryKey(currency)]: { decrement: fee.amountCents } },
-  });
+  if (fee.amountCents > 0) {
+    await tx.platformTreasury.update({
+      where: { id: "chipshop" },
+      data: { [treasuryKey(currency)]: { decrement: fee.amountCents } },
+    });
+  }
   await tx.platformFee.update({
     where: { id: fee.id },
     data: { reversedAt: new Date() },
@@ -143,10 +190,12 @@ export async function reverseSaleFee(tx: Tx, orderId: string) {
   if (!fee || fee.reversedAt) return null;
   const currency = parseCurrency(fee.currency);
   await ensureTreasury(tx);
-  await tx.platformTreasury.update({
-    where: { id: "chipshop" },
-    data: { [treasuryKey(currency)]: { decrement: fee.amountCents } },
-  });
+  if (fee.amountCents > 0) {
+    await tx.platformTreasury.update({
+      where: { id: "chipshop" },
+      data: { [treasuryKey(currency)]: { decrement: fee.amountCents } },
+    });
+  }
   await tx.platformFee.update({
     where: { id: fee.id },
     data: { reversedAt: new Date() },

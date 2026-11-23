@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { QrCode } from "lucide-react";
 import { fetchJson } from "@/lib/fetch-json";
 import { qrImageUrl } from "@/lib/handover";
-import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fees";
+import { SALE_FEE_BPS_DEFAULT } from "@/lib/platform-fee-math";
 import { formatMoney } from "@/lib/utils";
 import { usePageBack } from "@/components/back-nav-context";
 import { PageLoader } from "@/components/page-loader";

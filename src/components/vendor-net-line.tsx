@@ -1,5 +1,5 @@
 import { DEFAULT_FX, parseCurrency } from "@/lib/money";
-import { saleFeeCents, vendorNetCents } from "@/lib/platform-fees";
+import { saleFeeCents, vendorNetCents } from "@/lib/platform-fee-math";
 import { formatMoney } from "@/lib/utils";
 
 export function VendorNetLine({

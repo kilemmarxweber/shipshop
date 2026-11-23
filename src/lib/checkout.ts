@@ -25,6 +25,7 @@ import { PURCHASE_PROVIDER } from "@/lib/payments/rails";
 import {
     courierNetCents,
     creatorFeeCents,
+    getPlatformFeeSettings,
     refundProductCents,
     saleFeeBpsForMonthlyGmvUsd,
     saleFeeCents,
@@ -862,8 +863,19 @@ export async function releaseShippingToCourier(tx: Tx, orderId: string) {
 
   const currency = parseCurrency(order.product.currency);
   const fx = shopFxRates(order.shop);
-  const fee = shippingFeeCents(order.shippingCents, currency, fx);
-  const net = courierNetCents(order.shippingCents, currency, fx);
+  const feeSettings = await getPlatformFeeSettings();
+  const fee = shippingFeeCents(
+    order.shippingCents,
+    currency,
+    fx,
+    feeSettings.shippingFeeBps,
+  );
+  const net = courierNetCents(
+    order.shippingCents,
+    currency,
+    fx,
+    feeSettings.shippingFeeBps,
+  );
 
   if (!order.courier?.userId) {
     await tx.order.update({
@@ -908,7 +920,7 @@ export async function releaseShippingToCourier(tx: Tx, orderId: string) {
     });
   }
 
-  if (fee > 0) {
+  if (fee > 0 || net > 0) {
     await creditTreasury(tx, {
       amountCents: fee,
       currency,
@@ -917,6 +929,11 @@ export async function releaseShippingToCourier(tx: Tx, orderId: string) {
       shopId: order.shopId,
       courierId: order.courierId,
       fx,
+      grossFeeCents: fee,
+      providerCostCents: 0,
+      partnerShareCents: net,
+      feeBpsSnapshot: feeSettings.shippingFeeBps,
+      providerBpsSnapshot: 0,
     });
   }
 
@@ -951,8 +968,12 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
 
   const currency = parseCurrency(order.product.currency);
   const fx = shopFxRates(order.shop);
+  const feeSettings = await getPlatformFeeSettings();
   const monthlyGmvUsd = await shopMonthGmvUsdCents(tx, order.shopId);
-  const volumeBps = saleFeeBpsForMonthlyGmvUsd(monthlyGmvUsd);
+  const volumeBps = saleFeeBpsForMonthlyGmvUsd(
+    monthlyGmvUsd,
+    feeSettings.saleFeeBpsDefault,
+  );
   const rewardState = await tx.shopRewardState.findUnique({
     where: { shopId: order.shopId },
   });
@@ -967,6 +988,7 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
     fx,
     monthlyGmvUsd,
     feeBps,
+    feeSettings.saleFeeBpsDefault,
   );
   const creatorBps =
     order.attributedCreatorId && order.product.creatorCommissionBps > 0
@@ -980,6 +1002,7 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
     monthlyGmvUsd,
     creatorBps,
     feeBps,
+    feeSettings.saleFeeBpsDefault,
   );
 
   if (order.productCents <= 0) {
@@ -1032,7 +1055,7 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
     },
   });
 
-  if (fee > 0) {
+  if (fee > 0 || creditCents > 0) {
     await creditTreasury(tx, {
       amountCents: fee,
       currency,
@@ -1040,6 +1063,11 @@ export async function releaseEscrowToSeller(tx: Tx, orderId: string) {
       orderId: order.id,
       shopId: order.shopId,
       fx,
+      grossFeeCents: fee,
+      providerCostCents: 0,
+      partnerShareCents: creditCents,
+      feeBpsSnapshot: feeBps,
+      providerBpsSnapshot: 0,
     });
   }
 

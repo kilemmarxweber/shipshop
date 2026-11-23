@@ -12,8 +12,10 @@ import {
 import { idempotencyFrom } from "@/lib/payments/ledger";
 import { revertUnsentWithdrawal } from "@/lib/payments/revert-withdrawal";
 import {
+    getPlatformFeeSettings,
     MIN_CASH_MOVE_CENTS,
     minCashMoveLabel,
+    splitCashMoveFee,
     withdrawalFeeCents,
 } from "@/lib/platform-fees";
 import { creditTreasury } from "@/lib/platform-ledger";
@@ -29,6 +31,8 @@ const schema = z.object({
   currency: z.enum(["USD", "CDF", "KW"]).optional(),
   provider: z.enum(["MPESA", "ORANGE", "AIRTEL"]),
   phone: z.string().min(8).max(40),
+  /** WITHDRAW = mon numéro ; TRANSFER_EXTERNAL = autre numéro via CinetPay. */
+  purpose: z.enum(["WITHDRAW", "TRANSFER_EXTERNAL"]).optional(),
   idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
@@ -43,12 +47,14 @@ export async function POST(req: Request) {
     const body = schema.parse(await req.json());
     key = idempotencyFrom(req, body.idempotencyKey);
     const currency = parseCurrency(body.currency);
+    const purpose = body.purpose ?? "WITHDRAW";
     const requestHash = fingerprintPayload({
       bucket: body.bucket,
       amountCents: body.amountCents,
       currency,
       provider: body.provider,
       phone: body.phone.trim(),
+      purpose,
     });
 
     const prior = replayIfComplete(
@@ -78,9 +84,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const fee = withdrawalFeeCents(body.amountCents, body.bucket);
+    const settings = await getPlatformFeeSettings();
+    const feeBps =
+      purpose === "TRANSFER_EXTERNAL"
+        ? settings.transferExternalFeeBps
+        : settings.withdrawFeeBps;
+    const providerBps =
+      purpose === "TRANSFER_EXTERNAL"
+        ? settings.transferExternalCinetPayBps
+        : settings.withdrawCinetPayBps;
+    const fee =
+      purpose === "TRANSFER_EXTERNAL"
+        ? Math.floor((body.amountCents * feeBps) / 10_000)
+        : withdrawalFeeCents(body.amountCents, body.bucket, feeBps);
+    const split = splitCashMoveFee(body.amountCents, feeBps, providerBps);
+    // VENDOR withdraw fee = 0 → forcer split à 0 pour le ledger.
+    const ledgerSplit =
+      fee === 0
+        ? {
+            ...split,
+            grossFeeCents: 0,
+            providerCostCents: 0,
+            netAmountCents: 0,
+          }
+        : split;
     const net = body.amountCents - fee;
     const livePayout = isCinetPayConfigured();
+    const feeKind =
+      purpose === "TRANSFER_EXTERNAL" ? "TRANSFER_EXTERNAL" : "WITHDRAWAL";
 
     const result = await prisma.$transaction(async (tx) => {
       const began = await beginIdempotentInTx(tx, {
@@ -161,20 +192,33 @@ export async function POST(req: Request) {
             phone: body.phone.trim(),
             withdrawalId: withdrawal.id,
             idempotencyKey: key,
+            purpose,
+            feeKind,
+            feeBps,
+            providerBps,
+            providerCostCents: ledgerSplit.providerCostCents,
+            netPlatformCents: ledgerSplit.netAmountCents,
             rail: livePayout ? "CINETPAY" : "SIMULATED",
           },
         },
       });
-      if (fee > 0) {
+      if (
+        ledgerSplit.grossFeeCents > 0 ||
+        ledgerSplit.providerCostCents > 0
+      ) {
         await creditTreasury(tx, {
-          amountCents: fee,
+          amountCents: ledgerSplit.netAmountCents,
           currency,
-          kind: "WITHDRAWAL",
+          kind: feeKind,
           withdrawalId: withdrawal.id,
           actorUserId: session.user.id,
+          grossFeeCents: ledgerSplit.grossFeeCents,
+          providerCostCents: ledgerSplit.providerCostCents,
+          feeBpsSnapshot: feeBps,
+          providerBpsSnapshot: providerBps,
         });
       }
-      const payload = { withdrawal, replayed: false };
+      const payload = { withdrawal, replayed: false, purpose, feeKind };
       await completeIdempotentInTx(tx, {
         userId: session.user.id,
         scope: "WITHDRAW",

@@ -1681,6 +1681,9 @@ enum PlatformFeeKind {
   SHIPPING
   WITHDRAWAL
   TICKET
+  DEPOSIT
+  TRANSFER_EXTERNAL
+  TRANSFER_INTERNAL
 }
 
 enum WalletBucket {
@@ -1695,6 +1698,24 @@ enum WithdrawalStatus {
   FAILED
 }
 
+/// Singleton owner — pourcentages éditables (bps, 500 = 5 %).
+model PlatformFeeSettings {
+  id                           String   @id @default("default")
+  depositFeeBps                Int      @default(500)
+  depositCinetPayBps           Int      @default(300)
+  withdrawFeeBps               Int      @default(500)
+  withdrawCinetPayBps          Int      @default(300)
+  transferExternalFeeBps       Int      @default(500)
+  transferExternalCinetPayBps  Int      @default(300)
+  transferInternalFeeBps       Int      @default(0)
+  saleFeeBpsDefault            Int      @default(500)
+  /// Part ShipShop sur le prix course (reste = coursier). Défaut 10 %.
+  shippingFeeBps               Int      @default(1000)
+  updatedAt                    DateTime @updatedAt
+
+  @@map("platform_fee_settings")
+}
+
 model PlatformTreasury {
   id       String @id @default("chipshop")
   usdCents Int    @default(0)
@@ -1706,21 +1727,29 @@ model PlatformTreasury {
 }
 
 model PlatformFee {
-  id             String          @id @default(cuid())
-  kind           PlatformFeeKind
-  amountCents    Int
-  currency       String          @default("USD")
-  amountUsdCents Int
-  reversedAt     DateTime?
-  orderId        String?
-  order          Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  withdrawalId   String?
-  withdrawal     Withdrawal?     @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
-  shopId         String?
-  courierId      String?
-  ticketId       String?
-  ticket         Ticket?         @relation(fields: [ticketId], references: [id], onDelete: SetNull)
-  createdAt      DateTime        @default(now())
+  id                  String          @id @default(cuid())
+  kind                PlatformFeeKind
+  /// Crédit treasury (= net ShipShop).
+  amountCents         Int
+  currency            String          @default("USD")
+  amountUsdCents      Int
+  /// Frais brut prélevé (avant coût provider).
+  grossFeeCents       Int             @default(0)
+  providerCostCents   Int             @default(0)
+  netAmountCents      Int             @default(0)
+  partnerShareCents   Int             @default(0)
+  feeBpsSnapshot      Int?
+  providerBpsSnapshot Int?
+  reversedAt          DateTime?
+  orderId             String?
+  order               Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  withdrawalId        String?
+  withdrawal          Withdrawal?     @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+  shopId              String?
+  courierId           String?
+  ticketId            String?
+  ticket              Ticket?         @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  createdAt           DateTime        @default(now())
 
   @@unique([orderId, kind])
   @@unique([ticketId, kind])
