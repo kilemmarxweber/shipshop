@@ -22,11 +22,31 @@ import {
 } from "@/lib/product-image-intel";
 import { useAppConfig } from "@/lib/use-app-config";
 import { cn } from "@/lib/utils";
-import { Film, ImageIcon, Loader2, Plus, Scan, Star, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+    Camera,
+    Film,
+    ImageIcon,
+    Loader2,
+    Plus,
+    Scan,
+    Star,
+    X,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const ACCEPT = "image/*,video/*";
+
+function normalizeCameraFile(file: File, kind: "image" | "video") {
+  const hasExt = /\.[a-z0-9]{2,5}$/i.test(file.name);
+  const type = file.type || (kind === "video" ? "video/mp4" : "image/jpeg");
+  if (hasExt && file.type) return file;
+  const ext = kind === "video" ? "mp4" : "jpg";
+  return new File([file], file.name && hasExt ? file.name : `camera.${ext}`, {
+    type,
+    lastModified: file.lastModified,
+  });
+}
 
 type Props = {
   urls: string[];
@@ -48,9 +68,20 @@ export function MediaUploader({
   const cfg = useAppConfig();
   const cap = max ?? cfg.maxImages;
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraPhotoRef = useRef<HTMLInputElement>(null);
+  const cameraVideoRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [probes, setProbes] = useState<Record<string, ImageProbe>>({});
   const [active, setActive] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const cameraSupported = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const media = navigator.mediaDevices?.getUserMedia;
+    const mobile =
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints ?? 0) > 1;
+    return Boolean(media) || mobile;
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -85,7 +116,10 @@ export function MediaUploader({
     toast.success("Photo principale définie");
   }
 
-  async function onFiles(files: FileList | null) {
+  async function onFiles(
+    files: FileList | null,
+    opts?: { cameraKind?: "image" | "video" },
+  ) {
     if (!files?.length) return;
     const remaining = cap - urls.length;
     if (remaining <= 0) {
@@ -93,9 +127,21 @@ export function MediaUploader({
       return;
     }
 
-    const list = Array.from(files).slice(0, remaining);
+    const list = Array.from(files)
+      .slice(0, remaining)
+      .map((file) =>
+        opts?.cameraKind
+          ? normalizeCameraFile(file, opts.cameraKind)
+          : file.name
+            ? file
+            : normalizeCameraFile(
+                file,
+                looksLikeVideoFile(file) ? "video" : "image",
+              ),
+      );
     setUploading(true);
     onBusyChange?.(true);
+    setMenuOpen(false);
     toast.message("Analyse + envoi des médias…");
     const next = [...urls];
     let succeededFiles = 0;
@@ -104,7 +150,7 @@ export function MediaUploader({
     try {
       for (const file of list) {
         if (!looksLikeImageFile(file) && !looksLikeVideoFile(file)) {
-          toast.error(`${file.name} : image ou vidéo uniquement`);
+          toast.error(`${file.name || "fichier"} : image ou vidéo uniquement`);
           continue;
         }
 
@@ -142,12 +188,32 @@ export function MediaUploader({
       setUploading(false);
       onBusyChange?.(false);
       if (inputRef.current) inputRef.current.value = "";
+      if (cameraPhotoRef.current) cameraPhotoRef.current.value = "";
+      if (cameraVideoRef.current) cameraVideoRef.current.value = "";
     }
 
     if (list.length > 1) {
       toast.message(`${succeededFiles}/${list.length} fichier(s) ajouté(s)`);
     }
     onChange(next);
+  }
+
+  function openImport() {
+    if (inputRef.current) inputRef.current.value = "";
+    inputRef.current?.click();
+    setMenuOpen(false);
+  }
+
+  function openCameraPhoto() {
+    if (cameraPhotoRef.current) cameraPhotoRef.current.value = "";
+    cameraPhotoRef.current?.click();
+    setMenuOpen(false);
+  }
+
+  function openCameraVideo() {
+    if (cameraVideoRef.current) cameraVideoRef.current.value = "";
+    cameraVideoRef.current?.click();
+    setMenuOpen(false);
   }
 
   const activeProbe = active ? probes[active] : null;
@@ -181,26 +247,80 @@ export function MediaUploader({
         className="sr-only"
         onChange={(e) => onFiles(e.target.files)}
       />
+      <input
+        ref={cameraPhotoRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        onChange={(e) => onFiles(e.target.files, { cameraKind: "image" })}
+      />
+      <input
+        ref={cameraVideoRef}
+        type="file"
+        accept="video/*"
+        capture="environment"
+        className="sr-only"
+        onChange={(e) => onFiles(e.target.files, { cameraKind: "video" })}
+      />
 
-      <button
-        type="button"
-        disabled={uploading || urls.length >= cap}
-        onClick={() => {
-          if (inputRef.current) inputRef.current.value = "";
-          inputRef.current?.click();
-        }}
-        className={cn(
-          "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-surface-2 text-sm font-semibold transition hover:border-primary/40 hover:bg-muted/40",
-          (uploading || urls.length >= cap) && "opacity-50",
-        )}
-      >
-        {uploading ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Plus className="size-4" />
-        )}
-        {uploading ? "Chargement…" : "Ajouter images / vidéos"}
-      </button>
+      <div className="relative space-y-2">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={uploading || urls.length >= cap}
+            onClick={openImport}
+            className={cn(
+              "flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-surface-2 text-sm font-semibold transition hover:border-primary/40 hover:bg-muted/40",
+              (uploading || urls.length >= cap) && "opacity-50",
+            )}
+          >
+            {uploading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            {uploading ? "Chargement…" : "Importer"}
+          </button>
+          {cameraSupported ? (
+            <button
+              type="button"
+              disabled={uploading || urls.length >= cap}
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-expanded={menuOpen}
+              className={cn(
+                "flex min-h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-surface-2 px-4 text-sm font-semibold transition hover:border-primary/40 hover:bg-muted/40",
+                (uploading || urls.length >= cap) && "opacity-50",
+              )}
+            >
+              <Camera className="size-4" />
+              Caméra
+            </button>
+          ) : null}
+        </div>
+        {menuOpen && cameraSupported ? (
+          <div className="absolute inset-x-0 z-20 overflow-hidden rounded-xl border border-border bg-surface-2 shadow-lg">
+            <button
+              type="button"
+              disabled={uploading || urls.length >= cap}
+              onClick={openCameraPhoto}
+              className="flex min-h-11 w-full items-center gap-2 px-3 text-left text-sm font-semibold hover:bg-muted/40"
+            >
+              <Camera className="size-4" />
+              Prendre une photo
+            </button>
+            <button
+              type="button"
+              disabled={uploading || urls.length >= cap}
+              onClick={openCameraVideo}
+              className="flex min-h-11 w-full items-center gap-2 border-t border-border px-3 text-left text-sm font-semibold hover:bg-muted/40"
+            >
+              <Film className="size-4" />
+              Filmer une vidéo
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       <p className="text-[11px] text-muted-foreground">
         {urls.length}/{cap}

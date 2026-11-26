@@ -67,6 +67,7 @@ export function detectUrlKind(url: string): MediaKind | null {
 export function looksLikeImageFile(file: { name?: string; type?: string }) {
   const mime = (file.type ?? "").toLowerCase();
   if (mime.startsWith("image/")) return true;
+  if (mime && mime !== "application/octet-stream") return false;
   return /\.(jpe?g|png|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(
     file.name ?? "",
   );
@@ -75,6 +76,7 @@ export function looksLikeImageFile(file: { name?: string; type?: string }) {
 export function looksLikeVideoFile(file: { name?: string; type?: string }) {
   const mime = (file.type ?? "").toLowerCase();
   if (mime.startsWith("video/")) return true;
+  if (mime && mime !== "application/octet-stream") return false;
   return /\.(mp4|webm|mov|m4v|mkv|avi|3gp|ogv|mpeg|mpg|wmv|flv)$/i.test(
     file.name ?? "",
   );

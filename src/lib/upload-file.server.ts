@@ -222,6 +222,7 @@ export function detectMediaKind(
   buffer?: Buffer,
 ): "image" | "video" | null {
   const mime = (file.type ?? "").toLowerCase();
+  // Caméra mobile : type souvent vide ou application/octet-stream.
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
   const ext = path.extname(file.name ?? "").toLowerCase();
