@@ -247,14 +247,14 @@ cd /var/www/shop/shipshop
 pnpm install --frozen-lockfile
 pnpm prisma migrate deploy
 pm2 stop shipshop
-pnpm build:vps
+pnpm build
 pm2 start shipshop
 ```
 
-**`pnpm build:vps`** (recommandé sur le serveur) :
+**`pnpm build`** (serveur) :
 - heap Node plafonné à 2048 Mo
 - saute le typecheck Next (`SHIPSHOP_BUILD_SKIP_TSC=1`) → plus d’exit **137** au « Running TypeScript… »
-- typecheck local/CI : `pnpm typecheck`
+- typecheck local/CI : `pnpm typecheck` — build avec typecheck : `pnpm build:checked`
 
 **Exit 137** = OOM (kernel). Ce n’est **pas** une erreur TypeScript.
 
@@ -277,7 +277,7 @@ pnpm install
 pnpm rebuild @prisma/engines prisma esbuild unrs-resolver sharp
 ```
 
-Si `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` / `ERR_PNPM_NO_MATURE_MATCHING_VERSION` : pnpm refuse un paquet trop récent (souvent un canary `next` pendant « Preparing upgrade… »). `pnpm-workspace.yaml` exclut déjà `next` via `minimumReleaseAgeExclude`. Après `git pull` : `pnpm install --frozen-lockfile` puis `pnpm build:vps`.
+Si `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` / `ERR_PNPM_NO_MATURE_MATCHING_VERSION` : pnpm refuse un paquet trop récent (souvent un canary `next` pendant « Preparing upgrade… »). `pnpm-workspace.yaml` exclut déjà `next` via `minimumReleaseAgeExclude`. Après `git pull` : `pnpm install --frozen-lockfile` puis `pnpm build`.
 
 Si `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` sur d’autres paquets : les `overrides` dans `pnpm-workspace.yaml` figent les versions trop neuves. Relancer `pnpm install` après `git pull`.
 
@@ -295,7 +295,7 @@ Si le process démarre sans les variables : `pm2 restart shipshop --update-env`.
 3. Dossier `/var/www/chipshop-uploads` + droits
 4. `pnpm install --frozen-lockfile`
 5. `pnpm prisma migrate deploy`
-6. `pm2 stop shipshop` puis `pnpm build:vps`
+6. `pm2 stop shipshop` puis `pnpm build`
 7. PM2 + Nginx + SSL
 8. Créer le **vrai owner** (pas `demo@chipshop.cd`)
 9. Configurer SMS / WhatsApp dans `/shops/messaging` (clés Infobip / Klambo dans l’UI, pas dans `.env`)

@@ -5,9 +5,10 @@
   "packageManager": "pnpm@10.28.0",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && node --max-old-space-size=2048 ./node_modules/next/dist/bin/next build",
-    "build:vps": "prisma generate && node --max-old-space-size=2048 ./scripts/next-build-vps.mjs",
+    "build": "prisma generate && node --max-old-space-size=2048 ./scripts/next-build-vps.mjs",
+    "build:vps": "pnpm build",
     "typecheck": "tsc --noEmit",
+    "build:checked": "prisma generate && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "eslint",
     "test:unit": "node --import tsx src/lib/auth-login-security.test.ts && node --import tsx src/lib/password-reset.test.ts && node --import tsx src/lib/monitoring/sentry-scrub.test.ts && node --import tsx src/lib/growth/feed-live-match.test.ts && node scripts/check-postman-collection.mjs && node --import tsx src/lib/payments/transfer-idempotency.test.ts && node --import tsx src/lib/payments/cinetpay.test.ts && node --import tsx src/lib/cis/events.test.ts && node --import tsx src/lib/cis/profile.test.ts && node --import tsx src/lib/ai/catalog-chat.test.ts && node --import tsx src/lib/security/policies.test.ts && node --import tsx src/lib/security/alert-mail.test.ts",
