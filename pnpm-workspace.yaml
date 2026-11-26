@@ -5,6 +5,10 @@
 # pnpm 11 : 24 h de délai (minimumReleaseAge=1440). Les versions trop neuves
 # cassent `pnpm install` sur le VPS (ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION).
 minimumReleaseAge: 1440
+# Next peut tenter un dlx canary pendant le build (« Preparing upgrade… ») ;
+# sans exclude → ERR_PNPM_NO_MATURE_MATCHING_VERSION sur le VPS.
+minimumReleaseAgeExclude:
+  - next
 overrides:
   execa@10.2.0: 10.1.1
   i18next@26.5.2: 26.4.7

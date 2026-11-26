@@ -6,9 +6,18 @@ const publicUploadUrl = normalizePublicUploadUrl(
   process.env.NEXT_PUBLIC_UPLOAD_URL,
 );
 
+const skipTsc =
+  process.env.SHIPSHOP_BUILD_SKIP_TSC === "1" ||
+  process.env.SHIPSHOP_BUILD_SKIP_TSC === "true";
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  // VPS 2 Go : le typecheck Next pendant `next build` OOM (exit 137).
+  // Activer avec SHIPSHOP_BUILD_SKIP_TSC=1 (script build:vps). Sinon `pnpm typecheck`.
+  typescript: {
+    ignoreBuildErrors: skipTsc,
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "cdn.sanity.io" },
