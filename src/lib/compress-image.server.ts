@@ -52,6 +52,33 @@ export async function compressImageBuffer(
     return { buffer: input, ext: isWebp ? "webp" : "jpg" };
   }
 
+  // Produit mur d’accueil : canvas 9:16, produit entier (pas de coupe G/D).
+  if (variant === "product") {
+    const wall = sharp(input, { failOn: "none" }).rotate().resize({
+      width: 1080,
+      height: 1920,
+      fit: "contain",
+      background: { r: 14, g: 14, b: 20, alpha: 1 },
+      kernel: sharp.kernel.cubic,
+    });
+
+    let buffer = await wall
+      .clone()
+      .jpeg({ quality: 82, mozjpeg: true, progressive: true })
+      .toBuffer();
+
+    if (buffer.length > IMAGE_STORED_MAX_BYTES) {
+      buffer = await wall
+        .clone()
+        .jpeg({ quality: 68, mozjpeg: true })
+        .toBuffer();
+    }
+    if (buffer.length > IMAGE_STORED_MAX_BYTES) {
+      throw new Error("Impossible d'envoyer ce fichier");
+    }
+    return { buffer, ext: "jpg" };
+  }
+
   const { width, height } = boundsFor(variant);
   const base = sharp(input, { failOn: "none" }).rotate().resize({
     width,
